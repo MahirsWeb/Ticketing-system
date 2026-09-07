@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: ticketsystemtech-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ConnectionStrings__DefaultConnection
+        sync: false
+      - key: Jwt__Secret
+        sync: false
+      - key: Jwt__Issuer
+        value: TicketSystemTech
+      - key: Jwt__Audience
+        value: TicketSystemTech.Client
+      - key: Frontend__BaseUrl
+        sync: false
+      - key: Cors__AllowedOrigins__0
+        sync: false
+      - key: Brevo__ApiKey
+        sync: false
+      - key: Brevo__SenderEmail
+        value: no-reply@ticketsystemtech.app
+      - key: Brevo__SenderName
+        value: Ticket System Tech
+      - key: GoogleAi__ApiKey
+        sync: false

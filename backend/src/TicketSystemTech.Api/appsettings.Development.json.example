@@ -1,0 +1,35 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Debug",
+      "Microsoft.AspNetCore": "Information"
+    }
+  },
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=localhost\\SQLEXPRESS;Database=TicketSystemTech;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true"
+  },
+  "Jwt": {
+    "Secret": "PROMIJENI-OVO-U-NASUMICAN-STRING-OD-BAREM-32-KARAKTERA",
+    "AccessTokenMinutes": 120
+  },
+  "Brevo": {
+    "ApiKey": ""
+  },
+  "GoogleAi": {
+    "ApiKey": ""
+  },
+  "MicrosoftGraph": {
+    "ClientId": "",
+    "ClientSecret": ""
+  },
+  "TemporaryPassword": {
+    "ValidityMinutes": 20
+  },
+  "Pii": {
+    "HashKey": "PROMIJENI-OVO-U-NASUMICAN-STRING-OD-BAREM-32-KARAKTERA"
+  },
+  "SeedAdmin": {
+    "Email": "tvoj-email@example.com",
+    "Password": ""
+  }
+}

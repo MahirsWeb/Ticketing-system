@@ -1,0 +1,35 @@
+# ---- .NET ----
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+.vs/
+appsettings.Development.json
+appsettings.Local.json
+*.db
+
+# ---- Node / Frontend ----
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# ---- Env / secrets ----
+.env
+.env.*
+!.env.example
+
+# ---- Editor / OS ----
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# ---- Logs ----
+logs/
+*.log
+
+# ---- Local uploaded files (dev-only storage) ----
+backend/src/TicketSystemTech.Api/wwwroot/uploads/*
+!backend/src/TicketSystemTech.Api/wwwroot/uploads/.gitkeep

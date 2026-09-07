@@ -1,0 +1,21 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  background-color: #f4f6fb;
+  color: #1f2430;
+}
+
+.tiptap {
+  min-height: 160px;
+  outline: none;
+}
+.tiptap p {
+  margin: 0 0 0.5em;
+}
