@@ -16,7 +16,7 @@ public class TicketNumberGenerator : ITicketNumberGenerator
     public async Task<string> NextAsync(CancellationToken ct = default)
     {
         var result = await _db.Database
-            .SqlQueryRaw<long>("SELECT nextval('\"TicketNumberSequence\"') AS \"Value\"")
+            .SqlQueryRaw<long>("SELECT NEXT VALUE FOR [TicketNumberSequence] AS [Value]")
             .ToListAsync(ct);
         return result[0].ToString();
     }

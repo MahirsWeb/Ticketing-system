@@ -4,7 +4,7 @@ Sistem za upravljanje korisničkom podrškom (ticketing/helpdesk aplikacija): Re
 .NET 8 Web API backend, Microsoft SQL Server baza podataka. Aplikacija radi **potpuno lokalno** — nema
 potrebe za internetom niti cloud nalozima da bi radila (osim za AI asistenta, koji koristi Google AI API).
 
-Uključuje: tikete sa punom istorijom razgovora, ulogama Admin/Zaposlenik/Klijent, AI asistenta za pretragu
+Uključuje: tikete sa punom historijom razgovora, ulogama Admin/Zaposlenik/Klijent, AI asistenta za pretragu
 starih tiketa i dokumentacije, email integraciju (Outlook), izvještaje/dashboard, upravljanje zadacima
 (work tasks), i enkripciju ličnih podataka (email, telefon, adresa) u bazi.
 
