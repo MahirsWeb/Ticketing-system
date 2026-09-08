@@ -146,25 +146,6 @@ export function KnowledgeBaseSearchPanel({ initialQuery = '', alwaysOpen = false
         </div>
       )}
 
-      {!loading && asked && totalEligible > 0 && (
-        <div className="mb-4 flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
-          <div className="text-sm text-slate-700">
-            <span className="font-bold text-slate-900">
-              {similarCount} of {totalEligible} tickets ({similarPct}%)
-            </span>{' '}
-            look similar to this problem.
-          </div>
-          {similarCount > 0 && (
-            <button
-              className="text-xs font-medium text-blue-700 hover:underline"
-              onClick={() => navigate(`/knowledge-base/similar?query=${encodeURIComponent(askedQuery)}`)}
-            >
-              View the list &amp; stats →
-            </button>
-          )}
-        </div>
-      )}
-
       {!loading && sources.length > 0 && (
         <>
           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Sources used as context</div>
@@ -184,6 +165,25 @@ export function KnowledgeBaseSearchPanel({ initialQuery = '', alwaysOpen = false
             </button>
           )}
         </>
+      )}
+
+      {!loading && asked && totalEligible > 0 && (
+        <div className="mb-4 mt-4 flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="text-sm text-slate-700">
+            <span className="font-bold text-slate-900">
+              {similarCount} of {totalEligible} tickets ({similarPct}%)
+            </span>{' '}
+            look similar to this problem.
+          </div>
+          {similarCount > 0 && (
+            <button
+              className="text-xs font-medium text-blue-700 hover:underline"
+              onClick={() => navigate(`/knowledge-base/similar?query=${encodeURIComponent(askedQuery)}`)}
+            >
+              View the list &amp; stats →
+            </button>
+          )}
+        </div>
       )}
 
       {!loading && asked && sources.length === 0 && !answer && (

@@ -123,9 +123,15 @@ public class KnowledgeBaseController : ControllerBase
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
     public async Task<ActionResult<KnowledgeBaseAskResponseDto>> Ask(KnowledgeBaseAskRequest request)
     {
-        var matches = await FindMatchesAsync(request.Question, 50, includeTicketSources: true);
+        // Computed once and reused below — this question previously got embedded twice per request (once
+        // here, once again inside the similar-tickets stat), doubling both the Google AI round-trip and
+        // the full-corpus scoring pass on every ask.
+        var queryEmbedding = await _embeddingService.EmbedAsync(request.Question);
+        var matches = queryEmbedding is not null
+            ? await FindMatchesBySimilarityAsync(queryEmbedding, 50, includeTicketSources: true)
+            : await FindMatchesByKeywordAsync(request.Question, 50, includeTicketSources: true);
         var sources = matches.Select(ToDto).ToList();
-        var stats = await ComputeSimilarTicketStatsAsync(request.Question);
+        var stats = await ComputeSimilarTicketStatsAsync(request.Question, queryEmbedding);
 
         if (matches.Count == 0)
         {
@@ -194,7 +200,8 @@ public class KnowledgeBaseController : ControllerBase
             : $"Documentation — {m.Document!.Title}\n{m.Content}";
 
     private static HashSet<string> ExtractMentionedTicketNumbers(string answer) =>
-        Regex.Matches(answer, @"#(\d+)").Select(m => m.Groups[1].Value).ToHashSet();
+        // Matches both native "#123456" and migrated "#OST-123456" style ticket numbers.
+        Regex.Matches(answer, @"#([A-Za-z0-9\-]+)").Select(m => m.Groups[1].Value).ToHashSet();
 
     // ---------------- Documentation upload/management ----------------
 
@@ -302,17 +309,30 @@ public class KnowledgeBaseController : ControllerBase
     {
         // Eligibility (has a long-enough internal note, or is a document) is filtered in SQL via
         // EligibleChunksQuery — only chunks that already qualify have their embedding pulled into memory.
-        var candidates = await EligibleChunksQuery(includeTicketSources)
+        // Content (can be large — full ticket notes/resolution) is left out of this pass and fetched only
+        // for the handful of chunks that actually rank, so per-query cost stays roughly flat as the
+        // corpus grows instead of scaling with total eligible tickets.
+        var candidateEmbeddings = await EligibleChunksQuery(includeTicketSources)
             .Where(c => c.Embedding != null)
-            .Select(c => new { c.Content, c.TicketId, c.DocumentId, c.Embedding })
+            .Select(c => new { c.Id, c.TicketId, c.DocumentId, c.Embedding })
             .ToListAsync();
 
-        if (candidates.Count == 0) return new List<ChunkMatch>();
+        if (candidateEmbeddings.Count == 0) return new List<ChunkMatch>();
 
-        var scored = candidates
-            .Select(c => new { c.TicketId, c.DocumentId, c.Content, Similarity = CosineSimilarity(queryEmbedding, c.Embedding!) })
+        var top = candidateEmbeddings
+            .Select(c => new { c.Id, c.TicketId, c.DocumentId, Similarity = CosineSimilarity(queryEmbedding, c.Embedding!) })
             .OrderByDescending(x => x.Similarity)
             .Take(Math.Clamp(take, 1, 500))
+            .ToList();
+
+        var topIds = top.Select(x => x.Id).ToList();
+        var contentById = await _db.KnowledgeBaseChunks.AsNoTracking()
+            .Where(c => topIds.Contains(c.Id))
+            .Select(c => new { c.Id, c.Content })
+            .ToDictionaryAsync(c => c.Id, c => c.Content);
+
+        var scored = top
+            .Select(x => new { x.TicketId, x.DocumentId, Content = contentById[x.Id], x.Similarity })
             // Within the relevant pool, the most substantial source (longest content) is listed first —
             // a proxy for "most thoroughly documented" that works the same way for both source types.
             .OrderByDescending(x => x.Content.Length)
@@ -398,25 +418,27 @@ public class KnowledgeBaseController : ControllerBase
     /// clear the similarity threshold, against the total eligible pool. Ticket-only (documentation isn't
     /// a "similar problem", it's reference material) so the percentage means what it says.
     /// </summary>
-    private async Task<SimilarTicketStats> ComputeSimilarTicketStatsAsync(string query, bool includeAllMatches = false)
+    private async Task<SimilarTicketStats> ComputeSimilarTicketStatsAsync(string query, float[]? precomputedQueryEmbedding = null, bool includeAllMatches = false)
     {
         if (string.IsNullOrWhiteSpace(query)) return new SimilarTicketStats(0, 0, 0, new List<ChunkMatch>());
 
         var totalEligible = await EligibleChunksQuery(includeTicketSources: true).Where(c => c.TicketId != null).CountAsync();
         if (totalEligible == 0) return new SimilarTicketStats(0, 0, 0, new List<ChunkMatch>());
 
-        var queryEmbedding = await _embeddingService.EmbedAsync(query);
+        var queryEmbedding = precomputedQueryEmbedding ?? await _embeddingService.EmbedAsync(query);
         List<ChunkMatch> matches;
 
         if (queryEmbedding is not null)
         {
-            var candidates = await EligibleChunksQuery(includeTicketSources: true)
+            // Embedding is needed for every candidate to score it, but Content (can be large — full
+            // ticket notes/resolution) is only fetched for the ones that actually clear the cutoff.
+            var candidateEmbeddings = await EligibleChunksQuery(includeTicketSources: true)
                 .Where(c => c.TicketId != null && c.Embedding != null)
-                .Select(c => new { c.Content, c.TicketId, c.Embedding })
+                .Select(c => new { c.Id, c.TicketId, c.Embedding })
                 .ToListAsync();
 
-            var rawScores = candidates
-                .Select(c => new { c.TicketId, c.Content, Similarity = CosineSimilarity(queryEmbedding, c.Embedding!) })
+            var rawScores = candidateEmbeddings
+                .Select(c => new { c.Id, c.TicketId, Similarity = CosineSimilarity(queryEmbedding, c.Embedding!) })
                 .ToList();
 
             if (rawScores.Count == 0)
@@ -429,10 +451,15 @@ public class KnowledgeBaseController : ControllerBase
                 var minSim = rawScores.Min(x => x.Similarity);
                 var cutoff = maxSim - (maxSim - minSim) * (float)SimilarityReportTopFraction;
 
-                var scored = rawScores
-                    .Where(x => x.Similarity >= cutoff)
-                    .Select(x => new { x.TicketId, x.Content, Score = (int)MathF.Round(Math.Clamp(x.Similarity, 0f, 1f) * 100) })
-                    .OrderByDescending(x => x.Score)
+                var above = rawScores.Where(x => x.Similarity >= cutoff).OrderByDescending(x => x.Similarity).ToList();
+                var aboveIds = above.Select(x => x.Id).ToList();
+                var contentById = await _db.KnowledgeBaseChunks.AsNoTracking()
+                    .Where(c => aboveIds.Contains(c.Id))
+                    .Select(c => new { c.Id, c.Content })
+                    .ToDictionaryAsync(c => c.Id, c => c.Content);
+
+                var scored = above
+                    .Select(x => new { x.TicketId, Content = contentById[x.Id], Score = (int)MathF.Round(Math.Clamp(x.Similarity, 0f, 1f) * 100) })
                     .ToList();
 
                 matches = await ResolveSourcesAsync(scored.Select(s => ((Guid?)s.TicketId, (Guid?)null, s.Content, s.Score)));
