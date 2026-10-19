@@ -62,8 +62,9 @@ public record AddTicketAssigneeRequest(
     [Required] Guid UserId
 );
 
-public record SetTicketWorkTimeRequest(
-    DateTime? StartedAtUtc,
+/// <summary>One stretch of work on a ticket. No end means it is still running.</summary>
+public record WorkSessionRequest(
+    [Required] DateTime? StartedAtUtc,
     DateTime? EndedAtUtc
 );
 
@@ -108,6 +109,9 @@ public record TicketMessageDto(
 
 public record TicketAssigneeDto(Guid UserId, string Name);
 
+/// <summary>A stretch of work, by the person who did it. Staff only: the client never sees how long anybody worked.</summary>
+public record TicketWorkSessionDto(Guid Id, Guid UserId, string UserName, DateTime StartedAtUtc, DateTime? EndedAtUtc);
+
 public record TicketDetailDto(
     Guid Id,
     string TicketNumber,
@@ -136,8 +140,7 @@ public record TicketDetailDto(
     Guid? AssignedToUserId,
     string? AssignedToName,
     List<TicketAssigneeDto> Assignees,
-    DateTime? WorkStartedAtUtc,
-    DateTime? WorkEndedAtUtc,
+    List<TicketWorkSessionDto> WorkSessions,
     DateTime? OpenedAtUtc,
     DateTime? ClosedAtUtc,
     string? ResolutionSummary,

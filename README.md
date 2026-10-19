@@ -203,6 +203,23 @@ Posljedice koje treba znati:
   upisuje u audit log (`ClientLookupOutsideBranch`), a broj telefona se ne prikazuje dok klijent ne dobije tiket
   u toj poslovnici.
 - AI odgovori manjih poslovnica oslanjaju se samo na njihovu historiju, pa su skromniji od odgovora velike poslovnice.
+- **Spisak firmi klijenata je zajednički** za sve zaposlenike (firma se bira pri otvaranju naloga klijenta, a to mora
+  biti moguće i za firmu koja još nije pisala toj poslovnici). Izolacija važi za tikete, klijente i osoblje, ne za firme.
+
+### Evidencija radnog vremena na tiketu
+
+- Na tiketu može biti **više sesija rada** (jutarnja i popodnevna su dvije), a nijedna ne briše drugu. Sesija ima početak
+  i kraj; bez kraja znači da rad još traje (dugme *End now* je završava).
+- Sesije se vode za **osobu koja radi na tiketu** (glavni izvršilac). Ko god ih unese, pripadaju njoj.
+- Osoba dodana **kao ispomoć** je na tiketu navedena, ali **nema svoje sesije** pa se zbog tog tiketa ne pojavljuje na
+  vremenskoj liniji (Gantt i Excel izvoz). Ako glavni izvršilac bude skinut s tiketa, ispomoć postaje glavni izvršilac, a
+  stare sesije ostaju kod onoga ko je radio.
+- Sesije jednog tiketa se ne smiju preklapati, ne mogu početi u budućnosti, a tiket ima najviše jednu sesiju koja traje.
+  Sesija koja traje završava se sama kad se tiket zatvori, prebaci u drugu poslovnicu ili kad se osoba skine s njega
+  ili deaktivira.
+- Klijent ne vidi koliko je ko radio. Svaka izmjena sesije ostavlja zapis u audit logu.
+- Tiket za koji niko nije upisao vrijeme na vremenskoj liniji i dalje stoji od otvaranja do zatvaranja, ali samo za glavnog
+  izvršioca, a Excel izvoz za takav red ne prikazuje sate (to nije stvarno utrošeno vrijeme).
 
 ---
 

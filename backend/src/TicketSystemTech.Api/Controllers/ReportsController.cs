@@ -337,17 +337,14 @@ public class ReportsController : ControllerBase
         {
             var employeeName = $"{employee.FirstName} {employee.LastName}";
 
-            var ticketBlocks = await _db.Tickets.AsNoTracking()
-                .Where(x => isAdmin || x.DepartmentId == _currentUser.DepartmentId)
-                .Where(x => x.AssignedToUserId == employee.Id || x.Assignees.Any(a => a.UserId == employee.Id))
-                .Select(x => new { x.TicketNumber, x.Title, x.Status, Start = x.WorkStartedAtUtc ?? x.OpenedAtUtc, End = x.WorkEndedAtUtc ?? x.ClosedAtUtc })
-                .Where(x => x.Start != null && x.Start < to && (x.End == null || x.End >= from))
-                .ToListAsync(Ct);
+            // Same blocks as the Gantt chart. Hours are only given for logged work; the stand-in for a ticket nobody logged time on
+            // would otherwise report "opened to closed" as if it were effort.
+            var ticketBlocks = await Queries.TicketWorkBlocks.ForUserAsync(_db, employee.Id, from, to, isAdmin ? null : _currentUser.DepartmentId, Ct);
             foreach (var b in ticketBlocks)
             {
                 timelineRows.Add(new TimelineExportRow(
                     employeeName, "Ticket", $"#{b.TicketNumber} — {b.Title}", b.Status.ToString(), b.Start, b.End,
-                    b.Start.HasValue && b.End.HasValue ? Math.Round((b.End.Value - b.Start.Value).TotalHours, 1) : (double?)null));
+                    b.IsLogged && b.End.HasValue ? Math.Round((b.End.Value - b.Start).TotalHours, 1) : (double?)null));
             }
 
             var taskBlocks = await _db.WorkTasks.AsNoTracking()

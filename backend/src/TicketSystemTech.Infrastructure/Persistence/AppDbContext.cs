@@ -41,6 +41,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<EmailConnection> EmailConnections => Set<EmailConnection>();
     public DbSet<EmailTicketMark> EmailTicketMarks => Set<EmailTicketMark>();
     public DbSet<TicketAssignee> TicketAssignees => Set<TicketAssignee>();
+    public DbSet<TicketWorkSession> TicketWorkSessions => Set<TicketWorkSession>();
     public DbSet<OverdueNotificationSettings> OverdueNotificationSettings => Set<OverdueNotificationSettings>();
     public DbSet<SubBranch> SubBranches => Set<SubBranch>();
     public DbSet<WorkTask> WorkTasks => Set<WorkTask>();
@@ -211,6 +212,15 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
             // "My tickets", the Gantt and the timeline export start from a person, not from a ticket.
             e.HasIndex(a => new { a.UserId, a.TicketId });
             e.HasOne(a => a.Ticket).WithMany(t => t.Assignees).HasForeignKey(a => a.TicketId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<TicketWorkSession>(e =>
+        {
+            e.HasIndex(s => new { s.TicketId, s.StartedAtUtc });
+            // The Gantt chart and the timeline export start from a person and a day.
+            e.HasIndex(s => new { s.UserId, s.StartedAtUtc }).IncludeProperties(s => new { s.EndedAtUtc, s.TicketId });
+            e.HasOne(s => s.Ticket).WithMany(t => t.WorkSessions).HasForeignKey(s => s.TicketId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<TicketSystemTech.Infrastructure.Identity.ApplicationUser>().WithMany().HasForeignKey(s => s.UserId).OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<IdempotencyRecord>(e =>

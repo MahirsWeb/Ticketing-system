@@ -156,6 +156,15 @@ export interface TicketAssigneeDto {
   name: string;
 }
 
+/** One stretch of work on a ticket, by the person who did it. endedAtUtc is null while it is still running. */
+export interface TicketWorkSessionDto {
+  id: string;
+  userId: string;
+  userName: string;
+  startedAtUtc: string;
+  endedAtUtc: string | null;
+}
+
 export interface PagedResult<T> {
   items: T[];
   page: number;
@@ -199,8 +208,8 @@ export interface TicketDetailDto {
   assignedToUserId: string | null;
   assignedToName: string | null;
   assignees: TicketAssigneeDto[];
-  workStartedAtUtc: string | null;
-  workEndedAtUtc: string | null;
+  /** Staff only: the client always gets an empty list. */
+  workSessions: TicketWorkSessionDto[];
   openedAtUtc: string | null;
   closedAtUtc: string | null;
   resolutionSummary: string | null;

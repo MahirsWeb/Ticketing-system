@@ -30,6 +30,7 @@ public class EndpointAuthorizationTests
         "DELETE /api/sla-plans/{id:guid} => Admin",
         "DELETE /api/ticket-categories/{id:guid} => Admin",
         "DELETE /api/tickets/{id:guid}/assignees/{userId:guid} => Admin+Employee",
+        "DELETE /api/tickets/{id:guid}/work-sessions/{sessionId:guid} => Admin+Employee",
         "GET / => public",
         "GET /api/companies => Admin+Employee",
         "GET /api/companies/{id:guid} => Admin+Employee",
@@ -72,7 +73,6 @@ public class EndpointAuthorizationTests
         "GET /health/ready => public",
         "GET /hubs/notifications => any signed-in person",
         "GET /hubs/notifications/negotiate => any signed-in person",
-        "PATCH /api/tickets/{id:guid}/work-time => Admin+Employee",
         "PATCH /api/users/me/phone => Client",
         "PATCH /api/users/{id:guid}/active => Admin",
         "PATCH /api/work-tasks/{id:guid}/time => Employee",
@@ -108,6 +108,7 @@ public class EndpointAuthorizationTests
         "POST /api/tickets/{id:guid}/reopen => Admin+Employee",
         "POST /api/tickets/{id:guid}/status => Admin+Employee",
         "POST /api/tickets/{id:guid}/transfer-branch => Admin+Employee",
+        "POST /api/tickets/{id:guid}/work-sessions => Admin+Employee",
         "POST /api/tickets/{ticketId:guid}/attachments => any signed-in person",
         "POST /api/users/clients => Admin+Employee",
         "POST /api/users/employees => Admin",
@@ -124,6 +125,7 @@ public class EndpointAuthorizationTests
         "PUT /api/settings/overdue-notifications => Admin",
         "PUT /api/sla-plans/{id:guid} => Admin",
         "PUT /api/sub-branches/{id:guid} => Admin",
+        "PUT /api/tickets/{id:guid}/work-sessions/{sessionId:guid} => Admin+Employee",
         "PUT /api/ticket-categories/{id:guid} => Admin",
         "PUT /api/users/{id:guid} => Admin"
     };

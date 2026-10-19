@@ -52,9 +52,6 @@ public class Ticket : BaseEntity
     /// <summary>Mandatory detailed resolution description, required to close the ticket.</summary>
     public string? ResolutionSummary { get; set; }
 
-    /// <summary>Manually logged work session — not tied to any single assignee, just "when work happened".</summary>
-    public DateTime? WorkStartedAtUtc { get; set; }
-    public DateTime? WorkEndedAtUtc { get; set; }
 
     /// <summary>Set once an overdue notification has been sent, so the background job doesn't re-notify every run.</summary>
     public DateTime? OverdueNotifiedAtUtc { get; set; }
@@ -68,4 +65,7 @@ public class Ticket : BaseEntity
     public ICollection<TicketMessage> Messages { get; set; } = new List<TicketMessage>();
     public ICollection<TicketAttachment> Attachments { get; set; } = new List<TicketAttachment>();
     public ICollection<TicketAssignee> Assignees { get; set; } = new List<TicketAssignee>();
+
+    /// <summary>The stretches of work done on the ticket (see <see cref="TicketWorkSession"/>).</summary>
+    public ICollection<TicketWorkSession> WorkSessions { get; set; } = new List<TicketWorkSession>();
 }

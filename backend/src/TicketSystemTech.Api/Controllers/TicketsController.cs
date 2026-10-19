@@ -6,11 +6,13 @@ using TicketSystemTech.Api.Contracts;
 using TicketSystemTech.Api.Emails;
 using TicketSystemTech.Application.Common;
 using TicketSystemTech.Application.Common.Interfaces;
+using TicketSystemTech.Application.WorkTime;
 using TicketSystemTech.Domain.Entities;
 using TicketSystemTech.Domain.Enums;
 using TicketSystemTech.Domain.Workflow;
 using TicketSystemTech.Infrastructure.Identity;
 using TicketSystemTech.Infrastructure.Persistence;
+using TicketSystemTech.Infrastructure.Services;
 
 namespace TicketSystemTech.Api.Controllers;
 
@@ -511,6 +513,7 @@ public class TicketsController : ControllerBase
         ticket.AssignedToUserId = null; // the previous assignee(s) likely don't belong to the destination branch
         var oldAssignees = await _db.TicketAssignees.Where(a => a.TicketId == ticket.Id).ToListAsync();
         _db.TicketAssignees.RemoveRange(oldAssignees);
+        await _db.EndRunningSessionsAsync(new[] { ticket.Id }, null, DateTime.UtcNow); // nobody is working it any more
         _db.TicketMessages.Add(new TicketMessage
         {
             TicketId = ticket.Id,
@@ -565,6 +568,7 @@ public class TicketsController : ControllerBase
         ticket.ResolutionSummary = request.ResolutionSummary;
         ticket.ClosedByUserId = _currentUser.UserId;
         ticket.ClosedAtUtc = DateTime.UtcNow;
+        await _db.EndRunningSessionsAsync(new[] { ticket.Id }, null, ticket.ClosedAtUtc.Value);
 
         var client = await _db.Users.FirstAsync(u => u.Id == ticket.ClientId);
         var closedBy = await _db.Users.FirstAsync(u => u.Id == _currentUser.UserId);
@@ -747,6 +751,7 @@ public class TicketsController : ControllerBase
         if (assignment is null) return NotFound();
 
         _db.TicketAssignees.Remove(assignment);
+        await _db.EndRunningSessionsAsync(new[] { id }, userId, DateTime.UtcNow); // the person stops working it
         if (ticket.AssignedToUserId == userId)
         {
             var remaining = await _db.TicketAssignees.Where(a => a.TicketId == id && a.UserId != userId).FirstOrDefaultAsync();
@@ -757,19 +762,95 @@ public class TicketsController : ControllerBase
         return Ok(await BuildDetailDto(id));
     }
 
-    /// <summary>Manually logs when work on the ticket started/ended — not tied to any single assignee.</summary>
-    [HttpPatch("{id:guid}/work-time")]
+    // ---------------- work sessions ----------------
+    // A ticket can have any number of sessions (the morning and the afternoon are two). They are the work of the person the
+    // ticket is assigned to; people added as extra help are listed on the ticket but log no time of their own.
+
+    private static DateTime AsUtc(DateTime value) => value.Kind switch
+    {
+        DateTimeKind.Utc => value,
+        DateTimeKind.Local => value.ToUniversalTime(),
+        _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+    };
+
+    private async Task<List<WorkSessionRules.Span>> OtherSessionsAsync(Guid ticketId, Guid? exceptSessionId) =>
+        await _db.TicketWorkSessions.AsNoTracking()
+            .Where(s => s.TicketId == ticketId && s.Id != exceptSessionId)
+            .Select(s => new WorkSessionRules.Span(s.Id, s.StartedAtUtc, s.EndedAtUtc))
+            .ToListAsync();
+
+    private void AuditWorkSession(string action, Guid ticketId, TicketWorkSession session) =>
+        _db.AuditLogs.Add(new AuditLog
+        {
+            UserId = _currentUser.UserId,
+            Action = action,
+            EntityType = nameof(Ticket),
+            EntityId = ticketId,
+            Details = $"session {session.Id} of user {session.UserId}: {session.StartedAtUtc:O} - {session.EndedAtUtc?.ToString("O") ?? "running"}"
+        });
+
+    /// <summary>Logs a stretch of work on the ticket, for the person it is assigned to.</summary>
+    [HttpPost("{id:guid}/work-sessions")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    public async Task<ActionResult<TicketDetailDto>> SetWorkTime(Guid id, SetTicketWorkTimeRequest request)
+    public async Task<ActionResult<TicketDetailDto>> AddWorkSession(Guid id, WorkSessionRequest request)
     {
         var ticket = await _db.Tickets.FirstOrDefaultAsync(t => t.Id == id);
         if (ticket is null) return NotFound();
         if (!CanAccess(ticket)) return Forbid();
-        if (request.StartedAtUtc.HasValue && request.EndedAtUtc.HasValue && request.EndedAtUtc < request.StartedAtUtc)
-            return BadRequest(new { message = "End time cannot be before start time." });
+        if (ticket.AssignedToUserId is null)
+            return BadRequest(new { message = "Assign the ticket to somebody before logging work time on it." });
 
-        ticket.WorkStartedAtUtc = request.StartedAtUtc;
-        ticket.WorkEndedAtUtc = request.EndedAtUtc;
+        var started = AsUtc(request.StartedAtUtc!.Value);
+        var ended = request.EndedAtUtc.HasValue ? AsUtc(request.EndedAtUtc.Value) : (DateTime?)null;
+        var error = WorkSessionRules.Validate(started, ended, DateTime.UtcNow, await OtherSessionsAsync(id, null));
+        if (error is not null) return BadRequest(new { message = error });
+
+        var session = new TicketWorkSession { TicketId = id, UserId = ticket.AssignedToUserId.Value, StartedAtUtc = started, EndedAtUtc = ended };
+        _db.TicketWorkSessions.Add(session);
+        AuditWorkSession("WorkSessionAdded", id, session);
+        await _db.SaveChangesAsync();
+
+        return Ok(await BuildDetailDto(id));
+    }
+
+    /// <summary>Changes the times of a session. It stays with the person who did the work, whoever the ticket belongs to now.</summary>
+    [HttpPut("{id:guid}/work-sessions/{sessionId:guid}")]
+    [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
+    public async Task<ActionResult<TicketDetailDto>> UpdateWorkSession(Guid id, Guid sessionId, WorkSessionRequest request)
+    {
+        var ticket = await _db.Tickets.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id);
+        if (ticket is null) return NotFound();
+        if (!CanAccess(ticket)) return Forbid();
+
+        var session = await _db.TicketWorkSessions.FirstOrDefaultAsync(s => s.Id == sessionId && s.TicketId == id);
+        if (session is null) return NotFound();
+
+        var started = AsUtc(request.StartedAtUtc!.Value);
+        var ended = request.EndedAtUtc.HasValue ? AsUtc(request.EndedAtUtc.Value) : (DateTime?)null;
+        var error = WorkSessionRules.Validate(started, ended, DateTime.UtcNow, await OtherSessionsAsync(id, sessionId));
+        if (error is not null) return BadRequest(new { message = error });
+
+        session.StartedAtUtc = started;
+        session.EndedAtUtc = ended;
+        AuditWorkSession("WorkSessionChanged", id, session);
+        await _db.SaveChangesAsync();
+
+        return Ok(await BuildDetailDto(id));
+    }
+
+    [HttpDelete("{id:guid}/work-sessions/{sessionId:guid}")]
+    [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
+    public async Task<ActionResult<TicketDetailDto>> DeleteWorkSession(Guid id, Guid sessionId)
+    {
+        var ticket = await _db.Tickets.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id);
+        if (ticket is null) return NotFound();
+        if (!CanAccess(ticket)) return Forbid();
+
+        var session = await _db.TicketWorkSessions.FirstOrDefaultAsync(s => s.Id == sessionId && s.TicketId == id);
+        if (session is null) return NotFound();
+
+        _db.TicketWorkSessions.Remove(session);
+        AuditWorkSession("WorkSessionDeleted", id, session);
         await _db.SaveChangesAsync();
 
         return Ok(await BuildDetailDto(id));
@@ -908,7 +989,13 @@ public class TicketsController : ControllerBase
 
         var assignees = await _db.TicketAssignees.AsNoTracking().Where(a => a.TicketId == ticketId).ToListAsync();
 
+        // How long staff worked is internal: the client gets an empty list.
+        var sessions = _currentUser.Role == UserRole.Client
+            ? new List<TicketWorkSession>()
+            : await _db.TicketWorkSessions.AsNoTracking().Where(s => s.TicketId == ticketId).OrderBy(s => s.StartedAtUtc).ToListAsync();
+
         var relevantUserIds = new List<Guid> { t.ClientId };
+        relevantUserIds.AddRange(sessions.Select(s => s.UserId));
         if (t.AssignedToUserId.HasValue) relevantUserIds.Add(t.AssignedToUserId.Value);
         relevantUserIds.AddRange(assignees.Select(a => a.UserId));
         relevantUserIds.AddRange(messages.Select(m => m.AuthorId));
@@ -925,6 +1012,7 @@ public class TicketsController : ControllerBase
         var ticketLevelAttachments = t.Attachments.Where(a => a.MessageId == null).Select(ToAttachmentDto).ToList();
 
         var assigneeDtos = assignees.Select(a => new TicketAssigneeDto(a.UserId, NameOf(a.UserId))).ToList();
+        var sessionDtos = sessions.Select(s => new TicketWorkSessionDto(s.Id, s.UserId, NameOf(s.UserId), s.StartedAtUtc, s.EndedAtUtc)).ToList();
 
         users.TryGetValue(t.ClientId, out var clientUser);
 
@@ -941,7 +1029,7 @@ public class TicketsController : ControllerBase
             _currentUser.Role == UserRole.Client ? null : t.Category?.Name,
             t.AssignedToUserId,
             t.AssignedToUserId.HasValue ? NameOf(t.AssignedToUserId.Value) : null,
-            assigneeDtos, t.WorkStartedAtUtc, t.WorkEndedAtUtc,
+            assigneeDtos, sessionDtos,
             t.OpenedAtUtc, t.ClosedAtUtc, t.ResolutionSummary, t.CreatedAt,
             ticketLevelAttachments, messageDtos
         );

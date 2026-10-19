@@ -94,8 +94,14 @@ export const ticketsApi = {
   removeAssignee: (id: string, userId: string) =>
     apiClient.delete<TicketDetailDto>(`/api/tickets/${id}/assignees/${userId}`).then((r) => r.data),
 
-  setWorkTime: (id: string, startedAtUtc: string | null, endedAtUtc: string | null) =>
-    apiClient.patch<TicketDetailDto>(`/api/tickets/${id}/work-time`, { startedAtUtc, endedAtUtc }).then((r) => r.data),
+  addWorkSession: (id: string, startedAtUtc: string, endedAtUtc: string | null) =>
+    apiClient.post<TicketDetailDto>(`/api/tickets/${id}/work-sessions`, { startedAtUtc, endedAtUtc }).then((r) => r.data),
+
+  updateWorkSession: (id: string, sessionId: string, startedAtUtc: string, endedAtUtc: string | null) =>
+    apiClient.put<TicketDetailDto>(`/api/tickets/${id}/work-sessions/${sessionId}`, { startedAtUtc, endedAtUtc }).then((r) => r.data),
+
+  deleteWorkSession: (id: string, sessionId: string) =>
+    apiClient.delete<TicketDetailDto>(`/api/tickets/${id}/work-sessions/${sessionId}`).then((r) => r.data),
 
   addMessage: (id: string, type: MessageType, bodyHtml: string) =>
     apiClient.post(`/api/tickets/${id}/messages`, { type, bodyHtml }).then((r) => r.data),

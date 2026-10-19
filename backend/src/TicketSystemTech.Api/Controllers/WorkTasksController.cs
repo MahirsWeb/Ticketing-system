@@ -241,30 +241,17 @@ public class WorkTasksController : ControllerBase
     }
 
     /// <summary>
-    /// A ticket's Gantt block uses the manually-logged work session if staff filled one in (WorkStartedAtUtc/
-    /// WorkEndedAtUtc, precise), otherwise falls back to when the ticket was opened/closed — so a ticket shows
-    /// up on the timeline as soon as it's opened, without staff having to remember to fill in a separate field.
+    /// A ticket's blocks on the chart are the work sessions the person logged on it (any number a day). A ticket assigned to
+    /// them with no logged work at all still shows, from opening to closing, so it does not disappear just because nobody typed
+    /// in a time. People added to a ticket as extra help have no sessions and therefore no block on it.
     /// </summary>
     private async Task<List<GanttEntryDto>> BuildGanttEntriesAsync(Guid userId, DateTime day)
     {
         var dayEnd = day.AddDays(1);
 
-        var ticketRows = await _db.Tickets.AsNoTracking()
-            .Where(t => t.AssignedToUserId == userId || t.Assignees.Any(a => a.UserId == userId))
-            .Select(t => new
-            {
-                t.Id,
-                t.TicketNumber,
-                t.Title,
-                t.Status,
-                Start = t.WorkStartedAtUtc ?? t.OpenedAtUtc,
-                End = t.WorkEndedAtUtc ?? t.ClosedAtUtc
-            })
-            .Where(t => t.Start != null && t.Start < dayEnd && (t.End == null || t.End >= day))
-            .ToListAsync();
-
-        var tickets = ticketRows
-            .Select(t => new GanttEntryDto("Ticket", t.Id, $"#{t.TicketNumber} — {t.Title}", t.Status.ToString(), t.Start, t.End, t.Status.ToString()))
+        var blocks = await Queries.TicketWorkBlocks.ForUserAsync(_db, userId, day, dayEnd, null);
+        var tickets = blocks
+            .Select(b => new GanttEntryDto("Ticket", b.TicketId, $"#{b.TicketNumber} — {b.Title}", b.Status.ToString(), b.Start, b.End, b.Status.ToString()))
             .ToList();
 
         var tasks = await _db.WorkTasks.AsNoTracking()

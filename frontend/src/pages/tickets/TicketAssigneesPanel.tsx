@@ -56,12 +56,16 @@ export function TicketAssigneesPanel({ ticket, onChanged }: { ticket: TicketDeta
         {ticket.assignees.map((a) => (
           <span key={a.userId} className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
             {a.name}
+            <span className="text-[10px] font-semibold uppercase text-slate-400">{a.userId === ticket.assignedToUserId ? 'works on it' : 'helps'}</span>
             <button type="button" disabled={busy} onClick={() => handleRemove(a.userId)} className="font-bold text-slate-400 hover:text-red-600">
               ×
             </button>
           </span>
         ))}
       </div>
+      {ticket.assignees.length > 1 && (
+        <p className="mt-1 text-xs text-slate-400">Only the person who works on the ticket logs time on it. The others help, without time of their own.</p>
+      )}
       {available.length > 0 && (
         <div className="mt-2 flex items-center gap-2">
           <div className="w-52">

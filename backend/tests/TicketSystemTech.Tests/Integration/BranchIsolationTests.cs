@@ -118,7 +118,9 @@ public class BranchIsolationTests
             ("transfer to another branch", _world.Post(actor, $"/api/tickets/{id}/transfer-branch", new { departmentId = _world.BranchA })),
             ("add an assignee", _world.Post(actor, $"/api/tickets/{id}/assignees", new { userId = _world.EmpA1.Id })),
             ("remove an assignee", _world.Send(actor, HttpMethod.Delete, $"/api/tickets/{id}/assignees/{_world.EmpA1.Id}")),
-            ("set work time", _world.Send(actor, HttpMethod.Patch, $"/api/tickets/{id}/work-time", new { startedAtUtc = DateTime.UtcNow })),
+            ("log a work session", _world.Post(actor, $"/api/tickets/{id}/work-sessions", new { startedAtUtc = DateTime.UtcNow.AddHours(-2), endedAtUtc = DateTime.UtcNow.AddHours(-1) })),
+            ("change a work session", _world.Send(actor, HttpMethod.Put, $"/api/tickets/{id}/work-sessions/{anyId}", new { startedAtUtc = DateTime.UtcNow.AddHours(-2) })),
+            ("delete a work session", _world.Send(actor, HttpMethod.Delete, $"/api/tickets/{id}/work-sessions/{anyId}")),
             ("upload an attachment", _world.Post(actor, $"/api/tickets/{id}/attachments", UploadForm())),
         };
 
@@ -138,7 +140,7 @@ public class BranchIsolationTests
             var t = await db.Tickets.AsNoTracking().SingleAsync(x => x.Id == ticketId);
             return (await db.TicketMessages.CountAsync(m => m.TicketId == ticketId),
                     await db.TicketAssignees.CountAsync(a => a.TicketId == ticketId),
-                    await db.TicketAttachments.CountAsync(a => a.TicketId == ticketId),
+                    await db.TicketAttachments.CountAsync(a => a.TicketId == ticketId) + await db.TicketWorkSessions.CountAsync(s => s.TicketId == ticketId),
                     t.Status, t.DepartmentId);
         });
 

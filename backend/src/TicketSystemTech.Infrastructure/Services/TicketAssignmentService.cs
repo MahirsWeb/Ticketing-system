@@ -33,6 +33,9 @@ public class TicketAssignmentService : ITicketAssignmentService
             .ToListAsync(ct);
         if (tickets.Count == 0) return 0;
 
+        // They stop working these tickets now: a session left running would keep counting after they have gone.
+        await _db.EndRunningSessionsAsync(tickets.Select(t => t.Id).ToList(), userId, DateTime.UtcNow, ct);
+
         var orphaned = new List<Ticket>();
         foreach (var ticket in tickets)
         {
