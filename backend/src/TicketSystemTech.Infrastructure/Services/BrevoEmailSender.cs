@@ -79,5 +79,11 @@ public class BrevoEmailSender : IEmailSender
         {
             _logger.LogError(ex, "Brevo email send timed out to {Email}", toEmail);
         }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The HTTP resilience pipeline reports its own timeouts and an open circuit breaker as exceptions of its
+            // own (neither is an HttpRequestException). The email is a best-effort side effect: log it, do not fail.
+            _logger.LogError(ex, "Brevo email send to {Email} was not attempted or did not finish ({Reason})", toEmail, ex.GetType().Name);
+        }
     }
 }

@@ -15,6 +15,7 @@ using TicketSystemTech.Application.KnowledgeBase;
 using TicketSystemTech.Infrastructure.Identity;
 using TicketSystemTech.Infrastructure.Persistence;
 using TicketSystemTech.Infrastructure.Services;
+using TicketSystemTech.Api.Configuration;
 using TicketSystemTech.Api.Realtime;
 
 // Disable appsettings.json hot-reload watching: it uses inotify under the hood, and long-lived containers
@@ -51,7 +52,10 @@ var jwtOptions = builder.Configuration.GetSection("Jwt").Get<JwtOptions>() ?? ne
 
 // ---- Database ----
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"),
+        // A dropped connection, a failover or a deadlock victim is retried a few times instead of becoming a 500.
+        // (Safe here: the application never opens an explicit transaction of its own.)
+        sql => sql.EnableRetryOnFailure(maxRetryCount: 3, maxRetryDelay: TimeSpan.FromSeconds(5), errorNumbersToAdd: null)));
 
 // Encrypts PII columns (email, phone, address) at rest. Must be registered as a singleton — see
 // PiiProtector's doc comment — and the custom ILookupNormalizer must be registered before AddIdentity()
@@ -148,7 +152,6 @@ builder.Services.AddScoped<IHtmlSanitizerService, HtmlSanitizerService>();
 builder.Services.Configure<SlaOptions>(builder.Configuration.GetSection("Sla"));
 builder.Services.AddSingleton<ISlaCalculator>(sp =>
     new TicketSystemTech.Application.Sla.SlaCalculator(sp.GetRequiredService<IOptions<SlaOptions>>().Value));
-builder.Services.AddScoped<IEmailSender, BrevoEmailSender>();
 builder.Services.AddScoped<ITicketNumberGenerator, TicketNumberGenerator>();
 builder.Services.AddScoped<IDateTimeProvider, DateTimeProvider>();
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
@@ -156,7 +159,6 @@ builder.Services.AddScoped<ITemporaryPasswordGenerator, TemporaryPasswordGenerat
 builder.Services.AddScoped<IFileStorage, LocalFileStorage>();
 builder.Services.AddScoped<IFileLinkService, FileLinkService>();
 builder.Services.AddScoped<ITicketAssignmentService, TicketAssignmentService>();
-builder.Services.AddScoped<IEmbeddingService, GoogleAiEmbeddingService>();
 builder.Services.AddScoped<IKnowledgeBaseIndexer, KnowledgeBaseIndexer>();
 builder.Services.AddSingleton<IVectorIndex, VectorIndex>();
 builder.Services.AddSingleton<TicketSystemTech.Api.BackgroundJobs.KnowledgeBaseReindexService>();
@@ -164,14 +166,14 @@ builder.Services.AddSingleton<IKnowledgeBaseReindexJob>(sp => sp.GetRequiredServ
 builder.Services.AddHostedService(sp => sp.GetRequiredService<TicketSystemTech.Api.BackgroundJobs.KnowledgeBaseReindexService>());
 builder.Services.AddScoped<IDocumentTextExtractor, DocumentTextExtractor>();
 builder.Services.AddScoped<IKnowledgeBaseDocumentIndexer, KnowledgeBaseDocumentIndexer>();
-builder.Services.AddScoped<IChatCompletionService, GeminiChatCompletionService>();
-builder.Services.AddScoped<IEmailIntegrationService, GraphEmailIntegrationService>();
 builder.Services.Configure<MicrosoftGraphOptions>(builder.Configuration.GetSection("MicrosoftGraph"));
 builder.Services.AddSingleton<INotificationPublisher, SignalRNotificationPublisher>();
 builder.Services.AddHostedService<TicketSystemTech.Api.BackgroundJobs.OverdueTicketNotifier>();
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddHttpClient();
+// Brevo, Gemini, embeddings and Microsoft Graph: one typed client each, with its own timeouts, retries and circuit breaker.
+builder.Services.AddOutboundHttpClients();
 builder.Services.AddMemoryCache();
+builder.Services.AddHealthChecks().AddCheck<TicketSystemTech.Api.Health.DatabaseHealthCheck>("database", tags: new[] { "ready" });
 builder.Services.AddScoped<TicketSystemTech.Api.Middleware.UserStatusValidationMiddleware>();
 // Key ring persisted to the database (not local disk) so encrypted OAuth tokens survive redeploys.
 builder.Services.AddDataProtection()
@@ -233,20 +235,28 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
+try
 {
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-    var startupLogger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    var seedPasswordGenerator = scope.ServiceProvider.GetRequiredService<ITemporaryPasswordGenerator>();
-    var tempPasswordOptions = scope.ServiceProvider.GetRequiredService<IOptions<TemporaryPasswordOptions>>();
-    var piiProtector = scope.ServiceProvider.GetRequiredService<IPiiProtector>();
-    await db.Database.MigrateAsync();
-    await TicketSystemTech.Infrastructure.Persistence.PiiBackfillMigration.RunAsync(db, piiProtector, startupLogger);
-    await TicketSystemTech.Infrastructure.Persistence.EmbeddingFormatBackfill.RunAsync(
-        db, TicketSystemTech.Infrastructure.Services.GoogleAiEmbeddingService.Model, startupLogger);
-    await TicketSystemTech.Infrastructure.Persistence.DbSeeder.SeedAsync(
-        db, userManager, startupLogger, builder.Configuration, seedPasswordGenerator, tempPasswordOptions);
+    await TicketSystemTech.Api.Startup.StartupTasks.RunAsync(
+        app.Services, builder.Configuration, app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup"));
+}
+catch (Exception ex)
+{
+    // Logged through Serilog before the process ends: an exception that simply escapes Main prints to stderr only, which
+    // is easy to miss and leaves a crash-looping service with nothing to diagnose.
+    Log.Fatal(ex, "Startup tasks failed; the application will not start");
+    await Log.CloseAndFlushAsync();
+    Environment.ExitCode = 1;
+    return;
+}
+
+// `dotnet run -- --migrate-only` applies migrations and the other startup tasks and exits, so a deployment can do that as a
+// step of its own (see Startup:Migrate).
+if (args.Contains("--migrate-only"))
+{
+    Log.Information("--migrate-only: startup tasks finished, exiting");
+    await Log.CloseAndFlushAsync();
+    return;
 }
 
 app.UseForwardedHeaders(new ForwardedHeadersOptions
@@ -295,9 +305,40 @@ app.UseAuthorization();
 // Render's health check hits the service root by default — without this it 404s and Render kills the
 // instance in an endless restart loop, even though the app itself started up fine.
 app.MapGet("/", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
+
+// /health/live: the process is up (no dependencies checked, so a database outage does not get a healthy instance killed
+// and restarted pointlessly). /health/ready and /api/health: it can really serve requests, i.e. the database answers and
+// its schema is current. A host's health check should point at one of the latter.
+var healthOptions = new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = registration => registration.Tags.Contains("ready"),
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsJsonAsync(new
+        {
+            status = report.Status.ToString(),
+            checks = report.Entries.Select(e => new { name = e.Key, status = e.Value.Status.ToString(), description = e.Value.Description })
+        });
+    }
+};
+app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
+app.MapHealthChecks("/health/ready", healthOptions).AllowAnonymous();
+app.MapHealthChecks("/api/health", healthOptions).AllowAnonymous();
 app.MapControllers();
 // A long-lived WebSocket would otherwise keep receiving per-user and per-role pushes after its JWT has expired.
 app.MapHub<NotificationsHub>("/hubs/notifications", options => options.CloseOnAuthenticationExpiration = true);
 
-app.Run();
+try
+{
+    app.Run();
+}
+catch (Exception ex) when (ex is not Microsoft.Extensions.Hosting.HostAbortedException)
+{
+    Log.Fatal(ex, "The application terminated unexpectedly");
+    Environment.ExitCode = 1;
+}
+finally
+{
+    await Log.CloseAndFlushAsync();
+}

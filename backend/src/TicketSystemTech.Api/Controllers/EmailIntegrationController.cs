@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using TicketSystemTech.Api.Contracts;
+using TicketSystemTech.Application.Common;
 using TicketSystemTech.Application.Common.Interfaces;
 using TicketSystemTech.Application.Common.Options;
 using TicketSystemTech.Domain.Enums;
@@ -54,9 +55,11 @@ public class EmailIntegrationController : ControllerBase
             var status = await _emailService.ConnectAsync(_currentUser.DepartmentId!.Value, _currentUser.UserId!.Value, request.Code, request.RedirectUri);
             return Ok(new EmailConnectionStatusDto(status.Connected, status.ConnectedEmail));
         }
-        catch (Exception ex)
+        catch (ExternalServiceException ex)
         {
-            return BadRequest(new { message = "Could not connect the branch mailbox. Please try again.", detail = ex.Message });
+            // Written to be shown. Anything else is a genuine fault and goes to the global handler (with a trace id)
+            // instead of being echoed to the browser as raw exception text.
+            return BadRequest(new { message = ex.Message });
         }
     }
 

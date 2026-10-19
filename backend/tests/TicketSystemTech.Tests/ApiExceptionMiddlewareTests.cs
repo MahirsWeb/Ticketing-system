@@ -5,6 +5,7 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using TicketSystemTech.Api.Middleware;
+using TicketSystemTech.Application.Common;
 
 namespace TicketSystemTech.Tests;
 
@@ -53,6 +54,26 @@ public class ApiExceptionMiddlewareTests
         var (_, body) = await RunAsync(new InvalidOperationException("boom"), environment: "Development");
 
         Assert.Equal("boom", body.GetProperty("detail").GetString());
+    }
+
+    [Fact]
+    public async Task A_provider_that_is_down_is_a_503_with_a_message_meant_to_be_shown()
+    {
+        var inner = new HttpRequestException("socket closed: secret.internal.host:443");
+        var (context, body) = await RunAsync(new ExternalServiceException("Microsoft 365", "Microsoft 365 could not be reached right now.", unavailable: true, inner));
+
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, context.Response.StatusCode);
+        Assert.Equal("EXTERNAL_SERVICE", body.GetProperty("code").GetString());
+        Assert.Equal("Microsoft 365 could not be reached right now.", body.GetProperty("message").GetString());
+        Assert.DoesNotContain("secret.internal.host", body.ToString()); // the inner exception never reaches the client
+    }
+
+    [Fact]
+    public async Task A_provider_that_refused_the_request_is_a_502()
+    {
+        var (context, _) = await RunAsync(new ExternalServiceException("Microsoft 365", "Microsoft 365 did not accept the request.", unavailable: false));
+
+        Assert.Equal(StatusCodes.Status502BadGateway, context.Response.StatusCode);
     }
 
     [Fact]

@@ -70,7 +70,19 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
             ["scope"] = Scopes,
         };
 
-        var tokenResponse = await PostFormAsync(TokenEndpoint, form, ct);
+        JsonElement tokenResponse;
+        try
+        {
+            tokenResponse = await PostFormAsync(TokenEndpoint, form, ct);
+        }
+        catch (ExternalServiceException ex) when (!ex.Unavailable)
+        {
+            // Here (the one-time authorization code) a refusal means the sign-in itself was not accepted, e.g. the code
+            // was already used or has expired: "the connection expired" would send the user to the wrong place.
+            throw new ExternalServiceException("Microsoft 365",
+                "Microsoft did not accept the sign-in (it may have expired or already been used). Please start connecting the mailbox again.",
+                unavailable: false, ex);
+        }
 
         var accessToken = tokenResponse.GetProperty("access_token").GetString()!;
         var refreshToken = tokenResponse.GetProperty("refresh_token").GetString()!;
@@ -78,8 +90,8 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
 
         var request = new HttpRequestMessage(HttpMethod.Get, $"{GraphBase}/me?$select=mail,userPrincipalName");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        var meResponse = await _http.SendAsync(request, ct);
-        meResponse.EnsureSuccessStatusCode();
+        var meResponse = await SendAsync(request, ct);
+        if (!meResponse.IsSuccessStatusCode) throw RejectedBy(meResponse.StatusCode, null);
         using var meDoc = JsonDocument.Parse(await meResponse.Content.ReadAsStreamAsync(ct));
         var mail = meDoc.RootElement.TryGetProperty("mail", out var m) && m.ValueKind == JsonValueKind.String
             ? m.GetString()
@@ -276,16 +288,34 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
         return conn;
     }
 
+    /// <summary>Reads are repeated a couple of times when Microsoft cannot be reached or says it is busy; they change nothing,
+    /// so repeating them is harmless. (The OAuth token POST is deliberately not repeated.)</summary>
     private async Task<JsonDocument> GetGraphAsync(EmailConnection conn, string url, CancellationToken ct)
+    {
+        const int attempts = 3;
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return await GetGraphOnceAsync(conn, url, ct);
+            }
+            catch (ExternalServiceException ex) when (ex.Unavailable && attempt < attempts)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(500 * attempt * attempt), ct); // 0.5 s, then 2 s
+            }
+        }
+    }
+
+    private async Task<JsonDocument> GetGraphOnceAsync(EmailConnection conn, string url, CancellationToken ct)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Unprotect(conn.AccessToken));
-        var response = await _http.SendAsync(request, ct);
+        var response = await SendAsync(request, ct);
         if (!response.IsSuccessStatusCode)
         {
             var body = await response.Content.ReadAsStringAsync(ct);
             _logger.LogWarning("Microsoft Graph request failed ({Status}): {Body}", response.StatusCode, body);
-            response.EnsureSuccessStatusCode();
+            throw RejectedBy(response.StatusCode, body);
         }
         return JsonDocument.Parse(await response.Content.ReadAsStreamAsync(ct));
     }
@@ -293,13 +323,43 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
     private async Task<JsonElement> PostFormAsync(string url, Dictionary<string, string> form, CancellationToken ct)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = new FormUrlEncodedContent(form) };
-        var response = await _http.SendAsync(request, ct);
+        var response = await SendAsync(request, ct);
         var body = await response.Content.ReadAsStringAsync(ct);
         if (!response.IsSuccessStatusCode)
         {
             _logger.LogWarning("Microsoft token endpoint request failed ({Status}): {Body}", response.StatusCode, body);
-            response.EnsureSuccessStatusCode();
+            throw RejectedBy(response.StatusCode, body);
         }
         return JsonDocument.Parse(body).RootElement.Clone();
+    }
+
+    /// <summary>Sends a request to Microsoft, turning "could not reach it / it was too slow / the circuit breaker is open"
+    /// into one exception the API can answer with 503 and a clear message. A caller that gave up is left alone.</summary>
+    private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+    {
+        try
+        {
+            return await _http.SendAsync(request, ct);
+        }
+        catch (Exception ex) when (!(ex is OperationCanceledException && ct.IsCancellationRequested))
+        {
+            _logger.LogWarning(ex, "Microsoft 365 could not be reached ({Reason})", ex.GetType().Name);
+            throw new ExternalServiceException("Microsoft 365",
+                "Microsoft 365 could not be reached right now. Please try again in a minute.", unavailable: true, ex);
+        }
+    }
+
+    /// <summary>What a non-success answer from Microsoft means for the user. Status and the OAuth error code are
+    /// examined, but the provider's own text is never passed on.</summary>
+    private static ExternalServiceException RejectedBy(System.Net.HttpStatusCode status, string? body)
+    {
+        if (status == System.Net.HttpStatusCode.TooManyRequests || (int)status >= 500)
+            return new ExternalServiceException("Microsoft 365", "Microsoft 365 is busy right now. Please try again in a minute.", unavailable: true);
+
+        var expired = status == System.Net.HttpStatusCode.Unauthorized
+            || (body is not null && body.Contains("invalid_grant", StringComparison.OrdinalIgnoreCase));
+        return expired
+            ? new ExternalServiceException("Microsoft 365", "The mailbox connection has expired or was revoked. Disconnect the mailbox and connect it again.", unavailable: false)
+            : new ExternalServiceException("Microsoft 365", "Microsoft 365 did not accept the request. If this keeps happening, reconnect the mailbox.", unavailable: false);
     }
 }

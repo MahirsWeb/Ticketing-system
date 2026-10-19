@@ -194,6 +194,7 @@ direktno u bazi.
 | `Pii:HashKey` | ✅ Da (obavezno izvan Development) | Ključ HMAC hasha kojim se nalozi traže po emailu. **Ne mijenjaj ga nakon što već postoje nalozi** — niko se više ne bi mogao ulogovati. Enkripcija sadržaja koristi ključeve iz tabele `DataProtectionKeys`, koja mora biti u svakom backupu. |
 | `Storage:UploadsPath` | Ne | Folder za priloge tiketa i dokumente baze znanja (default `App_Data/uploads` pored aplikacije). Ne servira se javno; za produkciju postavi putanju **van** foldera koji se redeploya. Prilozi se otvaraju kroz potpisane linkove koji ističu za 4 sata. |
 | `SeedAdmin:Email` / `Password` | ✅ Email da, lozinka ne | Email za prvi Admin nalog koji se automatski pravi. Ako ostaviš `Password` prazno, generiše se nasumična privremena lozinka (ispiše se u terminalu). |
+| `Startup:Migrate` | Ne (default `true`) | Da li backend pri pokretanju sam primjenjuje migracije i jednokratne popravke baze. Postavi na `false` ako migracije radiš kao zaseban korak (`dotnet TicketSystemTech.Api.dll --migrate-only` — primijeni migracije, seeduje prvog admina i izađe); backend tada odbija da krene na neažuriranoj bazi. Više instanci koje krenu istovremeno čekaju jedna drugu (SQL Server zaključak), pa se migracije ne izvršavaju paralelno. |
 | `Sla:Mode` | Ne (default `CalendarHours`) | Kako se računa rok tiketa iz SLA plana. `CalendarHours` = sati teku non-stop (plan od 24 h = rok za 24 h). `BusinessHours` = broje se samo radni sati. Rok koji osoblje ručno unese uvijek ima prednost. |
 | `Sla:TimeZoneId`, `Sla:WorkdayStart`, `Sla:WorkdayEnd` | Ne | Samo za `BusinessHours`: vremenska zona (default `Europe/Sarajevo`) i radno vrijeme (default `08:00`–`16:00`). |
 | `Sla:WorkDays`, `Sla:Holidays` | Ne | Samo za `BusinessHours`: radni dani (default ponedjeljak–petak) i neradni datumi (`yyyy-MM-dd`). Ako ih postaviš, **zamjenjuju** default; ne dodaju se na njega. |
@@ -254,6 +255,11 @@ internih bilješki), pa je to znatno manje posla nego ranije.
 tiketa, prikazuje napredak u logu). Stari JSON ostaje u koloni `EmbeddingJson` kao sigurnosna kopija. Kad
 provjeriš da AI pretraga radi, možeš osloboditi prostor:
 `UPDATE KnowledgeBaseChunks SET EmbeddingJson = NULL WHERE EmbeddingBinary IS NOT NULL;`
+
+**Kako provjeriti da li backend radi (health check)**
+→ `GET /health/live` — proces je podignut (ne provjerava bazu). `GET /health/ready` (isto i `GET /api/health`) — baza
+odgovara i ima aktuelnu shemu; vraća `503` ako ne, bez ikakvih internih detalja. Monitoring ili load balancer treba da
+gleda `/health/ready`.
 
 **Zaboravio sam admin lozinku**
 → Restartuj backend — ako nalog i dalje postoji (samo je lozinka nepoznata), obriši ga direktno u bazi
