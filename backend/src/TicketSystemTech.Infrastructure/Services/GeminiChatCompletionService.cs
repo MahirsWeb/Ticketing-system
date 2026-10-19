@@ -36,7 +36,9 @@ public class GeminiChatCompletionService : IChatCompletionService
 
         try
         {
-            var url = $"https://generativelanguage.googleapis.com/v1beta/models/{Model}:generateContent?key={apiKey}";
+            // The key travels in a header, not in the query string: HttpClient's built-in logging writes the full
+            // request URI at Information level, which would put the key into every log line.
+            var url = $"https://generativelanguage.googleapis.com/v1beta/models/{Model}:generateContent";
 
             var userPrompt =
                 $"""
@@ -51,12 +53,17 @@ public class GeminiChatCompletionService : IChatCompletionService
                 nothing relevant was found in the knowledge base — do not guess or use outside knowledge.
                 """;
 
-            var response = await _httpClient.PostAsJsonAsync(url, new
+            using var request = new HttpRequestMessage(HttpMethod.Post, url)
             {
-                system_instruction = new { parts = new[] { new { text = systemInstruction } } },
-                contents = new[] { new { role = "user", parts = new[] { new { text = userPrompt } } } },
-                generationConfig = new { temperature = 0.2 }
-            }, ct);
+                Content = JsonContent.Create(new
+                {
+                    system_instruction = new { parts = new[] { new { text = systemInstruction } } },
+                    contents = new[] { new { role = "user", parts = new[] { new { text = userPrompt } } } },
+                    generationConfig = new { temperature = 0.2 }
+                })
+            };
+            request.Headers.Add("x-goog-api-key", apiKey);
+            var response = await _httpClient.SendAsync(request, ct);
 
             if (!response.IsSuccessStatusCode)
             {

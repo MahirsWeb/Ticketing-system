@@ -9,14 +9,20 @@ export function TempPasswordModal({ result, onClose }: { result: CreatedUserResp
       <Card className="w-full max-w-md p-6">
         <h2 className="mb-2 text-lg font-bold text-slate-900">Account created</h2>
         <p className="mb-4 text-sm text-slate-600">
-          An invite with this temporary password has been emailed to <span className="font-semibold">{result.email}</span>.
-          It's shown here too in case you need it. It expires at{' '}
+          An invite with a temporary password has been emailed to <span className="font-semibold">{result.email}</span>.
+          {result.temporaryPassword !== null && " It's shown here too in case you need it."} It expires at{' '}
           <span className="font-semibold">{format(expiresAt, 'HH:mm:ss')}</span>{' '}
           ({formatDistanceToNow(expiresAt, { addSuffix: true })}).
         </p>
-        <div className="mb-4 rounded-md border border-dashed border-slate-300 bg-slate-50 p-4 text-center font-mono text-xl tracking-wider text-slate-900">
-          {result.temporaryPassword}
-        </div>
+        {result.temporaryPassword !== null ? (
+          <div className="mb-4 rounded-md border border-dashed border-slate-300 bg-slate-50 p-4 text-center font-mono text-xl tracking-wider text-slate-900">
+            {result.temporaryPassword}
+          </div>
+        ) : (
+          <p className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-600">
+            The password was sent only to the account owner by email.
+          </p>
+        )}
         <Button className="w-full" onClick={onClose}>
           Done
         </Button>

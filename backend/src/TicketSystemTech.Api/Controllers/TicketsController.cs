@@ -1,3 +1,4 @@
+using System.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -6,6 +7,7 @@ using TicketSystemTech.Api.Emails;
 using TicketSystemTech.Application.Common.Interfaces;
 using TicketSystemTech.Domain.Entities;
 using TicketSystemTech.Domain.Enums;
+using TicketSystemTech.Infrastructure.Identity;
 using TicketSystemTech.Infrastructure.Persistence;
 
 namespace TicketSystemTech.Api.Controllers;
@@ -22,6 +24,8 @@ public class TicketsController : ControllerBase
     private readonly INotificationPublisher _notificationPublisher;
     private readonly IKnowledgeBaseIndexer _knowledgeBaseIndexer;
     private readonly IPiiProtector _piiProtector;
+    private readonly IHtmlSanitizerService _html;
+    private readonly IFileLinkService _links;
 
     public TicketsController(
         AppDbContext db,
@@ -30,8 +34,11 @@ public class TicketsController : ControllerBase
         IEmailSender emailSender,
         INotificationPublisher notificationPublisher,
         IKnowledgeBaseIndexer knowledgeBaseIndexer,
-        IPiiProtector piiProtector)
+        IPiiProtector piiProtector,
+        IHtmlSanitizerService html,
+        IFileLinkService links)
     {
+        _links = links;
         _db = db;
         _currentUser = currentUser;
         _ticketNumberGenerator = ticketNumberGenerator;
@@ -39,7 +46,13 @@ public class TicketsController : ControllerBase
         _notificationPublisher = notificationPublisher;
         _knowledgeBaseIndexer = knowledgeBaseIndexer;
         _piiProtector = piiProtector;
+        _html = html;
     }
+
+    // Names/branches are user-controlled text interpolated into HTML the server itself builds
+    // (system-event feed entries), so they must be encoded.
+    private static string H(string? text) => WebUtility.HtmlEncode(text ?? string.Empty);
+    private static string FullName(ApplicationUser u) => $"{H(u.FirstName)} {H(u.LastName)}";
 
     [HttpPost]
     [Authorize(Roles = nameof(UserRole.Client))]
@@ -60,7 +73,7 @@ public class TicketsController : ControllerBase
         {
             TicketNumber = await _ticketNumberGenerator.NextAsync(),
             Title = request.Title,
-            Description = request.Description,
+            Description = _html.Sanitize(request.Description),
             ClientId = clientId,
             CompanyId = companyId.Value,
             DepartmentId = department.Id,
@@ -125,7 +138,7 @@ public class TicketsController : ControllerBase
         {
             TicketNumber = await _ticketNumberGenerator.NextAsync(),
             Title = request.Title,
-            Description = request.Description,
+            Description = _html.Sanitize(request.Description),
             ClientId = client.Id,
             CompanyId = client.CompanyId.Value,
             Status = TicketStatus.Open,
@@ -150,7 +163,7 @@ public class TicketsController : ControllerBase
             Ticket = ticket,
             AuthorId = openedBy.Id,
             Type = MessageType.SystemEvent,
-            BodyHtml = $"<p>Ticket opened by {openedBy.FirstName} {openedBy.LastName} and assigned to {assignee.FirstName} {assignee.LastName}.</p>"
+            BodyHtml = $"<p>Ticket opened by {FullName(openedBy)} and assigned to {FullName(assignee)}.</p>"
         });
 
         _db.Notifications.Add(new Notification { UserId = assignee.Id, Type = NotificationType.TicketAssigned, Message = $"Ticket #{ticket.TicketNumber} assigned to you", TicketId = ticket.Id });
@@ -320,6 +333,7 @@ public class TicketsController : ControllerBase
     {
         var ticket = await _db.Tickets.FirstOrDefaultAsync(t => t.Id == id);
         if (ticket is null) return NotFound();
+        if (!CanAccess(ticket)) return Forbid();
         if (ticket.Status != TicketStatus.New) return BadRequest(new { message = "Only new tickets can be opened." });
 
         // The client's branch pick is only a suggestion — any staff member (not just Admin) can correct it
@@ -356,7 +370,7 @@ public class TicketsController : ControllerBase
             TicketId = ticket.Id,
             AuthorId = openedBy.Id,
             Type = MessageType.SystemEvent,
-            BodyHtml = $"<p>Ticket opened by {openedBy.FirstName} {openedBy.LastName} and assigned to {assignee.FirstName} {assignee.LastName}.</p>"
+            BodyHtml = $"<p>Ticket opened by {FullName(openedBy)} and assigned to {FullName(assignee)}.</p>"
         });
 
         _db.Notifications.Add(new Notification { UserId = assignee.Id, Type = NotificationType.TicketAssigned, Message = $"Ticket #{ticket.TicketNumber} assigned to you", TicketId = ticket.Id });
@@ -400,7 +414,7 @@ public class TicketsController : ControllerBase
             TicketId = ticket.Id,
             AuthorId = transferredBy.Id,
             Type = MessageType.SystemEvent,
-            BodyHtml = $"<p>Ticket transferred from <b>{fromDepartment?.Name ?? "(unrouted)"}</b> to <b>{toDepartment.Name}</b> by {transferredBy.FirstName} {transferredBy.LastName}.</p>"
+            BodyHtml = $"<p>Ticket transferred from <b>{H(fromDepartment?.Name ?? "(unrouted)")}</b> to <b>{H(toDepartment.Name)}</b> by {FullName(transferredBy)}.</p>"
         });
         await _db.SaveChangesAsync();
 
@@ -445,7 +459,6 @@ public class TicketsController : ControllerBase
 
         ticket.Status = TicketStatus.Closed;
         ticket.ResolutionSummary = request.ResolutionSummary;
-        ticket.TechnicalNotes = request.TechnicalNotes;
         ticket.ClosedByUserId = _currentUser.UserId;
         ticket.ClosedAtUtc = DateTime.UtcNow;
 
@@ -457,7 +470,7 @@ public class TicketsController : ControllerBase
             TicketId = ticket.Id,
             AuthorId = closedBy.Id,
             Type = MessageType.SystemEvent,
-            BodyHtml = $"<p>Ticket closed by {closedBy.FirstName} {closedBy.LastName}.</p>"
+            BodyHtml = $"<p>Ticket closed by {FullName(closedBy)}.</p>"
         });
 
         _db.Notifications.Add(new Notification { UserId = client.Id, Type = NotificationType.TicketClosed, Message = $"Ticket #{ticket.TicketNumber} has been resolved", TicketId = ticket.Id });
@@ -495,7 +508,7 @@ public class TicketsController : ControllerBase
             TicketId = ticket.Id,
             AuthorId = reopenedBy.Id,
             Type = MessageType.SystemEvent,
-            BodyHtml = $"<p>Ticket reopened by {reopenedBy.FirstName} {reopenedBy.LastName}.</p>"
+            BodyHtml = $"<p>Ticket reopened by {FullName(reopenedBy)}.</p>"
         });
 
         await _db.SaveChangesAsync();
@@ -531,7 +544,7 @@ public class TicketsController : ControllerBase
             TicketId = id,
             AuthorId = addedBy.Id,
             Type = MessageType.SystemEvent,
-            BodyHtml = $"<p>{user.FirstName} {user.LastName} added as an assignee by {addedBy.FirstName} {addedBy.LastName}.</p>"
+            BodyHtml = $"<p>{FullName(user)} added as an assignee by {FullName(addedBy)}.</p>"
         });
 
         _db.Notifications.Add(new Notification { UserId = user.Id, Type = NotificationType.TicketAssigned, Message = $"Ticket #{ticket.TicketNumber} assigned to you", TicketId = ticket.Id });
@@ -600,7 +613,7 @@ public class TicketsController : ControllerBase
             TicketId = id,
             AuthorId = _currentUser.UserId!.Value,
             Type = request.Type,
-            BodyHtml = request.BodyHtml
+            BodyHtml = _html.Sanitize(request.BodyHtml)
         };
         _db.TicketMessages.Add(message);
         await _db.SaveChangesAsync();
@@ -652,6 +665,10 @@ public class TicketsController : ControllerBase
         _ => false
     };
 
+    /// <summary>The link handed to the browser is a signed, expiring download URL — never the raw storage path.</summary>
+    private TicketAttachmentDto ToAttachmentDto(TicketAttachment a) =>
+        new(a.Id, a.FileName, _links.ToDownloadUrl(a.FileUrl) ?? string.Empty, a.FileSizeBytes, a.ContentType, a.CreatedAt);
+
     private async Task<TicketDetailDto> BuildDetailDto(Guid ticketId)
     {
         var t = await _db.Tickets.AsNoTracking()
@@ -686,19 +703,18 @@ public class TicketsController : ControllerBase
         string NameOf(Guid userId) => users.TryGetValue(userId, out var u) ? $"{u.FirstName} {u.LastName}" : "";
 
         var messageDtos = messages.Select(m => new TicketMessageDto(
-            m.Id, m.Type.ToString(), m.BodyHtml, m.AuthorId, NameOf(m.AuthorId), m.CreatedAt,
-            m.Attachments.Select(a => new TicketAttachmentDto(a.Id, a.FileName, a.FileUrl, a.FileSizeBytes, a.ContentType, a.CreatedAt)).ToList()
+            m.Id, m.Type.ToString(), _html.Sanitize(m.BodyHtml), m.AuthorId, NameOf(m.AuthorId), m.CreatedAt,
+            m.Attachments.Select(ToAttachmentDto).ToList()
         )).ToList();
 
-        var ticketLevelAttachments = t.Attachments.Where(a => a.MessageId == null)
-            .Select(a => new TicketAttachmentDto(a.Id, a.FileName, a.FileUrl, a.FileSizeBytes, a.ContentType, a.CreatedAt)).ToList();
+        var ticketLevelAttachments = t.Attachments.Where(a => a.MessageId == null).Select(ToAttachmentDto).ToList();
 
         var assigneeDtos = assignees.Select(a => new TicketAssigneeDto(a.UserId, NameOf(a.UserId))).ToList();
 
         users.TryGetValue(t.ClientId, out var clientUser);
 
         return new TicketDetailDto(
-            t.Id, t.TicketNumber, t.Title, t.Description, t.Status.ToString(),
+            t.Id, t.TicketNumber, t.Title, _html.Sanitize(t.Description), t.Status.ToString(),
             t.ClientId, NameOf(t.ClientId), clientUser?.Email, clientUser?.PhoneNumber,
             t.CompanyId, t.Company?.Name ?? "",
             t.Source?.ToString(), t.HelpTopicId, t.HelpTopic?.Name, t.DepartmentId, t.Department?.Name,
@@ -711,7 +727,7 @@ public class TicketsController : ControllerBase
             t.AssignedToUserId,
             t.AssignedToUserId.HasValue ? NameOf(t.AssignedToUserId.Value) : null,
             assigneeDtos, t.WorkStartedAtUtc, t.WorkEndedAtUtc,
-            t.OpenedAtUtc, t.ClosedAtUtc, t.ResolutionSummary, t.TechnicalNotes, t.CreatedAt,
+            t.OpenedAtUtc, t.ClosedAtUtc, t.ResolutionSummary, t.CreatedAt,
             ticketLevelAttachments, messageDtos
         );
     }

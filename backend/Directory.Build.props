@@ -1,0 +1,14 @@
+<Project>
+
+  <PropertyGroup>
+    <!-- Surface known-vulnerable packages (direct and transitive) as build warnings instead of failing silently.
+         Level is "high": the only remaining moderate advisory is Microsoft.Build.Tasks.Git 8.0.0, the SourceLink git
+         tooling that ships with the .NET 8 SDK. It is build-time only, never in published output, and 8.0.0 is the
+         newest 8.0.x, so it can't be bumped until the SDK is upgraded. It stays visible in the full audit, which is
+         the "dotnet list package" command with the vulnerable and include-transitive options. -->
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>high</NuGetAuditLevel>
+  </PropertyGroup>
+
+</Project>

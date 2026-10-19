@@ -98,9 +98,13 @@ Otvori novi `appsettings.Development.json` i popuni:
 - **`ConnectionStrings:DefaultConnection`** — zamijeni `SQLEXPRESS` imenom svoje SQL Server instance
   (ako ne znaš koje ime tvoja instanca ima, pogledaj [Rad sa bazom podataka](#rad-sa-bazom-podataka) ispod).
 - **`Jwt:Secret`** i **`Pii:HashKey`** — bilo koji nasumičan string, što duži to bolje (30+ karaktera).
-  Mogu biti isti string na dva mjesta, ali su različite stvari — jedan čuva login sesije, drugi enkriptuje
-  email/telefon/adresu u bazi. **Ne mijenjaj `Pii:HashKey` nakon što već imaš podatke u bazi** — time bi
-  postali trajno nečitljivi (izgubio bi pristup enkriptovanim poljima).
+  Najmanje 32 karaktera; app neće krenuti s kraćim ključem. Treba da budu različiti stringovi — jedan potpisuje
+  login sesije, drugi (`Pii:HashKey`) služi za pretraživanje naloga po emailu (HMAC hash). **Ne mijenjaj
+  `Pii:HashKey` nakon što već imaš podatke u bazi** — ljudi se više ne bi mogli ulogovati jer se njihov email
+  više ne bi našao. Sam sadržaj email/telefon/adresa enkriptuje ključ koji je u tabeli `DataProtectionKeys`
+  (u istoj bazi); **ako se ta tabela izgubi ili zamijeni, enkriptovani podaci su trajno nečitljivi**, pa je
+  uvijek uključi u backup baze. App će odbiti da krene ako ne može dešifrovati postojeće podatke.
+  Izvan `Development` okruženja `Pii:HashKey` je obavezan.
 - **`SeedAdmin:Email`** — tvoj email; ovaj nalog će automatski biti napravljen kao Admin prvi put kad app
   krene.
 - **`GoogleAi:ApiKey`** — *opciono, ali potrebno za AI asistenta.* Besplatan ključ: [aistudio.google.com](https://aistudio.google.com/app/apikey).
@@ -187,7 +191,8 @@ direktno u bazi.
 | `ConnectionStrings:DefaultConnection` | ✅ Da | Kaže backend-u gdje mu je SQL Server baza. |
 | `Jwt:Secret` | ✅ Da | Tajni ključ kojim se potpisuju login sesije (tokeni). Mora ostati isti dok je aplikacija u upotrebi — ako ga promijeniš, svi su izlogovani. |
 | `Jwt:AccessTokenMinutes` | Ne (default 30, u primjeru 120) | Koliko dugo login sesija traje prije nego se mora ponovo ulogovati. |
-| `Pii:HashKey` | ✅ Da | Ključ kojim se enkriptuju email/telefon/adresa u bazi. **Nikad ga ne mijenjaj nakon što već postoje podaci** — postojeći podaci postaju nečitljivi. |
+| `Pii:HashKey` | ✅ Da (obavezno izvan Development) | Ključ HMAC hasha kojim se nalozi traže po emailu. **Ne mijenjaj ga nakon što već postoje nalozi** — niko se više ne bi mogao ulogovati. Enkripcija sadržaja koristi ključeve iz tabele `DataProtectionKeys`, koja mora biti u svakom backupu. |
+| `Storage:UploadsPath` | Ne | Folder za priloge tiketa i dokumente baze znanja (default `App_Data/uploads` pored aplikacije). Ne servira se javno; za produkciju postavi putanju **van** foldera koji se redeploya. Prilozi se otvaraju kroz potpisane linkove koji ističu za 4 sata. |
 | `SeedAdmin:Email` / `Password` | ✅ Email da, lozinka ne | Email za prvi Admin nalog koji se automatski pravi. Ako ostaviš `Password` prazno, generiše se nasumična privremena lozinka (ispiše se u terminalu). |
 | `GoogleAi:ApiKey` | Za AI funkcije | Bez ovoga, AI asistent i pretraga tiketa ne rade (ostatak aplikacije radi normalno). |
 | `Brevo:ApiKey` | Za slanje email-ova | Bez ovoga, "zaboravljena lozinka" i pozivnice se ne šalju (upozorenje u logu, aplikacija ne puca). |

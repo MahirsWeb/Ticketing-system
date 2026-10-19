@@ -60,6 +60,7 @@ public class KnowledgeBaseController : ControllerBase
     private readonly IKnowledgeBaseIndexer _indexer;
     private readonly IKnowledgeBaseDocumentIndexer _documentIndexer;
     private readonly IEmbeddingService _embeddingService;
+    private readonly IFileLinkService _links;
 
     public KnowledgeBaseController(
         AppDbContext db,
@@ -67,7 +68,8 @@ public class KnowledgeBaseController : ControllerBase
         IChatCompletionService chatCompletionService,
         IKnowledgeBaseIndexer indexer,
         IKnowledgeBaseDocumentIndexer documentIndexer,
-        IEmbeddingService embeddingService)
+        IEmbeddingService embeddingService,
+        IFileLinkService links)
     {
         _db = db;
         _currentUser = currentUser;
@@ -75,6 +77,7 @@ public class KnowledgeBaseController : ControllerBase
         _indexer = indexer;
         _documentIndexer = documentIndexer;
         _embeddingService = embeddingService;
+        _links = links;
     }
 
     /// <summary>
@@ -235,7 +238,7 @@ public class KnowledgeBaseController : ControllerBase
             }
 
             var chunkCount = await _db.KnowledgeBaseChunks.AsNoTracking().CountAsync(c => c.DocumentId == document.Id);
-            results.Add(new KnowledgeBaseDocumentDto(document.Id, document.Title, document.SourceFileName, document.FileUrl, document.CreatedAt, chunkCount));
+            results.Add(new KnowledgeBaseDocumentDto(document.Id, document.Title, document.SourceFileName, _links.ToDownloadUrl(document.FileUrl), document.CreatedAt, chunkCount));
         }
 
         if (results.Count == 0)
@@ -250,9 +253,10 @@ public class KnowledgeBaseController : ControllerBase
     {
         var docs = await _db.KnowledgeBaseDocuments.AsNoTracking()
             .OrderByDescending(d => d.CreatedAt)
-            .Select(d => new KnowledgeBaseDocumentDto(d.Id, d.Title, d.SourceFileName, d.FileUrl, d.CreatedAt, d.Chunks.Count))
+            .Select(d => new { d.Id, d.Title, d.SourceFileName, d.FileUrl, d.CreatedAt, ChunkCount = d.Chunks.Count })
             .ToListAsync();
-        return Ok(docs);
+        return Ok(docs.Select(d => new KnowledgeBaseDocumentDto(
+            d.Id, d.Title, d.SourceFileName, _links.ToDownloadUrl(d.FileUrl), d.CreatedAt, d.ChunkCount)).ToList());
     }
 
     [HttpDelete("documents/{id:guid}")]
@@ -493,10 +497,10 @@ public class KnowledgeBaseController : ControllerBase
         return new SimilarTicketStats(matches.Count, totalEligible, percentage, includeAllMatches ? matches : matches.Take(50).ToList());
     }
 
-    private static KnowledgeBaseSearchResultDto ToDto(ChunkMatch m) =>
+    private KnowledgeBaseSearchResultDto ToDto(ChunkMatch m) =>
         m.Ticket is not null
             ? new KnowledgeBaseSearchResultDto("Ticket", m.Ticket.Id, m.Ticket.TicketNumber, m.Ticket.Status.ToString(),
                 m.Ticket.ClosedAtUtc, m.Ticket.ResolutionSummary, null, null, m.Ticket.Title, m.Score)
             : new KnowledgeBaseSearchResultDto("Document", null, null, null,
-                null, null, m.Document!.Id, m.Document!.FileUrl, m.Document!.Title, m.Score);
+                null, null, m.Document!.Id, _links.ToDownloadUrl(m.Document!.FileUrl), m.Document!.Title, m.Score);
 }

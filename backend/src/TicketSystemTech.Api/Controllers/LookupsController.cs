@@ -144,6 +144,13 @@ public class LookupsController : ControllerBase
         if (subBranchCount > 0)
             return BadRequest(new { message = $"This branch still has {subBranchCount} sub-branch(es). Remove them first." });
 
+        // Tickets.DepartmentId is ON DELETE SET NULL, and a ticket without a branch is treated as "unrouted" and is
+        // visible to every employee. Deleting a branch that still owns tickets would therefore silently expose
+        // all of them across branches, so it is refused: transfer the tickets elsewhere first.
+        var ticketCount = await _db.Tickets.CountAsync(t => t.DepartmentId == id);
+        if (ticketCount > 0)
+            return BadRequest(new { message = $"This branch still owns {ticketCount} ticket(s). Transfer them to another branch first." });
+
         _db.Departments.Remove(entity);
         await _db.SaveChangesAsync();
         return NoContent();

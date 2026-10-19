@@ -1,0 +1,994 @@
+<title>Schema Migration Map</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root {
+    --bg: #f5f4f0;
+    --surface: #ffffff;
+    --surface-2: #faf9f6;
+    --ink: #171b22;
+    --ink-muted: #5a6270;
+    --ink-faint: #8a90a0;
+    --border: #e1dfd8;
+    --border-strong: #cbc8be;
+
+    --tst: #0d7a76;
+    --tst-soft: #e3f2f0;
+    --tst-line: #0d7a76;
+
+    --ost: #b5601f;
+    --ost-soft: #faedd9;
+    --ost-line: #b5601f;
+
+    --font-display: 'IBM Plex Sans', system-ui, sans-serif;
+    --font-body: 'IBM Plex Sans', system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14171d;
+      --surface: #1b1f27;
+      --surface-2: #20242d;
+      --ink: #eceef2;
+      --ink-muted: #9aa1b0;
+      --ink-faint: #6b7280;
+      --border: #2c313c;
+      --border-strong: #3a4150;
+
+      --tst: #4fd6cd;
+      --tst-soft: #16302f;
+      --tst-line: #4fd6cd;
+
+      --ost: #f0a35c;
+      --ost-soft: #3a2915;
+      --ost-line: #f0a35c;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #14171d;
+    --surface: #1b1f27;
+    --surface-2: #20242d;
+    --ink: #eceef2;
+    --ink-muted: #9aa1b0;
+    --ink-faint: #6b7280;
+    --border: #2c313c;
+    --border-strong: #3a4150;
+
+    --tst: #4fd6cd;
+    --tst-soft: #16302f;
+    --tst-line: #4fd6cd;
+
+    --ost: #f0a35c;
+    --ost-soft: #3a2915;
+    --ost-line: #f0a35c;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 48px 28px 96px;
+  }
+
+  /* ---------- Header ---------- */
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 10px;
+  }
+
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(28px, 4vw, 40px);
+    letter-spacing: -0.01em;
+    margin: 0 0 14px;
+    text-wrap: balance;
+  }
+
+  .lede {
+    max-width: 68ch;
+    color: var(--ink-muted);
+    font-size: 16px;
+    margin: 0 0 8px;
+  }
+
+  .lede strong { color: var(--ink); font-weight: 600; }
+
+  .scope-note {
+    max-width: 68ch;
+    color: var(--ink-faint);
+    font-size: 13.5px;
+    margin: 14px 0 0;
+    padding: 12px 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .scope-note code {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
+
+  /* ---------- Stat strip ---------- */
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 36px 0 0;
+  }
+  .stat {
+    background: var(--surface);
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .stat .n {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .stat .n.tst { color: var(--tst); }
+  .stat .n.ost { color: var(--ost); }
+  .stat .l {
+    font-size: 12px;
+    color: var(--ink-muted);
+  }
+
+  /* ---------- Section shell ---------- */
+
+  section.db {
+    margin-top: 64px;
+  }
+
+  .db-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    padding-bottom: 14px;
+    border-bottom: 3px solid var(--rail);
+    margin-bottom: 8px;
+  }
+  section.db.tst { --rail: var(--tst-line); }
+  section.db.ost { --rail: var(--ost-line); }
+
+  .db-head h2 {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0;
+  }
+  .db-head .tag {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-weight: 600;
+  }
+  section.db.tst .db-head .tag { background: var(--tst-soft); color: var(--tst); }
+  section.db.ost .db-head .tag { background: var(--ost-soft); color: var(--ost); }
+
+  .db-sub {
+    color: var(--ink-muted);
+    font-size: 14.5px;
+    max-width: 72ch;
+    margin: 0 0 32px;
+  }
+
+  /* ---------- Domain group ---------- */
+
+  .group {
+    margin-bottom: 40px;
+  }
+  .group-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .group-index {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--surface);
+    background: var(--rail);
+    width: 22px;
+    height: 22px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+  }
+  .group-head h3 {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+  }
+  .group-head .count {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-faint);
+  }
+
+  .diagram-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+    overflow-x: auto;
+  }
+  .diagram-card pre.mermaid {
+    margin: 0;
+    min-width: 640px;
+  }
+
+  /* ---------- Footer ---------- */
+
+  .next-steps {
+    margin-top: 64px;
+    padding: 22px 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .next-steps h2 {
+    font-family: var(--font-display);
+    font-size: 17px;
+    margin: 0 0 8px;
+  }
+  .next-steps p {
+    color: var(--ink-muted);
+    font-size: 14.5px;
+    max-width: 72ch;
+    margin: 0;
+  }
+
+  .legend {
+    display: flex;
+    gap: 18px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .legend .item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px;
+    color: var(--ink-muted);
+    font-family: var(--font-mono);
+  }
+  .legend .swatch {
+    width: 11px;
+    height: 11px;
+    border-radius: 3px;
+    flex: none;
+  }
+  .legend .swatch.tst { background: var(--tst); }
+  .legend .swatch.ost { background: var(--ost); }
+</style>
+
+<div class="page">
+
+  <p class="eyebrow">Ticket System Tech - data migration planning</p>
+  <h1>Schema Migration Map</h1>
+  <p class="lede">
+    Full entity-relationship diagrams for both databases involved in the osTicket to Ticket System Tech
+    migration: <strong>TicketSystemTech</strong> (the destination, SQL Server, currently empty) and
+    <strong>supportimel_dbpodrska</strong> (the source - a live osTicket installation with real support history).
+    Both run on the same local <code style="font-family: var(--font-mono); font-size: 0.85em;">localhost\MSSQLSERVER01</code> instance.
+  </p>
+  <p class="scope-note">
+    Scope: each schema is grouped by domain rather than shown as one solid block, and framework/operational
+    tables are left out &mdash; ASP.NET Identity plumbing (<code>AspNetRoleClaims</code>, <code>AspNetUserTokens</code>, &hellip;)
+    on the Ticket System Tech side, and osTicket's session/log/search/plugin internals
+    (<code>ost_syslog</code>, <code>ost_session</code>, <code>ost__search</code>, <code>ost_lock</code>, &hellip;) on the
+    other &mdash; since neither holds data that migrates. Column types are simplified to their base SQL type; exact
+    lengths are in the live schema.
+  </p>
+
+  <div class="stats">
+    <div class="stat"><span class="n tst">28</span><span class="l">TST tables total</span></div>
+    <div class="stat"><span class="n tst">19</span><span class="l">TST business tables shown</span></div>
+    <div class="stat"><span class="n ost">73</span><span class="l">osTicket tables total</span></div>
+    <div class="stat"><span class="n ost">33</span><span class="l">osTicket business tables shown</span></div>
+    <div class="stat"><span class="n ost">21,711</span><span class="l">ost_ticket rows</span></div>
+    <div class="stat"><span class="n ost">50,452</span><span class="l">ost_thread_entry rows</span></div>
+    <div class="stat"><span class="n ost">2,917</span><span class="l">ost_user rows</span></div>
+    <div class="stat"><span class="n ost">156</span><span class="l">ost_organization rows</span></div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- TICKET SYSTEM TECH -->
+  <!-- ============================================================ -->
+
+  <section class="db tst">
+    <div class="db-head">
+      <h2>Ticket System Tech</h2>
+      <span class="tag">destination &middot; SQL Server &middot; empty</span>
+    </div>
+    <p class="db-sub">
+      GUID primary keys throughout. The schema is intentionally slim compared to osTicket &mdash; one ticket
+      table instead of ticket + cdata + thread + thread_entry, one Users table instead of
+      user/user__cdata/user_email/user_account/staff.
+    </p>
+
+    <div class="group">
+      <div class="group-head">
+        <span class="group-index">A</span>
+        <h3>Core ticketing</h3>
+        <span class="count">Tickets &middot; TicketMessages &middot; TicketAttachments &middot; TicketAssignees</span>
+      </div>
+      <div class="diagram-card">
+<pre class="mermaid">
+erDiagram
+    Tickets {
+        guid Id PK
+        nvarchar TicketNumber
+        nvarchar Title
+        text Description
+        guid ClientId FK
+        guid CompanyId FK
+        int Status
+        int Source
+        guid HelpTopicId FK
+        guid DepartmentId FK
+        guid SubBranchId FK
+        guid SlaPlanId FK
+        datetime2 DueDateUtc
+        guid AssignedToUserId FK
+        guid CategoryId FK
+        int Priority
+        guid OpenedByUserId FK
+        datetime2 OpenedAtUtc
+        guid ClosedByUserId FK
+        datetime2 ClosedAtUtc
+        text ResolutionSummary
+        text TechnicalNotes "unused, legacy column"
+        datetime2 CreatedAt
+    }
+    TicketMessages {
+        guid Id PK
+        guid TicketId FK
+        guid AuthorId FK
+        int Type
+        text BodyHtml
+        datetime2 CreatedAt
+    }
+    TicketAttachments {
+        guid Id PK
+        guid TicketId FK
+        guid MessageId FK
+        nvarchar FileName
+        text FileUrl
+        bigint FileSizeBytes
+        nvarchar ContentType
+        guid UploadedByUserId FK
+        datetime2 CreatedAt
+    }
+    TicketAssignees {
+        guid Id PK
+        guid TicketId FK
+        guid UserId FK
+        datetime2 AssignedAtUtc
+    }
+    Tickets ||--o{ TicketMessages : "TicketId"
+    Tickets ||--o{ TicketAttachments : "TicketId"
+    TicketMessages ||--o{ TicketAttachments : "MessageId optional"
+    Tickets ||--o{ TicketAssignees : "TicketId"
+</pre>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-head">
+        <span class="group-index">B</span>
+        <h3>Org structure &amp; users</h3>
+        <span class="count">Companies &middot; Departments &middot; SubBranches &middot; AspNetUsers</span>
+      </div>
+      <div class="diagram-card">
+<pre class="mermaid">
+erDiagram
+    Companies {
+        guid Id PK
+        nvarchar Name
+        text Address "encrypted"
+        text ContactInfo
+        bit IsActive
+        datetime2 CreatedAt
+    }
+    Departments {
+        guid Id PK
+        nvarchar Name
+        nvarchar Email
+        bit IsActive
+        datetime2 CreatedAt
+    }
+    SubBranches {
+        guid Id PK
+        guid DepartmentId FK
+        nvarchar Name
+        bit IsActive
+        datetime2 CreatedAt
+    }
+    AspNetUsers {
+        guid Id PK
+        nvarchar FirstName
+        nvarchar LastName
+        int Role "Admin/Employee/Client"
+        guid CompanyId FK "Clients only"
+        guid DepartmentId FK "Employees only"
+        guid SubBranchId FK "Employees only"
+        bit IsActive
+        nvarchar Email "encrypted"
+        nvarchar UserName "encrypted, equals Email"
+        nvarchar PhoneNumber "encrypted"
+        nvarchar PasswordHash
+        datetime2 CreatedAtUtc
+    }
+    Departments ||--o{ SubBranches : "DepartmentId"
+    Departments ||--o{ AspNetUsers : "DepartmentId"
+    SubBranches ||--o{ AspNetUsers : "SubBranchId"
+    Companies ||--o{ AspNetUsers : "CompanyId"
+</pre>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-head">
+        <span class="group-index">C</span>
+        <h3>Lookups</h3>
+        <span class="count">HelpTopics &middot; TicketCategories &middot; SlaPlans</span>
+      </div>
+      <div class="diagram-card">
+<pre class="mermaid">
+erDiagram
+    HelpTopics {
+        guid Id PK
+        nvarchar Name
+        bit IsActive
+        datetime2 CreatedAt
+    }
+    TicketCategories {
+        guid Id PK
+        nvarchar Name
+        bit IsActive
+        datetime2 CreatedAt
+    }
+    SlaPlans {
+        guid Id PK
+        nvarchar Name
+        int ResolutionTimeHours
+        bit IsActive
+        datetime2 CreatedAt
+    }
+</pre>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-head">
+        <span class="group-index">D</span>
+        <h3>Knowledge base</h3>
+        <span class="count">KnowledgeBaseDocuments &middot; KnowledgeBaseChunks</span>
+      </div>
+      <div class="diagram-card">
+<pre class="mermaid">
+erDiagram
+    KnowledgeBaseDocuments {
+        guid Id PK
+        text Title
+        text SourceFileName
+        text FileUrl
+        guid UploadedByUserId FK
+        datetime2 CreatedAt
+    }
+    KnowledgeBaseChunks {
+        guid Id PK
+        guid DocumentId FK "null if sourced from a ticket"
+        guid TicketId FK "null if sourced from a document"
+        text Content
+        text Embedding "JSON float array"
+        datetime2 CreatedAt
+    }
+    KnowledgeBaseDocuments ||--o{ KnowledgeBaseChunks : "DocumentId"
+</pre>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-head">
+        <span class="group-index">E</span>
+        <h3>Work tasks</h3>
+        <span class="count">WorkTasks &middot; WorkTaskAssignmentLogs</span>
+      </div>
+      <div class="diagram-card">
+<pre class="mermaid">
+erDiagram
+    WorkTasks {
+        guid Id PK
+        nvarchar Title
+        text Description
+        guid DepartmentId FK
+        guid CreatedByUserId FK
+        guid AssignedByUserId FK
+        guid AssignedToUserId FK
+        int Status
+        datetime2 StartedAtUtc
+        datetime2 EndedAtUtc
+        datetime2 CreatedAt
+    }
+    WorkTaskAssignmentLogs {
+        guid Id PK
+        guid WorkTaskId FK
+        guid AssignedByUserId FK
+        guid AssignedToUserId FK
+        datetime2 AssignedAtUtc
+    }
+    WorkTasks ||--o{ WorkTaskAssignmentLogs : "WorkTaskId"
+</pre>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-head">
+        <span class="group-index">F</span>
+        <h3>Email integration &amp; notifications</h3>
+        <span class="count">EmailConnections &middot; EmailTicketMarks &middot; Notifications &middot; AuditLogs</span>
+      </div>
+      <div class="diagram-card">
+<pre class="mermaid">
+erDiagram
+    EmailConnections {
+        guid Id PK
+        guid DepartmentId FK
+        guid ConnectedByUserId FK
+        text Provider
+        text ConnectedEmail
+        datetime2 CreatedAt
+    }
+    EmailTicketMarks {
+        guid Id PK
+        guid DepartmentId FK
+        guid MarkedByUserId FK
+        nvarchar MessageId
+        bit IsMarked
+        guid ConvertedTicketId FK
+        datetime2 CreatedAt
+    }
+    Notifications {
+        guid Id PK
+        guid UserId FK
+        int Type
+        text Message
+        guid TicketId FK
+        bit IsRead
+        datetime2 CreatedAt
+    }
+    AuditLogs {
+        guid Id PK
+        guid UserId FK
+        text Action
+        text EntityType
+        guid EntityId
+        datetime2 CreatedAt
+    }
+</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- OSTICKET -->
+  <!-- ============================================================ -->
+
+  <section class="db ost">
+    <div class="db-head">
+      <h2>supportimel_dbpodrska</h2>
+      <span class="tag">source &middot; osTicket &middot; live data</span>
+    </div>
+    <p class="db-sub">
+      Standard osTicket schema (<code style="font-family: var(--font-mono); font-size: 0.85em;">ost_</code> prefix).
+      Bigint IDs, no declared foreign keys anywhere in the database &mdash; every relationship below is inferred
+      from osTicket's own column-naming convention (<code style="font-family: var(--font-mono); font-size: 0.85em;">*_id</code>),
+      not enforced by SQL Server. Several core tables are split into a base table plus a
+      <code style="font-family: var(--font-mono); font-size: 0.85em;">__cdata</code> 1:1 extension &mdash;
+      that split doesn't need to survive the migration.
+    </p>
+
+    <div class="group">
+      <div class="group-head">
+        <span class="group-index">A</span>
+        <h3>Core ticketing &amp; threads</h3>
+        <span class="count">ost_ticket &middot; ost_ticket__cdata &middot; ost_thread &middot; ost_thread_entry &middot; ost_thread_referral &middot; ost_thread_collaborator</span>
+      </div>
+      <div class="diagram-card">
+<pre class="mermaid">
+erDiagram
+    ost_ticket {
+        bigint ticket_id PK
+        bigint ticket_pid "parent ticket, if merged"
+        nvarchar number
+        bigint user_id FK
+        bigint user_email_id FK
+        bigint status_id FK
+        bigint dept_id FK
+        bigint sla_id FK
+        bigint topic_id FK
+        bigint staff_id FK
+        bigint team_id FK
+        nvarchar ip_address
+        nvarchar source "Phone/Email/Web/API"
+        bit isoverdue
+        bit isanswered
+        datetime2 duedate
+        datetime2 closed
+        datetime2 lastupdate
+        datetime2 created
+        datetime2 updated
+    }
+    ost_ticket__cdata {
+        bigint ticket_id PK "extends ost_ticket 1:1"
+        text subject
+        text priority "free text, not FK"
+    }
+    ost_thread {
+        bigint id PK
+        bigint object_id "points to ticket_id when object_type=T"
+        nchar object_type
+        datetime2 lastresponse
+        datetime2 lastmessage
+        datetime2 created
+    }
+    ost_thread_entry {
+        bigint id PK
+        bigint pid "parent entry"
+        bigint thread_id FK
+        bigint staff_id FK
+        bigint user_id FK
+        nchar type "M/R/N = message/response/note"
+        nvarchar poster
+        text body
+        nvarchar format
+        datetime2 created
+    }
+    ost_thread_referral {
+        bigint id PK
+        bigint thread_id FK
+        bigint object_id
+        nchar object_type
+        datetime2 created
+    }
+    ost_thread_collaborator {
+        bigint id PK
+        bigint thread_id FK
+        bigint user_id FK
+        nchar role
+        datetime2 created
+    }
+    ost_ticket ||--|| ost_ticket__cdata : "ticket_id"
+    ost_ticket ||--|| ost_thread : "object_id, object_type=T"
+    ost_thread ||--o{ ost_thread_entry : "thread_id"
+    ost_thread ||--o{ ost_thread_referral : "thread_id"
+    ost_thread ||--o{ ost_thread_collaborator : "thread_id"
+</pre>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-head">
+        <span class="group-index">B</span>
+        <h3>Users &amp; organizations</h3>
+        <span class="count">ost_user &middot; ost_user__cdata &middot; ost_user_email &middot; ost_user_account &middot; ost_organization &middot; ost_organization__cdata</span>
+      </div>
+      <div class="diagram-card">
+<pre class="mermaid">
+erDiagram
+    ost_user {
+        bigint id PK
+        bigint org_id FK
+        int default_email_id
+        bigint status
+        nvarchar name
+        datetime2 created
+        datetime2 updated
+    }
+    ost_user__cdata {
+        bigint user_id PK "extends ost_user 1:1"
+        text email
+        text name
+        text phone
+        text notes
+    }
+    ost_user_email {
+        bigint id PK
+        bigint user_id FK
+        nvarchar address
+    }
+    ost_user_account {
+        bigint id PK
+        bigint user_id FK
+        nvarchar username
+        nvarchar passwd
+        nvarchar timezone
+        datetime registered
+    }
+    ost_organization {
+        bigint id PK
+        nvarchar name
+        nvarchar manager
+        nvarchar domain
+        datetime created
+    }
+    ost_organization__cdata {
+        bigint org_id PK "extends ost_organization 1:1"
+        text name
+        text address
+        text phone
+        text website
+    }
+    ost_organization ||--o{ ost_user : "org_id"
+    ost_organization ||--|| ost_organization__cdata : "org_id"
+    ost_user ||--|| ost_user__cdata : "user_id"
+    ost_user ||--o{ ost_user_email : "user_id"
+    ost_user ||--o| ost_user_account : "user_id"
+</pre>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-head">
+        <span class="group-index">C</span>
+        <h3>Staff &amp; teams</h3>
+        <span class="count">ost_staff &middot; ost_staff_dept_access &middot; ost_role &middot; ost_team &middot; ost_team_member</span>
+      </div>
+      <div class="diagram-card">
+<pre class="mermaid">
+erDiagram
+    ost_staff {
+        bigint staff_id PK
+        bigint dept_id FK
+        bigint role_id FK
+        nvarchar username
+        nvarchar firstname
+        nvarchar lastname
+        nvarchar passwd
+        nvarchar email
+        nvarchar phone
+        smallint isactive
+        smallint isadmin
+        datetime2 created
+        datetime2 lastlogin
+    }
+    ost_staff_dept_access {
+        bigint staff_id PK
+        bigint dept_id PK
+        bigint role_id FK
+    }
+    ost_role {
+        bigint id PK
+        nvarchar name
+        text permissions
+    }
+    ost_team {
+        bigint team_id PK
+        bigint lead_id FK
+        nvarchar name
+    }
+    ost_team_member {
+        bigint team_id PK
+        bigint staff_id PK
+    }
+    ost_role ||--o{ ost_staff : "role_id"
+    ost_staff ||--o{ ost_staff_dept_access : "staff_id"
+    ost_staff ||--o| ost_team : "lead_id"
+    ost_team ||--o{ ost_team_member : "team_id"
+    ost_staff ||--o{ ost_team_member : "staff_id"
+</pre>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-head">
+        <span class="group-index">D</span>
+        <h3>Structure &amp; lookups</h3>
+        <span class="count">ost_department &middot; ost_help_topic &middot; ost_help_topic_form &middot; ost_sla &middot; ost_canned_response &middot; ost_ticket_status &middot; ost_ticket_priority</span>
+      </div>
+      <div class="diagram-card">
+<pre class="mermaid">
+erDiagram
+    ost_department {
+        bigint id PK
+        bigint pid "parent department"
+        bigint sla_id FK
+        bigint manager_id FK
+        nvarchar name
+        bit ispublic
+        nvarchar path
+    }
+    ost_help_topic {
+        bigint topic_id PK
+        bigint topic_pid "parent topic"
+        bigint status_id FK
+        bigint priority_id FK
+        bigint dept_id FK
+        bigint staff_id FK
+        bigint team_id FK
+        bigint sla_id FK
+        nvarchar topic
+    }
+    ost_help_topic_form {
+        bigint id PK
+        bigint topic_id FK
+        bigint form_id FK
+    }
+    ost_sla {
+        bigint id PK
+        bigint grace_period
+        nvarchar name
+    }
+    ost_canned_response {
+        bigint canned_id PK
+        bigint dept_id FK
+        nvarchar title
+        text response
+    }
+    ost_ticket_status {
+        int id PK
+        nvarchar name
+        nvarchar state
+    }
+    ost_ticket_priority {
+        smallint priority_id PK
+        nvarchar priority
+        nvarchar priority_color
+    }
+    ost_department ||--o{ ost_department : "pid, parent"
+    ost_sla ||--o{ ost_department : "sla_id"
+    ost_department ||--o{ ost_help_topic : "dept_id"
+    ost_sla ||--o{ ost_help_topic : "sla_id"
+    ost_department ||--o{ ost_canned_response : "dept_id"
+</pre>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-head">
+        <span class="group-index">E</span>
+        <h3>Forms &amp; custom fields</h3>
+        <span class="count">ost_form &middot; ost_form_field &middot; ost_form_entry &middot; ost_form_entry_values</span>
+      </div>
+      <div class="diagram-card">
+<pre class="mermaid">
+erDiagram
+    ost_form {
+        bigint id PK
+        bigint pid
+        nvarchar type
+        nvarchar title
+        nvarchar name
+    }
+    ost_form_field {
+        bigint id PK
+        bigint form_id FK
+        nvarchar type
+        nvarchar label
+        nvarchar name
+        text configuration
+    }
+    ost_form_entry {
+        bigint id PK
+        bigint form_id FK
+        bigint object_id "points to ticket/user/org depending on object_type"
+        nchar object_type
+    }
+    ost_form_entry_values {
+        bigint entry_id PK
+        bigint field_id PK
+        text value
+    }
+    ost_form ||--o{ ost_form_field : "form_id"
+    ost_form ||--o{ ost_form_entry : "form_id"
+    ost_form_entry ||--o{ ost_form_entry_values : "entry_id"
+    ost_form_field ||--o{ ost_form_entry_values : "field_id"
+</pre>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-head">
+        <span class="group-index">F</span>
+        <h3>FAQ &amp; attachments</h3>
+        <span class="count">ost_faq &middot; ost_faq_category &middot; ost_faq_topic &middot; ost_attachment &middot; ost_file &middot; ost_file_chunk</span>
+      </div>
+      <div class="diagram-card">
+<pre class="mermaid">
+erDiagram
+    ost_faq {
+        bigint faq_id PK
+        bigint category_id FK
+        bit ispublished
+        nvarchar question
+        text answer
+    }
+    ost_faq_category {
+        bigint category_id PK
+        bigint category_pid "parent category"
+        nvarchar name
+    }
+    ost_faq_topic {
+        bigint faq_id PK
+        bigint topic_id PK "points to ost_help_topic"
+    }
+    ost_attachment {
+        bigint id PK
+        bigint object_id "points to thread_entry/faq/etc by type"
+        nchar type
+        bigint file_id FK
+        nvarchar name
+    }
+    ost_file {
+        int id PK
+        varchar type
+        bigint size
+        nvarchar name
+        datetime2 created
+    }
+    ost_file_chunk {
+        int file_id PK
+        int chunk_id PK
+        varbinary filedata
+    }
+    ost_faq_category ||--o{ ost_faq : "category_id"
+    ost_faq ||--o{ ost_faq_topic : "faq_id"
+    ost_file ||--o{ ost_attachment : "file_id"
+    ost_file ||--o{ ost_file_chunk : "file_id"
+</pre>
+      </div>
+    </div>
+  </section>
+
+  <div class="next-steps">
+    <h2>Next: field-level mapping</h2>
+    <p>
+      With both schemas laid out, the next pass is drawing the actual correspondence &mdash; e.g.
+      <code style="font-family: var(--font-mono); font-size: 0.85em;">ost_ticket + ost_ticket__cdata + ost_thread</code>
+      collapsing into <code style="font-family: var(--font-mono); font-size: 0.85em;">Tickets + TicketMessages</code>,
+      or deciding how <code style="font-family: var(--font-mono); font-size: 0.85em;">ost_staff</code> and
+      <code style="font-family: var(--font-mono); font-size: 0.85em;">ost_user</code> both fold into the single
+      <code style="font-family: var(--font-mono); font-size: 0.85em;">AspNetUsers</code> table.
+    </p>
+    <div class="legend">
+      <span class="item"><span class="swatch tst"></span>Ticket System Tech (destination)</span>
+      <span class="item"><span class="swatch ost"></span>osTicket (source)</span>
+    </div>
+  </div>
+
+</div>

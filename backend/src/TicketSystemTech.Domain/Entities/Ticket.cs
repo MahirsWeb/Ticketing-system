@@ -52,9 +52,6 @@ public class Ticket : BaseEntity
     /// <summary>Mandatory detailed resolution description, required to close the ticket.</summary>
     public string? ResolutionSummary { get; set; }
 
-    /// <summary>Optional technical/code-change log recorded by support when closing.</summary>
-    public string? TechnicalNotes { get; set; }
-
     /// <summary>Manually logged work session — not tied to any single assignee, just "when work happened".</summary>
     public DateTime? WorkStartedAtUtc { get; set; }
     public DateTime? WorkEndedAtUtc { get; set; }

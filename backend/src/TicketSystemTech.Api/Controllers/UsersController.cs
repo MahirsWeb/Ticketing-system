@@ -10,6 +10,7 @@ using TicketSystemTech.Api.Emails;
 using TicketSystemTech.Api.Middleware;
 using TicketSystemTech.Application.Common.Interfaces;
 using TicketSystemTech.Application.Common.Options;
+using TicketSystemTech.Domain.Entities;
 using TicketSystemTech.Domain.Enums;
 using TicketSystemTech.Infrastructure.Identity;
 using TicketSystemTech.Infrastructure.Persistence;
@@ -113,9 +114,18 @@ public class UsersController : ControllerBase
         if (user is null)
             return NotFound();
 
-        // Only Admin may reset another employee's password; non-admin staff may only reset Client passwords.
-        if (_currentUser.Role != UserRole.Admin && user.Role != UserRole.Client)
-            return Forbid();
+        // Admin may reset anyone. A non-admin employee may only reset a Client, and only one who actually has
+        // a ticket in the employee's own branch — otherwise any employee could take over any client account
+        // (including one belonging to a different branch's customers) by resetting its password.
+        if (_currentUser.Role != UserRole.Admin)
+        {
+            if (user.Role != UserRole.Client) return Forbid();
+
+            var departmentId = _currentUser.DepartmentId;
+            var hasTicketInMyBranch = departmentId is not null &&
+                await _db.Tickets.AnyAsync(t => t.ClientId == user.Id && t.DepartmentId == departmentId);
+            if (!hasTicketInMyBranch) return Forbid();
+        }
 
         var tempPassword = _tempPasswordGenerator.Generate();
         var removeResult = await _userManager.RemovePasswordAsync(user);
@@ -129,11 +139,26 @@ public class UsersController : ControllerBase
         user.MustChangePassword = true;
         user.TemporaryPasswordExpiresAtUtc = DateTime.UtcNow.AddMinutes(_tempPasswordOptions.ValidityMinutes);
         await _userManager.UpdateAsync(user);
+        _cache.Remove(UserStatusCache.Key(user.Id)); // the new security stamp must take effect now, not after the cache TTL
+
+        // Who reset whose password and when — the password itself is never written to the log.
+        _db.AuditLogs.Add(new AuditLog
+        {
+            UserId = _currentUser.UserId,
+            Action = "RegenerateTempPassword",
+            EntityType = nameof(ApplicationUser),
+            EntityId = user.Id,
+            Details = $"Role of target: {user.Role}"
+        });
+        await _db.SaveChangesAsync();
 
         await _emailSender.SendAsync(user.Email!, "Your new temporary password — Ticket System Tech",
             EmailTemplates.Invite(user.FirstName, user.Email!, tempPassword, _tempPasswordOptions.ValidityMinutes, $"{_frontendOptions.BaseUrl}/login"));
 
-        return Ok(new CreatedUserResponse(user.Id, user.Email!, tempPassword, user.TemporaryPasswordExpiresAtUtc.Value));
+        // Only an Admin gets to see the plaintext. A non-admin employee resetting a client's password must not
+        // learn it: it travels by email to the account owner, so the employee cannot sign in as the client.
+        var visiblePassword = _currentUser.Role == UserRole.Admin ? tempPassword : null;
+        return Ok(new CreatedUserResponse(user.Id, user.Email!, visiblePassword, user.TemporaryPasswordExpiresAtUtc.Value));
     }
 
     /// <summary>
@@ -290,7 +315,7 @@ public class UsersController : ControllerBase
         if (file.Length > MaxProfilePictureSizeBytes) return BadRequest(new { message = "Image exceeds the 5 MB limit." });
 
         await using var stream = file.OpenReadStream();
-        var url = await _fileStorage.SaveAsync(file.FileName, file.ContentType, stream);
+        var url = await _fileStorage.SavePublicImageAsync(file.FileName, file.ContentType, stream);
 
         user.ProfilePictureUrl = url;
         await _userManager.UpdateAsync(user);

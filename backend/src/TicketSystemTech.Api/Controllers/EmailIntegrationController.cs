@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using TicketSystemTech.Api.Contracts;
 using TicketSystemTech.Application.Common.Interfaces;
 using TicketSystemTech.Application.Common.Options;
 using TicketSystemTech.Domain.Enums;
+using TicketSystemTech.Infrastructure.Persistence;
 
 namespace TicketSystemTech.Api.Controllers;
 
@@ -21,13 +23,15 @@ public class EmailIntegrationController : ControllerBase
     private readonly IEmailIntegrationService _emailService;
     private readonly ICurrentUserService _currentUser;
     private readonly MicrosoftGraphOptions _graphOptions;
+    private readonly AppDbContext _db;
 
     public EmailIntegrationController(
-        IEmailIntegrationService emailService, ICurrentUserService currentUser, IOptions<MicrosoftGraphOptions> graphOptions)
+        IEmailIntegrationService emailService, ICurrentUserService currentUser, IOptions<MicrosoftGraphOptions> graphOptions, AppDbContext db)
     {
         _emailService = emailService;
         _currentUser = currentUser;
         _graphOptions = graphOptions.Value;
+        _db = db;
     }
 
     [HttpGet("config")]
@@ -112,6 +116,16 @@ public class EmailIntegrationController : ControllerBase
     {
         if (RequireDepartment() is BadRequestObjectResult noBranch) return noBranch;
         var departmentId = _currentUser.DepartmentId!.Value;
+
+        // The ticket id comes from the query string: without this check any branch member could attach their
+        // mailbox's files to (and mark as converted) a ticket belonging to a different branch.
+        var ticket = await _db.Tickets.AsNoTracking()
+            .Where(t => t.Id == ticketId)
+            .Select(t => new { t.DepartmentId })
+            .FirstOrDefaultAsync();
+        if (ticket is null) return NotFound();
+        if (ticket.DepartmentId is not null && ticket.DepartmentId != departmentId) return Forbid();
+
         await _emailService.ImportAttachmentsToTicketAsync(departmentId, _currentUser.UserId!.Value, messageId, ticketId);
         await _emailService.MarkConvertedAsync(departmentId, messageId, ticketId);
         return Ok();

@@ -33,3 +33,6 @@ logs/
 # ---- Local uploaded files (dev-only storage) ----
 backend/src/TicketSystemTech.Api/wwwroot/uploads/*
 !backend/src/TicketSystemTech.Api/wwwroot/uploads/.gitkeep
+backend/src/TicketSystemTech.Api/wwwroot/avatars/
+# Private attachments / knowledge-base documents (see Storage:UploadsPath)
+backend/src/TicketSystemTech.Api/App_Data/

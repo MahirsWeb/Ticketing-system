@@ -204,7 +204,6 @@ export interface TicketDetailDto {
   openedAtUtc: string | null;
   closedAtUtc: string | null;
   resolutionSummary: string | null;
-  technicalNotes: string | null;
   createdAt: string;
   attachments: TicketAttachmentDto[];
   messages: TicketMessageDto[];
@@ -213,7 +212,8 @@ export interface TicketDetailDto {
 export interface CreatedUserResponse {
   userId: string;
   email: string;
-  temporaryPassword: string;
+  /** Null when the caller is not allowed to see it (it was only emailed to the account owner). */
+  temporaryPassword: string | null;
   temporaryPasswordExpiresAtUtc: string;
 }
 

@@ -36,7 +36,7 @@ public record UpdateUserRequest(
 public record CreatedUserResponse(
     Guid UserId,
     string Email,
-    string TemporaryPassword,
+    string? TemporaryPassword, // Null when the caller must not see it (a non-admin resetting a client): it is only emailed.
     DateTime TemporaryPasswordExpiresAtUtc
 );
 

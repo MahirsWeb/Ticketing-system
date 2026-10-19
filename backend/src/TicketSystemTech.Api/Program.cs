@@ -37,6 +37,10 @@ Log.Logger = new LoggerConfiguration()
     .CreateLogger();
 builder.Host.UseSerilog();
 
+// Fail fast, listing everything that is missing, instead of dying later inside token validation.
+TicketSystemTech.Api.Configuration.StartupConfigurationValidator.ThrowIfInvalid(
+    builder.Configuration, builder.Environment.IsDevelopment());
+
 // ---- Options ----
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
 builder.Services.Configure<FrontendOptions>(builder.Configuration.GetSection("Frontend"));
@@ -139,12 +143,14 @@ builder.Services.AddRateLimiter(options =>
 
 // ---- Application services ----
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+builder.Services.AddScoped<IHtmlSanitizerService, HtmlSanitizerService>();
 builder.Services.AddScoped<IEmailSender, BrevoEmailSender>();
 builder.Services.AddScoped<ITicketNumberGenerator, TicketNumberGenerator>();
 builder.Services.AddScoped<IDateTimeProvider, DateTimeProvider>();
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
 builder.Services.AddScoped<ITemporaryPasswordGenerator, TemporaryPasswordGenerator>();
 builder.Services.AddScoped<IFileStorage, LocalFileStorage>();
+builder.Services.AddScoped<IFileLinkService, FileLinkService>();
 builder.Services.AddScoped<IEmbeddingService, GoogleAiEmbeddingService>();
 builder.Services.AddScoped<IKnowledgeBaseIndexer, KnowledgeBaseIndexer>();
 builder.Services.AddScoped<IDocumentTextExtractor, DocumentTextExtractor>();
@@ -229,6 +235,29 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
     app.UseHttpsRedirection();
 }
+else
+{
+    app.UseHsts(); // only emitted on HTTPS requests; browsers ignore it over plain HTTP
+}
+
+// Baseline response headers. This API only returns JSON and downloads, so nothing in it ever needs to be framed,
+// sniffed or to run script. The CSP is skipped for file downloads (a PDF opened inline needs the browser's own
+// viewer) and in Development (Swagger UI relies on inline script).
+app.Use(async (context, next) =>
+{
+    context.Response.OnStarting(() =>
+    {
+        var headers = context.Response.Headers;
+        headers["X-Content-Type-Options"] = "nosniff";
+        headers["X-Frame-Options"] = "DENY";
+        headers["Referrer-Policy"] = "no-referrer";
+        headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+        if (!app.Environment.IsDevelopment() && !context.Request.Path.StartsWithSegments("/api/files"))
+            headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'";
+        return Task.CompletedTask;
+    });
+    await next();
+});
 
 app.UseStaticFiles();
 app.UseCors("Frontend");
@@ -242,6 +271,7 @@ app.UseAuthorization();
 app.MapGet("/", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 app.MapControllers();
-app.MapHub<NotificationsHub>("/hubs/notifications");
+// A long-lived WebSocket would otherwise keep receiving per-user and per-role pushes after its JWT has expired.
+app.MapHub<NotificationsHub>("/hubs/notifications", options => options.CloseOnAuthenticationExpiration = true);
 
 app.Run();

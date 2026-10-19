@@ -2,9 +2,11 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using TicketSystemTech.Api.Contracts;
 using TicketSystemTech.Api.Emails;
+using TicketSystemTech.Api.Middleware;
 using TicketSystemTech.Application.Common.Interfaces;
 using TicketSystemTech.Application.Common.Options;
 using TicketSystemTech.Domain.Entities;
@@ -25,6 +27,7 @@ public class AuthController : ControllerBase
     private readonly FrontendOptions _frontendOptions;
     private readonly AppDbContext _db;
     private readonly INotificationPublisher _notificationPublisher;
+    private readonly IMemoryCache _cache;
 
     public AuthController(
         UserManager<ApplicationUser> userManager,
@@ -32,8 +35,10 @@ public class AuthController : ControllerBase
         IEmailSender emailSender,
         IOptions<FrontendOptions> frontendOptions,
         AppDbContext db,
-        INotificationPublisher notificationPublisher)
+        INotificationPublisher notificationPublisher,
+        IMemoryCache cache)
     {
+        _cache = cache;
         _userManager = userManager;
         _tokenService = tokenService;
         _emailSender = emailSender;
@@ -84,7 +89,7 @@ public class AuthController : ControllerBase
             return StatusCode(403, new { code = "EMAIL_NOT_VERIFIED", message = "Please verify your email address before logging in." });
         }
 
-        var (token, expiresAt) = _tokenService.GenerateAccessToken(user.Id, user.Email!, user.FirstName, user.LastName, user.Role, user.CompanyId, user.DepartmentId);
+        var (token, expiresAt) = _tokenService.GenerateAccessToken(user.Id, user.Email!, user.FirstName, user.LastName, user.Role, user.CompanyId, user.DepartmentId, user.SecurityStamp ?? string.Empty);
 
         user.LastLoginAtUtc = DateTime.UtcNow;
         await _userManager.UpdateAsync(user);
@@ -172,6 +177,9 @@ public class AuthController : ControllerBase
         var result = await _userManager.ResetPasswordAsync(user, request.Token, request.NewPassword);
         if (!result.Succeeded)
             return BadRequest(new { message = string.Join(" ", result.Errors.Select(e => e.Description)) });
+
+        // The reset rotated the security stamp: drop the cached status so sessions opened with the old password die at once.
+        _cache.Remove(UserStatusCache.Key(user.Id));
 
         // A successful reset always supersedes any pending temporary-password requirement — otherwise a user
         // whose temp password expired would reset via email and still be blocked by the MustChangePassword check on login.

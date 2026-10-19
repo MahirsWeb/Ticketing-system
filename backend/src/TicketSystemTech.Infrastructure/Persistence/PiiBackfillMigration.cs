@@ -10,9 +10,12 @@ namespace TicketSystemTech.Infrastructure.Persistence;
 /// AppDbContext value converters for Email/UserName/PhoneNumber/Address were introduced. Runs via raw SQL,
 /// bypassing EF's converters entirely, so there's no ambiguity about double-encrypting a value.
 ///
-/// Idempotent: a row is only touched if IPiiProtector.Decrypt(rawColumnValue) returns the value unchanged
-/// (i.e. it isn't valid ciphertext yet — see PiiProtector's plaintext fallback). Already-migrated rows are
-/// skipped, so this is safe to leave running on every startup, the same way EF's own MigrateAsync() is.
+/// Idempotent: a row is only touched if it is not ciphertext yet (IPiiProtector.IsProtected is false), so this is
+/// safe to leave running on every startup, the same way EF's own MigrateAsync() is.
+///
+/// It also doubles as a key-ring canary: every row that IS ciphertext must still decrypt. If it does not (the
+/// DataProtectionKeys table was lost, restored from another environment, or the key ring changed), startup is
+/// aborted with a clear message instead of letting the app run and overwrite undecryptable values with garbage.
 /// </summary>
 public static class PiiBackfillMigration
 {
@@ -24,8 +27,15 @@ public static class PiiBackfillMigration
 
         try
         {
-            await BackfillUsersAsync(connection, piiProtector, logger, ct);
-            await BackfillCompanyAddressesAsync(connection, piiProtector, logger, ct);
+            var undecryptable = await BackfillUsersAsync(connection, piiProtector, logger, ct);
+            undecryptable += await BackfillCompanyAddressesAsync(connection, piiProtector, logger, ct);
+
+            if (undecryptable > 0)
+                throw new InvalidOperationException(
+                    $"{undecryptable} encrypted value(s) cannot be decrypted with the current Data Protection key ring. " +
+                    "The DataProtectionKeys table is missing, was replaced, or does not belong to this database. " +
+                    "Restore the matching DataProtectionKeys rows before starting the application; " +
+                    "continuing would corrupt personal data.");
         }
         finally
         {
@@ -33,9 +43,10 @@ public static class PiiBackfillMigration
         }
     }
 
-    private static async Task BackfillUsersAsync(SqlConnection connection, IPiiProtector piiProtector, ILogger logger, CancellationToken ct)
+    private static async Task<int> BackfillUsersAsync(SqlConnection connection, IPiiProtector piiProtector, ILogger logger, CancellationToken ct)
     {
         var toMigrate = new List<(Guid Id, string? Email, string? UserName, string? PhoneNumber)>();
+        var undecryptable = 0;
 
         await using (var cmd = connection.CreateCommand())
         {
@@ -48,10 +59,16 @@ public static class PiiBackfillMigration
                 var userName = reader.IsDBNull(2) ? null : reader.GetString(2);
                 var phone = reader.IsDBNull(3) ? null : reader.GetString(3);
 
-                var stillPlaintext = email is not null && piiProtector.Decrypt(email) == email;
-                if (stillPlaintext)
+                if (email is null) continue;
+
+                if (!piiProtector.IsProtected(email))
                 {
                     toMigrate.Add((id, email, userName, phone));
+                }
+                else if (!CanDecrypt(piiProtector, email))
+                {
+                    undecryptable++;
+                    logger.LogError("PII backfill: AspNetUsers row {UserId} holds ciphertext that the current key ring cannot decrypt.", id);
                 }
             }
         }
@@ -59,7 +76,7 @@ public static class PiiBackfillMigration
         if (toMigrate.Count == 0)
         {
             logger.LogInformation("PII backfill: AspNetUsers already fully encrypted, nothing to do.");
-            return;
+            return undecryptable;
         }
 
         logger.LogWarning("PII backfill: encrypting Email/UserName/PhoneNumber for {Count} AspNetUsers row(s)...", toMigrate.Count);
@@ -89,23 +106,44 @@ public static class PiiBackfillMigration
             }
         }
         logger.LogWarning("PII backfill: AspNetUsers encryption complete ({Count} row(s), {Failures} failed).", toMigrate.Count - failures, failures);
+        return undecryptable;
     }
 
-    private static async Task BackfillCompanyAddressesAsync(SqlConnection connection, IPiiProtector piiProtector, ILogger logger, CancellationToken ct)
+    private static bool CanDecrypt(IPiiProtector piiProtector, string value)
+    {
+        try
+        {
+            piiProtector.Decrypt(value);
+            return true;
+        }
+        catch (System.Security.Cryptography.CryptographicException)
+        {
+            return false;
+        }
+    }
+
+    private static async Task<int> BackfillCompanyAddressesAsync(SqlConnection connection, IPiiProtector piiProtector, ILogger logger, CancellationToken ct)
     {
         var toMigrate = new List<(Guid Id, string Address)>();
+        var undecryptable = 0;
 
         await using (var cmd = connection.CreateCommand())
         {
-            cmd.CommandText = "SELECT [Id], [Address] FROM [Companies] WHERE [Address] IS NOT NULL";
+            // Empty strings are skipped: Encrypt("") returns "", so they would look "unmigrated" and be rewritten forever.
+            cmd.CommandText = "SELECT [Id], [Address] FROM [Companies] WHERE [Address] IS NOT NULL AND [Address] <> ''";
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
             {
                 var id = reader.GetGuid(0);
                 var address = reader.GetString(1);
-                if (piiProtector.Decrypt(address) == address)
+                if (!piiProtector.IsProtected(address))
                 {
                     toMigrate.Add((id, address));
+                }
+                else if (!CanDecrypt(piiProtector, address))
+                {
+                    undecryptable++;
+                    logger.LogError("PII backfill: Companies row {CompanyId} holds an Address that the current key ring cannot decrypt.", id);
                 }
             }
         }
@@ -113,7 +151,7 @@ public static class PiiBackfillMigration
         if (toMigrate.Count == 0)
         {
             logger.LogInformation("PII backfill: Companies.Address already fully encrypted, nothing to do.");
-            return;
+            return undecryptable;
         }
 
         logger.LogWarning("PII backfill: encrypting Address for {Count} Companies row(s)...", toMigrate.Count);
@@ -135,5 +173,6 @@ public static class PiiBackfillMigration
             }
         }
         logger.LogWarning("PII backfill: Companies.Address encryption complete ({Count} row(s), {Failures} failed).", toMigrate.Count - failures, failures);
+        return undecryptable;
     }
 }

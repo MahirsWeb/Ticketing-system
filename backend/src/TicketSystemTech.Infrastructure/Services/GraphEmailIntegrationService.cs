@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using TicketSystemTech.Application.Common;
 using TicketSystemTech.Application.Common.Interfaces;
 using TicketSystemTech.Application.Common.Options;
 using TicketSystemTech.Domain.Entities;
@@ -24,11 +25,12 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
     private readonly MicrosoftGraphOptions _options;
     private readonly ILogger<GraphEmailIntegrationService> _logger;
     private readonly IDataProtector _protector;
+    private readonly IHtmlSanitizerService _html;
 
     public GraphEmailIntegrationService(
         AppDbContext db, HttpClient http, IFileStorage fileStorage,
         IOptions<MicrosoftGraphOptions> options, ILogger<GraphEmailIntegrationService> logger,
-        IDataProtectionProvider dataProtectionProvider)
+        IDataProtectionProvider dataProtectionProvider, IHtmlSanitizerService html)
     {
         _db = db;
         _http = http;
@@ -36,6 +38,7 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
         _options = options.Value;
         _logger = logger;
         _protector = dataProtectionProvider.CreateProtector("EmailConnection.OAuthTokens");
+        _html = html;
     }
 
     private string Protect(string value) => _protector.Protect(value);
@@ -151,7 +154,9 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
 
         var from = root.TryGetProperty("from", out var f) && f.ValueKind == JsonValueKind.Object
             ? f.GetProperty("emailAddress") : (JsonElement?)null;
-        var bodyHtml = root.GetProperty("body").GetProperty("content").GetString() ?? "";
+        // Inbound email HTML is attacker-controlled (anyone can mail a branch mailbox) and is rendered raw in
+        // the staff UI and can be carried into a ticket, so sanitize it at the source.
+        var bodyHtml = _html.Sanitize(root.GetProperty("body").GetProperty("content").GetString());
 
         var attachments = new List<InboxAttachmentSummary>();
         if (root.GetProperty("hasAttachments").GetBoolean())
@@ -218,8 +223,13 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
             if (!a.TryGetProperty("contentBytes", out var contentBytesProp)) continue; // skip non-file (e.g. item) attachments
 
             var name = a.GetProperty("name").GetString() ?? "attachment";
+            // Same allow-list and size cap as direct uploads: an inbound email is the easiest way to get an
+            // .html/.svg/.exe in front of staff, so it must not be a way around the rules.
+            if (!AttachmentPolicy.IsAllowedExtension(Path.GetExtension(name))) continue;
+
             var contentType = a.TryGetProperty("contentType", out var ct2) ? ct2.GetString() ?? "application/octet-stream" : "application/octet-stream";
             var bytes = Convert.FromBase64String(contentBytesProp.GetString()!);
+            if (bytes.LongLength > AttachmentPolicy.MaxFileSizeBytes) continue;
 
             using var stream = new MemoryStream(bytes);
             var fileUrl = await _fileStorage.SaveAsync(name, contentType, stream, ct);

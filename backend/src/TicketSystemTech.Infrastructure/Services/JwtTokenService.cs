@@ -12,6 +12,8 @@ namespace TicketSystemTech.Infrastructure.Services;
 
 public class JwtTokenService : ITokenService
 {
+    public const string SecurityStampClaim = "sstamp";
+
     private readonly JwtOptions _options;
 
     public JwtTokenService(IOptions<JwtOptions> options)
@@ -19,7 +21,7 @@ public class JwtTokenService : ITokenService
         _options = options.Value;
     }
 
-    public (string Token, DateTime ExpiresAtUtc) GenerateAccessToken(Guid userId, string email, string firstName, string lastName, UserRole role, Guid? companyId, Guid? departmentId)
+    public (string Token, DateTime ExpiresAtUtc) GenerateAccessToken(Guid userId, string email, string firstName, string lastName, UserRole role, Guid? companyId, Guid? departmentId, string securityStamp)
     {
         var expiresAt = DateTime.UtcNow.AddMinutes(_options.AccessTokenMinutes);
 
@@ -29,7 +31,10 @@ public class JwtTokenService : ITokenService
             new(ClaimTypes.Email, email),
             new(ClaimTypes.GivenName, firstName),
             new(ClaimTypes.Surname, lastName),
-            new(ClaimTypes.Role, role.ToString())
+            new(ClaimTypes.Role, role.ToString()),
+            // Identity rotates the stamp on every password change/reset. The status middleware compares it with the
+            // account's current stamp, so changing or resetting a password signs out every session issued before it.
+            new(SecurityStampClaim, securityStamp)
         };
         if (companyId.HasValue)
             claims.Add(new Claim("companyId", companyId.Value.ToString()));

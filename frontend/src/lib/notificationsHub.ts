@@ -22,3 +22,9 @@ export function stopNotificationsHub() {
   connection?.stop();
   connection = null;
 }
+
+// Signing out (or a 401 that logs the user out) must also drop the socket: otherwise it stays in the previous
+// user's `user:` and `role:` groups and keeps receiving their pushes until something happens to reconnect it.
+useAuthStore.subscribe((state, previous) => {
+  if (previous.accessToken && !state.accessToken) stopNotificationsHub();
+});

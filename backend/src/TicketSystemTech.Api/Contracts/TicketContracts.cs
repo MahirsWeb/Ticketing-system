@@ -38,8 +38,7 @@ public record OpenTicketRequest(
 );
 
 public record CloseTicketRequest(
-    [Required] string ResolutionSummary,
-    string? TechnicalNotes
+    [Required] string ResolutionSummary
 );
 
 public record AddTicketMessageRequest(
@@ -130,7 +129,6 @@ public record TicketDetailDto(
     DateTime? OpenedAtUtc,
     DateTime? ClosedAtUtc,
     string? ResolutionSummary,
-    string? TechnicalNotes,
     DateTime CreatedAt,
     List<TicketAttachmentDto> Attachments,
     List<TicketMessageDto> Messages

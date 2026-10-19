@@ -271,9 +271,12 @@ public class ReportsController : ControllerBase
     /// </summary>
     private async Task<List<TimelineExportRow>> BuildTimelineExportRowsAsync(DateTime from, DateTime to, Guid? agentId, Guid? departmentId)
     {
+        var isAdmin = _currentUser.Role == UserRole.Admin;
         var employeeQuery = _db.Users.AsNoTracking().Where(u => u.Role == UserRole.Employee && u.IsActive);
+        // Same isolation as Scoped(): a non-admin only ever gets their own branch, whatever agent or branch was requested.
+        if (!isAdmin) employeeQuery = employeeQuery.Where(u => u.DepartmentId == _currentUser.DepartmentId);
         if (agentId.HasValue) employeeQuery = employeeQuery.Where(u => u.Id == agentId.Value);
-        else if (departmentId.HasValue) employeeQuery = employeeQuery.Where(u => u.DepartmentId == departmentId.Value);
+        else if (isAdmin && departmentId.HasValue) employeeQuery = employeeQuery.Where(u => u.DepartmentId == departmentId.Value);
         var employees = await employeeQuery.OrderBy(u => u.FirstName).ToListAsync();
 
         var timelineRows = new List<TimelineExportRow>();
@@ -282,6 +285,7 @@ public class ReportsController : ControllerBase
             var employeeName = $"{employee.FirstName} {employee.LastName}";
 
             var ticketBlocks = await _db.Tickets.AsNoTracking()
+                .Where(x => isAdmin || x.DepartmentId == _currentUser.DepartmentId)
                 .Where(x => x.AssignedToUserId == employee.Id || x.Assignees.Any(a => a.UserId == employee.Id))
                 .Select(x => new { x.TicketNumber, x.Title, x.Status, Start = x.WorkStartedAtUtc ?? x.OpenedAtUtc, End = x.WorkEndedAtUtc ?? x.ClosedAtUtc })
                 .Where(x => x.Start != null && x.Start < to && (x.End == null || x.End >= from))

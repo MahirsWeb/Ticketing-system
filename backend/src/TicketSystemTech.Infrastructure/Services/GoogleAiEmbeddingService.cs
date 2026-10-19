@@ -41,17 +41,20 @@ public class GoogleAiEmbeddingService : IEmbeddingService
         if (string.IsNullOrWhiteSpace(text))
             return null;
 
-        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key={apiKey}";
+        // Key goes in a header, not the query string, so it never appears in HttpClient's request-URI logging.
+        const string url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent";
 
         for (var attempt = 0; attempt <= MaxRetries; attempt++)
         {
             await ThrottleAsync(ct);
             try
             {
-                var response = await _httpClient.PostAsJsonAsync(url, new
+                using var request = new HttpRequestMessage(HttpMethod.Post, url)
                 {
-                    content = new { parts = new[] { new { text } } }
-                }, ct);
+                    Content = JsonContent.Create(new { content = new { parts = new[] { new { text } } } })
+                };
+                request.Headers.Add("x-goog-api-key", apiKey);
+                var response = await _httpClient.SendAsync(request, ct);
 
                 if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
                 {
