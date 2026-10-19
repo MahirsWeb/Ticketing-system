@@ -31,6 +31,7 @@ public class UsersController : ControllerBase
     private readonly FrontendOptions _frontendOptions;
     private readonly IFileStorage _fileStorage;
     private readonly IMemoryCache _cache;
+    private readonly ITicketAssignmentService _assignments;
 
     public UsersController(
         UserManager<ApplicationUser> userManager,
@@ -41,8 +42,10 @@ public class UsersController : ControllerBase
         IEmailSender emailSender,
         IOptions<FrontendOptions> frontendOptions,
         IFileStorage fileStorage,
-        IMemoryCache cache)
+        IMemoryCache cache,
+        ITicketAssignmentService assignments)
     {
+        _assignments = assignments;
         _userManager = userManager;
         _db = db;
         _currentUser = currentUser;
@@ -200,6 +203,11 @@ public class UsersController : ControllerBase
             subBranchId = request.SubBranchId;
         }
 
+        // Captured before the change: a staff member who leaves their role, branch or sub-branch can no longer be
+        // the assignee of the tickets they were working there.
+        var wasEmployee = user.Role == UserRole.Employee;
+        var movedAway = wasEmployee && (request.Role != UserRole.Employee || user.DepartmentId != departmentId || user.SubBranchId != subBranchId);
+
         user.FirstName = request.FirstName;
         user.LastName = request.LastName;
         user.Role = request.Role;
@@ -208,6 +216,10 @@ public class UsersController : ControllerBase
         user.SubBranchId = subBranchId;
         await _userManager.UpdateAsync(user);
         _cache.Remove(UserStatusCache.Key(user.Id));
+
+        if (movedAway)
+            await _assignments.ReleaseLiveTicketsAsync(user.Id, "moved to a different role or branch", _currentUser.UserId);
+
         return Ok();
     }
 
@@ -227,6 +239,11 @@ public class UsersController : ControllerBase
         user.IsActive = request.IsActive;
         await _userManager.UpdateAsync(user);
         _cache.Remove(UserStatusCache.Key(user.Id));
+
+        // Someone who can no longer work must not keep owning live tickets.
+        if (!request.IsActive && user.Role == UserRole.Employee)
+            await _assignments.ReleaseLiveTicketsAsync(user.Id, "account deactivated", _currentUser.UserId);
+
         return Ok();
     }
 

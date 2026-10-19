@@ -52,7 +52,9 @@ public enum NotificationType
     UserActivatedViaInvite = 6,
     TicketTransferred = 7,
     TicketOverdue = 8,
-    TaskAssigned = 9
+    TaskAssigned = 9,
+    /// <summary>A ticket lost its last assignee (e.g. they were deactivated or moved) and needs someone to pick it up.</summary>
+    TicketUnassigned = 10
 }
 
 /// <summary>Lifecycle of a WorkTask, derived from its start/stop timestamps.</summary>

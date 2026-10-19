@@ -155,6 +155,7 @@ builder.Services.AddScoped<ITokenService, JwtTokenService>();
 builder.Services.AddScoped<ITemporaryPasswordGenerator, TemporaryPasswordGenerator>();
 builder.Services.AddScoped<IFileStorage, LocalFileStorage>();
 builder.Services.AddScoped<IFileLinkService, FileLinkService>();
+builder.Services.AddScoped<ITicketAssignmentService, TicketAssignmentService>();
 builder.Services.AddScoped<IEmbeddingService, GoogleAiEmbeddingService>();
 builder.Services.AddScoped<IKnowledgeBaseIndexer, KnowledgeBaseIndexer>();
 builder.Services.AddSingleton<IVectorIndex, VectorIndex>();

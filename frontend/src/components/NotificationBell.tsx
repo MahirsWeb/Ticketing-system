@@ -15,7 +15,7 @@ export function NotificationBell() {
 
     const hub = getNotificationsHub();
     const refresh = () => notificationsApi.list().then(setItems).catch(() => {});
-    const events = ['newTicket', 'ticketOpened', 'ticketAssigned', 'ticketClosed', 'newResponse', 'userActivatedViaInvite', 'ticketTransferred', 'ticketOverdue', 'taskAssigned'];
+    const events = ['newTicket', 'ticketOpened', 'ticketAssigned', 'ticketClosed', 'newResponse', 'userActivatedViaInvite', 'ticketTransferred', 'ticketOverdue', 'taskAssigned', 'ticketUnassigned'];
     events.forEach((e) => hub.on(e, refresh));
     return () => {
       events.forEach((e) => hub.off(e, refresh));

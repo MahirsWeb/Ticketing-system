@@ -311,19 +311,19 @@ export default function DashboardPage() {
           label="Open / In progress"
           value={summary?.totalOpen ?? '—'}
           accent="text-amber-600"
-          hint="Tickets that have been opened and assigned, but not yet closed."
+          hint="Tickets submitted in this period that are opened, in progress or resolved, but not yet closed."
         />
         <KpiCard label="Closed" value={summary?.totalClosed ?? '—'} accent="text-green-700" hint="Tickets resolved and closed in this period." />
         <KpiCard
           label="Avg. resolution (h)"
           value={summary?.avgResolutionHours ?? '—'}
-          hint="Average time between a ticket being opened and being closed, in hours."
+          hint="Average time between a ticket being opened and being closed, in hours, over the tickets closed in this period."
         />
         <KpiCard
           label="SLA compliance"
           value={summary?.slaComplianceRate != null ? `${summary.slaComplianceRate}%` : '—'}
           accent="text-blue-700"
-          hint="Share of closed tickets (with a due date) that were resolved by their SLA due date."
+          hint="Share of tickets closed in this period (that had a due date) which were closed by that date. Shows — when none had one."
         />
       </div>
 

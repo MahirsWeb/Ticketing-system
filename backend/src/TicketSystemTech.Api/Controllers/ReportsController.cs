@@ -4,7 +4,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TicketSystemTech.Api.Contracts;
+using Microsoft.Extensions.Options;
 using TicketSystemTech.Application.Common.Interfaces;
+using TicketSystemTech.Application.Common.Options;
+using TicketSystemTech.Application.Sla;
 using TicketSystemTech.Application.Reporting;
 using TicketSystemTech.Domain.Entities;
 using TicketSystemTech.Domain.Enums;
@@ -26,20 +29,25 @@ public class ReportsController : ControllerBase
     private readonly AppDbContext _db;
     private readonly ICurrentUserService _currentUser;
     private readonly IChatCompletionService _chatCompletionService;
+    private readonly Lazy<TimeZoneInfo> _zone;
 
-    public ReportsController(AppDbContext db, ICurrentUserService currentUser, IChatCompletionService chatCompletionService)
+    public ReportsController(AppDbContext db, ICurrentUserService currentUser, IChatCompletionService chatCompletionService, IOptions<SlaOptions> slaOptions)
     {
         _db = db;
         _currentUser = currentUser;
         _chatCompletionService = chatCompletionService;
+        _zone = new Lazy<TimeZoneInfo>(() => BusinessTimeZone.Resolve(slaOptions.Value.TimeZoneId));
     }
 
-    private IQueryable<Ticket> Scoped(DateTime from, DateTime to, Guid? companyId, Guid? agentId, Guid? departmentId, Guid? subBranchId = null)
+    /// <summary>The branch/company/agent scope shared by every report, with no date restriction.</summary>
+    private IQueryable<Ticket> InScope(Guid? companyId, Guid? agentId, Guid? departmentId, Guid? subBranchId)
     {
-        var query = _db.Tickets.AsNoTracking().Where(t => t.CreatedAt >= from && t.CreatedAt <= to);
+        var query = _db.Tickets.AsNoTracking().AsQueryable();
 
+        // "Tickets of agent X" means the ones they are (co-)assigned to, not only those where they are the primary
+        // assignee — the ticket list already works this way, so the two screens now agree.
         if (agentId.HasValue)
-            query = query.Where(t => t.AssignedToUserId == agentId.Value);
+            query = query.Where(t => t.AssignedToUserId == agentId.Value || t.Assignees.Any(a => a.UserId == agentId.Value));
 
         if (companyId.HasValue) query = query.Where(t => t.CompanyId == companyId.Value);
         if (subBranchId.HasValue) query = query.Where(t => t.SubBranchId == subBranchId.Value);
@@ -53,15 +61,30 @@ public class ReportsController : ControllerBase
         return query;
     }
 
+    /// <summary>Tickets submitted in the range — the cohort for "what came in" figures.</summary>
+    private IQueryable<Ticket> Scoped(DateTime from, DateTime to, Guid? companyId, Guid? agentId, Guid? departmentId, Guid? subBranchId = null) =>
+        InScope(companyId, agentId, departmentId, subBranchId).Where(t => t.CreatedAt >= from && t.CreatedAt <= to);
+
+    /// <summary>Tickets closed in the range — the cohort for "what got done" figures (closed count, resolution time,
+    /// SLA compliance). Everything used to be measured on tickets CREATED in the range, so a ticket opened last month
+    /// and closed today counted toward last month, and the labels on the dashboard did not mean what they said.</summary>
+    private IQueryable<Ticket> ClosedIn(DateTime from, DateTime to, Guid? companyId, Guid? agentId, Guid? departmentId, Guid? subBranchId) =>
+        InScope(companyId, agentId, departmentId, subBranchId)
+            .Where(t => t.ClosedAtUtc != null && t.ClosedAtUtc >= from && t.ClosedAtUtc <= to);
+
     [HttpGet("summary")]
     public async Task<ActionResult<ReportSummaryDto>> Summary(DateTime? from, DateTime? to, Guid? companyId, Guid? agentId, Guid? departmentId, Guid? subBranchId)
     {
         var (f, t) = NormalizeRange(from, to);
-        var tickets = await Scoped(f, t, companyId, agentId, departmentId, subBranchId).ToListAsync();
 
-        var totalNew = tickets.Count(x => x.Status == TicketStatus.New);
-        var totalOpen = tickets.Count(x => x.Status is TicketStatus.Open or TicketStatus.InProgress);
-        var closed = tickets.Where(x => x.Status == TicketStatus.Closed).ToList();
+        var createdStatuses = await Scoped(f, t, companyId, agentId, departmentId, subBranchId).Select(x => x.Status).ToListAsync();
+        var totalNew = createdStatuses.Count(x => x == TicketStatus.New);
+        // Resolved is not closed yet, so it is still work in progress.
+        var totalOpen = createdStatuses.Count(x => x is TicketStatus.Open or TicketStatus.InProgress or TicketStatus.Resolved);
+
+        var closed = await ClosedIn(f, t, companyId, agentId, departmentId, subBranchId)
+            .Select(x => new { x.OpenedAtUtc, x.ClosedAtUtc, x.DueDateUtc })
+            .ToListAsync();
 
         var resolutionHours = closed
             .Where(x => x.OpenedAtUtc.HasValue && x.ClosedAtUtc.HasValue)
@@ -81,55 +104,73 @@ public class ReportsController : ControllerBase
     public async Task<ActionResult<List<TimeSeriesPointDto>>> TimeSeries(DateTime? from, DateTime? to, Guid? companyId, Guid? agentId, Guid? departmentId, Guid? subBranchId)
     {
         var (f, t) = NormalizeRange(from, to);
-        var tickets = await Scoped(f, t, companyId, agentId, departmentId, subBranchId).ToListAsync();
+        var zone = _zone.Value;
 
-        var opened = tickets.GroupBy(x => DateOnly.FromDateTime(x.CreatedAt)).ToDictionary(g => g.Key, g => g.Count());
-        var closed = tickets.Where(x => x.ClosedAtUtc.HasValue)
-            .GroupBy(x => DateOnly.FromDateTime(x.ClosedAtUtc!.Value)).ToDictionary(g => g.Key, g => g.Count());
+        // Two cohorts: what was opened on a day, and what was closed on it. The closed series used to come from the
+        // opened cohort, so anything closed in the range but opened before it was silently dropped.
+        var createdDates = await Scoped(f, t, companyId, agentId, departmentId, subBranchId).Select(x => x.CreatedAt).ToListAsync();
+        var closedDates = await ClosedIn(f, t, companyId, agentId, departmentId, subBranchId).Select(x => x.ClosedAtUtc!.Value).ToListAsync();
+
+        // Days are the business's local calendar days, not UTC days.
+        var opened = createdDates.GroupBy(d => BusinessTimeZone.LocalDate(d, zone)).ToDictionary(g => g.Key, g => g.Count());
+        var closed = closedDates.GroupBy(d => BusinessTimeZone.LocalDate(d, zone)).ToDictionary(g => g.Key, g => g.Count());
 
         var points = new List<TimeSeriesPointDto>();
-        for (var d = DateOnly.FromDateTime(f); d <= DateOnly.FromDateTime(t); d = d.AddDays(1))
+        for (var d = BusinessTimeZone.LocalDate(f, zone); d <= BusinessTimeZone.LocalDate(t, zone); d = d.AddDays(1))
             points.Add(new TimeSeriesPointDto(d, opened.GetValueOrDefault(d), closed.GetValueOrDefault(d)));
 
         return Ok(points);
     }
 
     [HttpGet("leaderboard")]
-    public async Task<ActionResult<List<LeaderboardEntryDto>>> Leaderboard(DateTime? from, DateTime? to, Guid? companyId, Guid? departmentId, Guid? subBranchId)
+    public async Task<ActionResult<List<LeaderboardEntryDto>>> Leaderboard(DateTime? from, DateTime? to, Guid? companyId, Guid? agentId, Guid? departmentId, Guid? subBranchId)
     {
         var (f, t) = NormalizeRange(from, to);
-        var closed = await Scoped(f, t, companyId, null, departmentId, subBranchId)
-            .Where(x => x.Status == TicketStatus.Closed && x.ClosedByUserId.HasValue)
+        // Ranked by who closed the tickets, among tickets closed in the range. An agent filter narrows the board to
+        // that person (it used to be ignored, so the filtered dashboard still ranked everyone).
+        var closed = ClosedIn(f, t, companyId, null, departmentId, subBranchId)
+            .Where(x => x.Status == TicketStatus.Closed && x.ClosedByUserId.HasValue);
+        if (agentId.HasValue) closed = closed.Where(x => x.ClosedByUserId == agentId.Value);
+
+        var ranked = await closed
             .GroupBy(x => x.ClosedByUserId!.Value)
             .Select(g => new { UserId = g.Key, Count = g.Count() })
             .OrderByDescending(x => x.Count)
             .ToListAsync();
 
-        var userIds = closed.Select(x => x.UserId).ToList();
+        var userIds = ranked.Select(x => x.UserId).ToList();
         var names = await _db.Users.Where(u => userIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => $"{u.FirstName} {u.LastName}");
 
-        return Ok(closed.Select(x => new LeaderboardEntryDto(x.UserId, names.GetValueOrDefault(x.UserId, "Unknown"), x.Count)).ToList());
+        return Ok(ranked.Select(x => new LeaderboardEntryDto(x.UserId, names.GetValueOrDefault(x.UserId, "Unknown"), x.Count)).ToList());
     }
 
-    /// <summary>Admin-only: ticket counts broken down by branch, for the global cross-branch dashboard view.</summary>
+    /// <summary>Admin-only: ticket counts broken down by branch, for the global cross-branch dashboard view.
+    /// New/open are counted on tickets submitted in the range and closed on tickets closed in it, the same cohorts as the summary.</summary>
     [HttpGet("by-branch")]
     [Authorize(Roles = nameof(UserRole.Admin))]
     public async Task<ActionResult<List<BranchBreakdownEntryDto>>> ByBranch(DateTime? from, DateTime? to)
     {
         var (f, t) = NormalizeRange(from, to);
-        var tickets = await _db.Tickets.AsNoTracking()
+        var created = await _db.Tickets.AsNoTracking()
             .Where(x => x.CreatedAt >= f && x.CreatedAt <= t && x.DepartmentId.HasValue)
+            .Select(x => new { DepartmentId = x.DepartmentId!.Value, x.Status })
             .ToListAsync();
+        var closedPerBranch = await _db.Tickets.AsNoTracking()
+            .Where(x => x.ClosedAtUtc != null && x.ClosedAtUtc >= f && x.ClosedAtUtc <= t && x.DepartmentId.HasValue)
+            .GroupBy(x => x.DepartmentId!.Value)
+            .Select(g => new { DepartmentId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(g => g.DepartmentId, g => g.Count);
 
         var departments = await _db.Departments.ToDictionaryAsync(d => d.Id, d => d.Name);
 
-        var result = tickets.GroupBy(x => x.DepartmentId!.Value)
-            .Select(g => new BranchBreakdownEntryDto(
-                g.Key,
-                departments.GetValueOrDefault(g.Key, "Unknown"),
-                g.Count(x => x.Status == TicketStatus.New),
-                g.Count(x => x.Status is TicketStatus.Open or TicketStatus.InProgress),
-                g.Count(x => x.Status == TicketStatus.Closed)))
+        var branchIds = created.Select(x => x.DepartmentId).Concat(closedPerBranch.Keys).Distinct();
+        var result = branchIds
+            .Select(id => new BranchBreakdownEntryDto(
+                id,
+                departments.GetValueOrDefault(id, "Unknown"),
+                created.Count(x => x.DepartmentId == id && x.Status == TicketStatus.New),
+                created.Count(x => x.DepartmentId == id && x.Status is TicketStatus.Open or TicketStatus.InProgress or TicketStatus.Resolved),
+                closedPerBranch.GetValueOrDefault(id)))
             .OrderBy(x => x.DepartmentName)
             .ToList();
 
@@ -142,7 +183,11 @@ public class ReportsController : ControllerBase
         DateTime? from, DateTime? to, Guid? companyId, Guid? agentId, Guid? departmentId, Guid? subBranchId, [FromQuery] string groupBy = "month")
     {
         var (f, t) = NormalizeRange(from, to);
-        var createdDates = await Scoped(f, t, companyId, agentId, departmentId, subBranchId).Select(x => x.CreatedAt).ToListAsync();
+        var zone = _zone.Value;
+        // Bucket by the business's local date, so a ticket created at 00:30 local on the 1st lands in the new month.
+        var createdDates = (await Scoped(f, t, companyId, agentId, departmentId, subBranchId).Select(x => x.CreatedAt).ToListAsync())
+            .Select(d => TimeZoneInfo.ConvertTimeFromUtc(BusinessTimeZone.AsUtc(d), zone))
+            .ToList();
 
         DateTime BucketStart(DateTime d) => groupBy.ToLowerInvariant() switch
         {
@@ -315,8 +360,8 @@ public class ReportsController : ControllerBase
 
     private static (DateTime From, DateTime To) NormalizeRange(DateTime? from, DateTime? to)
     {
-        var t = to ?? DateTime.UtcNow;
-        var f = from ?? t.AddDays(-30);
+        var t = BusinessTimeZone.AsUtc(to ?? DateTime.UtcNow);
+        var f = from.HasValue ? BusinessTimeZone.AsUtc(from.Value) : t.AddDays(-30);
         return (f, t);
     }
 }

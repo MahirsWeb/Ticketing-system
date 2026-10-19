@@ -21,7 +21,7 @@ public class SlaCalculator : ISlaCalculator
     public SlaCalculator(SlaOptions options)
     {
         _options = options;
-        _timeZone = new Lazy<TimeZoneInfo>(() => ResolveTimeZone(_options.TimeZoneId));
+        _timeZone = new Lazy<TimeZoneInfo>(() => BusinessTimeZone.Resolve(_options.TimeZoneId));
         _window = new Lazy<(TimeSpan, TimeSpan)>(ParseWindow);
         _holidays = new Lazy<HashSet<DateOnly>>(() => _options.Holidays
             .Select(h => DateOnly.ParseExact(h.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture))
@@ -76,17 +76,5 @@ public class SlaCalculator : ISlaCalculator
         var end = TimeSpan.ParseExact(_options.WorkdayEnd, @"hh\:mm", CultureInfo.InvariantCulture);
         if (end <= start) throw new InvalidOperationException("Sla:WorkdayEnd must be later than Sla:WorkdayStart.");
         return (start, end);
-    }
-
-    private static TimeZoneInfo ResolveTimeZone(string id)
-    {
-        foreach (var candidate in new[] { id, "Central European Standard Time" })
-        {
-            try { return TimeZoneInfo.FindSystemTimeZoneById(candidate); }
-            catch (TimeZoneNotFoundException) { }
-            catch (InvalidTimeZoneException) { }
-        }
-
-        throw new InvalidOperationException($"Sla:TimeZoneId '{id}' is not a known time zone on this machine.");
     }
 }

@@ -105,7 +105,7 @@ public static class TicketExcelExporter
         statsHeaderRow.GetCell(1).CellStyle = headerStyle;
 
         var newCount = rows.Count(r => r.Status == "New");
-        var openCount = rows.Count(r => r.Status is "Open" or "InProgress");
+        var openCount = rows.Count(r => r.Status is "Open" or "InProgress" or "Resolved");
         var closedCount = rows.Count(r => r.Status == "Closed");
         var avgResolution = rows.Where(r => r.ResolutionHours.HasValue).Select(r => r.ResolutionHours!.Value).DefaultIfEmpty(0).Average();
 

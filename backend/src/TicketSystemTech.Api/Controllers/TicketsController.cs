@@ -150,7 +150,7 @@ public class TicketsController : ControllerBase
         if (subBranchError is not null) return BadRequest(new { message = subBranchError });
 
         var assignee = await _db.Users.FirstOrDefaultAsync(u => u.Id == request.AssignedToUserId
-            && u.Role == UserRole.Employee);
+            && u.Role == UserRole.Employee && u.IsActive);
         if (assignee is null) return BadRequest(new { message = "Assignee must be a support agent or consultant." });
         if (assignee.DepartmentId != request.DepartmentId)
             return BadRequest(new { message = "Assignee must belong to the selected branch." });
@@ -419,7 +419,7 @@ public class TicketsController : ControllerBase
         if (subBranchError is not null) return BadRequest(new { message = subBranchError });
 
         var assignee = await _db.Users.FirstOrDefaultAsync(u => u.Id == request.AssignedToUserId
-            && u.Role == UserRole.Employee);
+            && u.Role == UserRole.Employee && u.IsActive);
         if (assignee is null) return BadRequest(new { message = "Assignee must be a support agent or consultant." });
         if (assignee.DepartmentId != request.DepartmentId)
             return BadRequest(new { message = "Assignee must belong to the selected branch." });
@@ -674,7 +674,7 @@ public class TicketsController : ControllerBase
         if (ticket.Status is TicketStatus.New or TicketStatus.Closed)
             return BadRequest(new { message = "The ticket must be open to change its assignees." });
 
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == request.UserId && u.Role == UserRole.Employee);
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == request.UserId && u.Role == UserRole.Employee && u.IsActive);
         if (user is null) return BadRequest(new { message = "Assignee must be a support agent or consultant." });
         if (user.DepartmentId != ticket.DepartmentId) return BadRequest(new { message = "Assignee must belong to this ticket's branch." });
         if (ticket.SubBranchId.HasValue && user.SubBranchId != ticket.SubBranchId)
@@ -684,6 +684,9 @@ public class TicketsController : ControllerBase
         if (alreadyAssigned) return BadRequest(new { message = "This person is already assigned to the ticket." });
 
         _db.TicketAssignees.Add(new TicketAssignee { TicketId = id, UserId = user.Id });
+        // The first person added to a ticket that has nobody becomes its primary assignee: AssignedToUserId and the
+        // assignee list used to drift apart, leaving "assigned to" empty on a ticket that did have assignees.
+        ticket.AssignedToUserId ??= user.Id;
 
         var addedBy = await _db.Users.FirstAsync(u => u.Id == _currentUser.UserId);
         _db.TicketMessages.Add(new TicketMessage
@@ -754,6 +757,9 @@ public class TicketsController : ControllerBase
             return BadRequest(new { message = "System events are recorded automatically and cannot be posted directly." });
         if (_currentUser.Role == UserRole.Client && request.Type != MessageType.Response)
             return Forbid();
+        // The screens already hide the reply box on a closed ticket; the API now enforces it too.
+        if (ticket.Status == TicketStatus.Closed)
+            return BadRequest(new { message = "This ticket is closed. Reopen it to add a message." });
 
         var message = new TicketMessage
         {
@@ -767,28 +773,55 @@ public class TicketsController : ControllerBase
 
         if (request.Type == MessageType.Response)
         {
-            var recipientId = _currentUser.Role == UserRole.Client ? ticket.AssignedToUserId : ticket.ClientId;
-            if (recipientId.HasValue)
+            // A client's reply goes to everyone working on the ticket, not just the primary assignee; a staff reply goes to the client.
+            var recipientIds = _currentUser.Role == UserRole.Client
+                ? await StaffToNotifyAsync(ticket)
+                : new List<Guid> { ticket.ClientId };
+
+            var recipients = await _db.Users.Where(u => recipientIds.Contains(u.Id) && u.IsActive).ToListAsync();
+            foreach (var recipient in recipients)
             {
-                var recipient = await _db.Users.FirstOrDefaultAsync(u => u.Id == recipientId.Value);
-                if (recipient is not null)
-                {
-                    _db.Notifications.Add(new Notification { UserId = recipient.Id, Type = NotificationType.NewResponse, Message = $"New reply on ticket #{ticket.TicketNumber}", TicketId = ticket.Id });
-                    await _db.SaveChangesAsync();
-                    await _emailSender.SendAsync(recipient.Email!, $"New reply on ticket #{ticket.TicketNumber}", EmailTemplates.NewResponse(recipient.FirstName, ticket.TicketNumber));
-                    await _notificationPublisher.PushToUserAsync(recipient.Id, "newResponse", new { ticket.Id, ticket.TicketNumber });
-                }
+                _db.Notifications.Add(new Notification { UserId = recipient.Id, Type = NotificationType.NewResponse, Message = $"New reply on ticket #{ticket.TicketNumber}", TicketId = ticket.Id });
+            }
+            if (recipients.Count > 0) await _db.SaveChangesAsync();
+
+            foreach (var recipient in recipients)
+            {
+                await _emailSender.SendAsync(recipient.Email!, $"New reply on ticket #{ticket.TicketNumber}", EmailTemplates.NewResponse(recipient.FirstName, ticket.TicketNumber));
+                await _notificationPublisher.PushToUserAsync(recipient.Id, "newResponse", new { ticket.Id, ticket.TicketNumber });
             }
         }
 
-        if (request.Type == MessageType.InternalNote)
+        // Only worth embedding once the ticket is past triage (search never returns New/Open tickets), and the
+        // embedding call is an external dependency: its failure must not fail a message that is already saved.
+        if (request.Type == MessageType.InternalNote && ticket.Status is not (TicketStatus.New or TicketStatus.Open))
         {
-            await _knowledgeBaseIndexer.IndexTicketAsync(ticket.Id);
+            try
+            {
+                await _knowledgeBaseIndexer.IndexTicketAsync(ticket.Id);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogError(ex, "Indexing ticket {TicketId} after an internal note failed", ticket.Id);
+            }
         }
 
         var author = await _db.Users.FirstAsync(u => u.Id == message.AuthorId);
         return Ok(new TicketMessageDto(message.Id, message.Type.ToString(), message.BodyHtml, message.AuthorId,
             $"{author.FirstName} {author.LastName}", message.CreatedAt, new List<TicketAttachmentDto>()));
+    }
+
+    /// <summary>Who should hear about a client's reply: every assignee, plus the primary assignee if the list lacks them.
+    /// A ticket with nobody on it falls back to the staff of its branch, so a reply is never addressed to no one.</summary>
+    private async Task<List<Guid>> StaffToNotifyAsync(Ticket ticket)
+    {
+        var ids = await _db.TicketAssignees.Where(a => a.TicketId == ticket.Id).Select(a => a.UserId).ToListAsync();
+        if (ticket.AssignedToUserId.HasValue && !ids.Contains(ticket.AssignedToUserId.Value)) ids.Add(ticket.AssignedToUserId.Value);
+
+        if (ids.Count == 0 && ticket.DepartmentId.HasValue)
+            ids = await _db.Users.Where(u => u.Role == UserRole.Employee && u.IsActive && u.DepartmentId == ticket.DepartmentId).Select(u => u.Id).ToListAsync();
+
+        return ids;
     }
 
     /// <summary>A branch with sub-branches requires picking exactly one of them; a branch without any must not receive one.</summary>
