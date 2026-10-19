@@ -150,9 +150,18 @@ export function DateRangePicker({
         {clearable && (from || to) && (
           <span
             role="button"
+            tabIndex={0}
+            aria-label="Clear"
             onClick={(e) => {
               e.stopPropagation();
               clear();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                clear();
+              }
             }}
             className="ml-1 rounded-full px-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
           >

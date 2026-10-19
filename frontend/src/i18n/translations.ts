@@ -49,6 +49,15 @@ export const translations = {
     aiHelp_cancel: 'Cancel',
     aiHelp_sourcesUsed: 'Sources used',
     aiHelp_noInfo: "Sorry, we don't have enough information in the system for your problem. Please contact your administrator.",
+
+    common_loading: 'Loading…',
+    notFound_title: 'Page not found',
+    notFound_body: "The page you are looking for doesn't exist or has been moved.",
+    notFound_home: 'Back to the start page',
+    error_title: 'Something went wrong',
+    error_body: 'An unexpected error stopped this page from loading. Your data is safe. Try again, or reload the page.',
+    error_retry: 'Try again',
+    error_reload: 'Reload the page',
   },
   bs: {
     appName: 'Ticket System Tech',
@@ -98,6 +107,15 @@ export const translations = {
     aiHelp_cancel: 'Odustani',
     aiHelp_sourcesUsed: 'Korišteni izvori',
     aiHelp_noInfo: 'Žao nam je, nemamo dovoljno informacija u sistemu za vaš problem, molimo kontaktirajte vašeg administratora.',
+
+    common_loading: 'Učitavanje…',
+    notFound_title: 'Stranica nije pronađena',
+    notFound_body: 'Stranica koju tražite ne postoji ili je premještena.',
+    notFound_home: 'Nazad na početnu stranicu',
+    error_title: 'Došlo je do greške',
+    error_body: 'Neočekivana greška je spriječila učitavanje ove stranice. Vaši podaci su sigurni. Pokušajte ponovo ili ponovo učitajte stranicu.',
+    error_retry: 'Pokušaj ponovo',
+    error_reload: 'Ponovo učitaj stranicu',
   },
 } as const satisfies Record<Language, Record<string, string>>;
 

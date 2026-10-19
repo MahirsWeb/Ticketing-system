@@ -1,11 +1,18 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import type { UserRole } from '../types';
 
 export function RequireAuth({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user);
   const token = useAuthStore((s) => s.accessToken);
-  if (!user || !token) return <Navigate to="/login" replace />;
+  const signedOutOnPurpose = useAuthStore((s) => s.signedOutOnPurpose);
+  const location = useLocation();
+  // Remember where the person was going so the sign-in page can send them back (an expired session or a bookmarked link).
+  // Not after "Sign out": whoever signs in next starts at the front page.
+  if (!user || !token) {
+    const state = signedOutOnPurpose ? undefined : { from: `${location.pathname}${location.search}` };
+    return <Navigate to="/login" replace state={state} />;
+  }
   return <>{children}</>;
 }
 

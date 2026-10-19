@@ -195,6 +195,7 @@ export default function EmailsPage() {
           {visible.map((m) => (
             <div
               key={m.messageId}
+              role="presentation"
               onClick={() => selectMessage(m.messageId)}
               className={clsx(
                 'flex cursor-pointer items-start gap-2 px-3 py-2 hover:bg-slate-50',
@@ -216,10 +217,19 @@ export default function EmailsPage() {
                     {formatDistanceToNow(new Date(m.receivedAtUtc), { addSuffix: true })}
                   </span>
                 </div>
-                <div className="truncate text-xs text-slate-600">
+                {/* The whole row is clickable with a mouse; this button is what a keyboard (or screen reader) uses. */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    selectMessage(m.messageId);
+                  }}
+                  aria-current={selectedId === m.messageId ? 'true' : undefined}
+                  className="block w-full truncate text-left text-xs text-slate-600"
+                >
                   {m.subject}
                   {m.hasAttachments && <span className="ml-1">📎</span>}
-                </div>
+                </button>
               </div>
             </div>
           ))}

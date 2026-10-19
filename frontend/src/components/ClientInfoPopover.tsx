@@ -37,7 +37,7 @@ export function ClientInfoPopover({
       </button>
       {open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div role="presentation" className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div className="absolute left-0 top-full z-20 mt-2 w-64 rounded-lg border border-slate-200 bg-white p-4 shadow-lg">
             <div className="flex items-center gap-3">
               <span

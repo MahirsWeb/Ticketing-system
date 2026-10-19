@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { authApi } from '../../api/auth';
 import { useAuthStore } from '../../store/authStore';
 import { Button, ErrorText, IconInput } from '../../components/ui';
@@ -24,8 +24,14 @@ function LockIcon() {
   );
 }
 
+/** Only an in-app path may be returned to: never an absolute URL or a protocol-relative "//host". */
+function safeReturnPath(from: unknown): string {
+  return typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') && !from.startsWith('/login') ? from : '/';
+}
+
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const setSession = useAuthStore((s) => s.setSession);
   const { t } = useLanguage();
   const [email, setEmail] = useState('');
@@ -45,7 +51,7 @@ export default function LoginPage() {
       }
       if (res.accessToken && res.user) {
         setSession(res.accessToken, res.user);
-        navigate('/');
+        navigate(safeReturnPath((location.state as { from?: unknown } | null)?.from), { replace: true });
       }
     } catch (err: any) {
       const code = err?.response?.data?.code;

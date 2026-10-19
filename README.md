@@ -16,10 +16,12 @@ starih tiketa i dokumentacije, email integraciju (Outlook), izvještaje/dashboar
 2. [Struktura projekta](#struktura-projekta)
 3. [Pokretanje korak po korak](#pokretanje-korak-po-korak)
 4. [Prijava u aplikaciju](#prijava-u-aplikaciju)
-5. [Objašnjenje svake konfiguracijske postavke](#objašnjenje-svake-konfiguracijske-postavke)
-6. [Rad sa bazom podataka](#rad-sa-bazom-podataka)
-7. [Rješavanje čestih problema](#rješavanje-čestih-problema)
-8. [Poznata ograničenja](#poznata-ograničenja)
+5. [Ko šta vidi (izolacija po poslovnicama)](#ko-šta-vidi-izolacija-po-poslovnicama)
+6. [Objašnjenje svake konfiguracijske postavke](#objašnjenje-svake-konfiguracijske-postavke)
+7. [Rad sa bazom podataka](#rad-sa-bazom-podataka)
+8. [Rješavanje čestih problema](#rješavanje-čestih-problema)
+9. [Provjera koda (testovi i CI)](#provjera-koda-testovi-i-ci)
+10. [Poznata ograničenja](#poznata-ograničenja)
 
 ---
 
@@ -184,6 +186,26 @@ direktno u bazi.
 
 ---
 
+## Ko šta vidi (izolacija po poslovnicama)
+
+Zaposlenik je vezan za jednu **poslovnicu** (odjel). Pravila su stroga i provodi ih server, ne samo ekran:
+
+| Uloga | Tiketi | Klijenti | Osoblje | AI asistent (pretraga, pitanja, slični tiketi) |
+|---|---|---|---|---|
+| **Admin** | svi | svi | svi | cijela baza znanja |
+| **Zaposlenik** | samo tiketi njegove poslovnice (tiket bez poslovnice vidi samo Admin) | samo klijenti koji imaju bar jedan tiket u njegovoj poslovnici | samo kolege iz njegove poslovnice (osim kad bira kome dodijeliti tiket u drugoj poslovnici) | samo tiketi njegove poslovnice + dokumentacija |
+| **Klijent** | samo njegovi tiketi | samo on sam | — | samo dokumentacija (nikad tiketi) |
+
+Posljedice koje treba znati:
+
+- Klijent koji još nikad nije pisao jednoj poslovnici **ne pojavljuje se** u njenoj listi klijenata. Zaposlenik ga
+  ipak može pronaći unosom **tačne email adrese** pri otvaranju tiketa u ime klijenta; takvo pretraživanje se
+  upisuje u audit log (`ClientLookupOutsideBranch`), a broj telefona se ne prikazuje dok klijent ne dobije tiket
+  u toj poslovnici.
+- AI odgovori manjih poslovnica oslanjaju se samo na njihovu historiju, pa su skromniji od odgovora velike poslovnice.
+
+---
+
 ## Objašnjenje svake konfiguracijske postavke
 
 | Postavka | Obavezno? | Šta radi |
@@ -267,11 +289,30 @@ gleda `/health/ready`.
 
 ---
 
+## Provjera koda (testovi i CI)
+
+Lokalno, iz korijena projekta:
+
+```bash
+cd backend && dotnet test
+```
+
+```bash
+cd frontend && npm run lint && npm run build
+```
+
+`npm run build` uključuje provjeru TypeScript tipova. Isto rade i GitHub Actions
+(`.github/workflows/ci.yml`) na svaki push na `main` i svaki pull request: backend se gradi i testira na Windowsu
+(mora proći) i na Linuxu (informativno, dok se ne potvrdi da testovi rade i tamo), frontend prolazi lint, build i
+`npm audit`, a paketi sa **visokim ili kritičnim** poznatim ranjivostima obaraju build.
+
+---
+
 ## Poznata ograničenja
 
-- **Prilozi (attachments)** se čuvaju na lokalnom disku (`backend/src/TicketSystemTech.Api/wwwroot/uploads`),
-  ne u cloud storage-u — normalno za lokalno pokretanje, ali ne bi bilo dovoljno za pravi produkcijski
-  hosting bez promjene `IFileStorage` implementacije.
+- **Prilozi (attachments)** se čuvaju na lokalnom disku (`Storage:UploadsPath`, podrazumijevano `App_Data/uploads`),
+  van web roota, i otvaraju se samo preko potpisanih linkova koji ističu. To je normalno za lokalno pokretanje, ali
+  za pravi produkcijski hosting treba ili disk koji se ne briše pri redeployu ili druga `IFileStorage` implementacija.
 - Aplikacija je dizajnirana da radi **potpuno lokalno** (SQL Server + backend + frontend na istom računaru).
   Ne postoji trenutno cloud deployment (Render/Vercel/Supabase konfiguracija koja se ranije koristila je
   uklonjena kad je projekat prebačen na lokalni SQL Server).

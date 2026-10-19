@@ -62,7 +62,7 @@ export function TaskDetailPanel({
   }
 
   return (
-    <div className="space-y-4 border-t border-slate-100 bg-slate-50 px-4 py-4" onClick={(e) => e.stopPropagation()}>
+    <div role="presentation" className="space-y-4 border-t border-slate-100 bg-slate-50 px-4 py-4" onClick={(e) => e.stopPropagation()}>
       <div>
         <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Description</div>
         <p className="mt-1 whitespace-pre-wrap text-sm text-slate-800">{task.description}</p>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { NotificationBell } from '../components/NotificationBell';
@@ -66,19 +66,29 @@ function TicketsNavItem({ to, label }: { to: string; label: string }) {
   // Rendered as a plain sibling of the other nav items — same tag, same classes — so it lines up
   // pixel-for-pixel with them. The dropdown panel nests inside this same <a>, so its rows are plain
   // clickable divs (not <Link>/<a>) to avoid invalid nested anchors.
+  function openRow(r: (typeof rows)[number]) {
+    const params = new URLSearchParams();
+    if (r.status) params.set('status', r.status);
+    if (r.mine) params.set('mine', '1');
+    const qs = params.toString();
+    navigate(qs ? `/tickets?${qs}` : '/tickets');
+  }
+
   return (
     <NavLink
       to={to}
       end
       className={(p) => clsx(navLinkClass(p), 'group relative flex items-center gap-1')}
       onMouseEnter={load}
+      onFocus={load}
     >
       {label}
       <span className="text-[10px] opacity-60">▾</span>
       <div
         className={clsx(
           'absolute left-0 top-full z-30 w-48 -translate-y-1 opacity-0 pointer-events-none',
-          'transition-all duration-200 ease-out group-hover:translate-y-0 group-hover:opacity-100 group-hover:pointer-events-auto'
+          'transition-all duration-200 ease-out group-hover:translate-y-0 group-hover:opacity-100 group-hover:pointer-events-auto',
+          'group-focus-within:translate-y-0 group-focus-within:opacity-100 group-focus-within:pointer-events-auto'
         )}
       >
         <div className="mt-1 overflow-hidden rounded-md border border-slate-200 bg-white py-1 text-left shadow-lg">
@@ -90,11 +100,14 @@ function TicketsNavItem({ to, label }: { to: string; label: string }) {
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                const params = new URLSearchParams();
-                if (r.status) params.set('status', r.status);
-                if (r.mine) params.set('mine', '1');
-                const qs = params.toString();
-                navigate(qs ? `/tickets?${qs}` : '/tickets');
+                openRow(r);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  openRow(r);
+                }
               }}
               className="flex cursor-pointer items-center justify-between px-4 py-2 text-sm font-normal text-slate-700 hover:bg-slate-50"
             >
@@ -110,7 +123,7 @@ function TicketsNavItem({ to, label }: { to: string; label: string }) {
 
 export default function AppLayout() {
   const user = useAuthStore((s) => s.user);
-  const logout = useAuthStore((s) => s.logout);
+  const signOut = useAuthStore((s) => s.signOut);
   const navigate = useNavigate();
   const { t } = useLanguage();
   const navByRole = useNavByRole();
@@ -134,8 +147,8 @@ export default function AppLayout() {
             <NotificationBell />
             <button
               onClick={() => {
-                logout();
-                navigate('/login');
+                signOut();
+                navigate('/login', { replace: true });
               }}
               className="rounded-md border border-white/20 px-3 py-1.5 text-sm font-medium text-slate-200 hover:bg-white/10"
             >
@@ -160,7 +173,10 @@ export default function AppLayout() {
       {user.role === 'Client' && <PhoneNumberBanner />}
 
       <main className="mx-auto max-w-5xl px-4 py-6">
-        <Outlet />
+        {/* Only the page area waits for a screen's code; the header and navigation stay put. */}
+        <Suspense fallback={<div role="status" className="py-16 text-center text-sm text-slate-500">{t('common_loading')}</div>}>
+          <Outlet />
+        </Suspense>
       </main>
     </div>
   );

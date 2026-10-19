@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows is where the application is developed and where every test is known to pass: this one must be green.
+          - os: windows-latest
+            experimental: false
+          # Linux is the Docker target. The tests have only ever been run on Windows, so a failure here is information
+          # (a path or case-sensitivity assumption), not yet a reason to block a merge.
+          - os: ubuntu-latest
+            experimental: true
+    continue-on-error: ${{ matrix.experimental }}
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore TicketSystemTech.sln
+
+      - name: Build
+        run: dotnet build TicketSystemTech.sln --no-restore -c Release
+
+      - name: Test
+        run: dotnet test TicketSystemTech.sln --no-build -c Release --logger "trx;LogFileName=test-results.trx"
+
+      - name: Known-vulnerable packages (high and critical fail the build)
+        shell: bash
+        run: |
+          dotnet list TicketSystemTech.sln package --vulnerable --include-transitive | tee audit.txt
+          if grep -Eq '\b(High|Critical)\b' audit.txt; then
+            echo "::error::A package with a high or critical advisory is referenced. See the output above."
+            exit 1
+          fi
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}
+          path: backend/**/test-results.trx
+          if-no-files-found: ignore
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check and build
+        run: npm run build
+        env:
+          VITE_API_BASE_URL: http://localhost:5114
+
+      - name: Dependency audit (high and critical fail the build)
+        run: npm audit --audit-level=high
