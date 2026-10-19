@@ -24,7 +24,8 @@ public sealed class KnowledgeBaseReindexService : BackgroundService, IKnowledgeB
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<KnowledgeBaseReindexService> _logger;
-    private readonly Channel<bool> _requests = Channel.CreateBounded<bool>(1);
+    private sealed record Request(Guid? DocumentId);
+    private readonly Channel<Request> _requests = Channel.CreateBounded<Request>(1);
     private readonly object _gate = new();
     private ReindexStatus _status = new(ReindexState.Idle, 0, 0, 0, 0, null, null, null);
 
@@ -39,15 +40,19 @@ public sealed class KnowledgeBaseReindexService : BackgroundService, IKnowledgeB
         lock (_gate) return _status;
     }
 
-    public bool TryStart()
+    public bool TryStart() => Begin(new Request(null), "Looking for tickets that need an embedding…");
+
+    public bool TryStartDocument(Guid documentId) => Begin(new Request(documentId), "Reading the stored document…");
+
+    private bool Begin(Request request, string message)
     {
         lock (_gate)
         {
             if (_status.State == ReindexState.Running) return false;
-            _status = new ReindexStatus(ReindexState.Running, 0, 0, 0, 0, DateTime.UtcNow, null, "Looking for tickets that need an embedding…");
+            _status = new ReindexStatus(ReindexState.Running, 0, 0, 0, 0, DateTime.UtcNow, null, message);
         }
 
-        _requests.Writer.TryWrite(true);
+        _requests.Writer.TryWrite(request);
         return true;
     }
 
@@ -55,11 +60,12 @@ public sealed class KnowledgeBaseReindexService : BackgroundService, IKnowledgeB
     {
         try
         {
-            await foreach (var _ in _requests.Reader.ReadAllAsync(stoppingToken))
+            await foreach (var request in _requests.Reader.ReadAllAsync(stoppingToken))
             {
                 try
                 {
-                    await RunAsync(stoppingToken);
+                    if (request.DocumentId is { } documentId) await RunDocumentAsync(documentId, stoppingToken);
+                    else await RunAsync(stoppingToken);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -76,6 +82,23 @@ public sealed class KnowledgeBaseReindexService : BackgroundService, IKnowledgeB
         {
             // shutdown while idle
         }
+    }
+
+    private async Task RunDocumentAsync(Guid documentId, CancellationToken ct)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var indexer = scope.ServiceProvider.GetRequiredService<IKnowledgeBaseDocumentIndexer>();
+
+        var result = await indexer.ReindexDocumentAsync(documentId,
+            (done, total) => Update(s => s with { Total = total, Processed = done, Embedded = done, Message = "Embedding the document…" }), ct);
+
+        Update(s => s with
+        {
+            State = result.Succeeded ? ReindexState.Completed : ReindexState.Failed,
+            FinishedAtUtc = DateTime.UtcNow,
+            Message = result.Message
+        });
+        _logger.LogInformation("Document reindex finished: {Succeeded}, {Message}", result.Succeeded, result.Message);
     }
 
     private async Task RunAsync(CancellationToken ct)

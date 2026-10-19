@@ -90,11 +90,11 @@ public sealed class VectorIndex : IVectorIndex
                 db.TicketMessages
                     .Where(m => m.TicketId == c.TicketId && m.Type == MessageType.InternalNote)
                     .Sum(m => (int?)m.BodyHtml.Length) >= KnowledgeBaseRules.MinInternalNoteChars))
-            .Select(c => new { c.Id, c.TicketId, c.DocumentId, c.Embedding })
+            .Select(c => new { c.Id, c.TicketId, c.DocumentId, DepartmentId = c.Ticket != null ? c.Ticket.DepartmentId : null, c.Embedding })
             .ToListAsync(ct);
 
         var entries = rows
-            .Select(r => new VectorEntry(r.Id, r.TicketId, r.DocumentId, IVectorIndex.Normalize(r.Embedding!)))
+            .Select(r => new VectorEntry(r.Id, r.TicketId, r.DocumentId, r.DepartmentId, IVectorIndex.Normalize(r.Embedding!)))
             .ToList();
         _logger.LogInformation("Vector index loaded: {Count} chunk(s) in {Ms} ms", entries.Count, clock.ElapsedMilliseconds);
         return entries;

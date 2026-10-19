@@ -43,13 +43,27 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
 
     private string Protect(string value) => _protector.Protect(value);
 
-    // Rows saved before encryption was introduced hold plaintext tokens — treat an Unprotect failure
-    // as "this one predates encryption" rather than a hard error, so existing connections (e.g. the
-    // one already live in production) keep working and get re-encrypted the next time they're saved.
+    /// <summary>Every payload ASP.NET Data Protection produces starts with this; anything else is a plaintext token saved
+    /// before encryption existed.</summary>
+    private const string CiphertextPrefix = "CfDJ8";
+
+    /// <summary>
+    /// Reads a stored OAuth token. Legacy plaintext rows are returned as they are (and encrypted the next time they are
+    /// saved). A value that IS ciphertext but cannot be opened (the key ring was lost or replaced) used to be returned
+    /// as if it were the token, so the ciphertext itself was sent to Microsoft as a "refresh token" and failed with a
+    /// confusing error. Now it is reported as what it is: the connection has to be made again.
+    /// </summary>
     private string Unprotect(string value)
     {
+        if (!value.StartsWith(CiphertextPrefix, StringComparison.Ordinal)) return value;
+
         try { return _protector.Unprotect(value); }
-        catch (CryptographicException) { return value; }
+        catch (CryptographicException ex)
+        {
+            throw new ExternalServiceException("Microsoft 365",
+                "The saved mailbox connection can no longer be read. Disconnect the mailbox and connect it again.",
+                unavailable: false, ex);
+        }
     }
 
     public async Task<EmailConnectionStatus> GetStatusAsync(Guid departmentId, CancellationToken ct = default)
@@ -58,7 +72,7 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
         return new EmailConnectionStatus(conn is not null, conn?.ConnectedEmail);
     }
 
-    public async Task<EmailConnectionStatus> ConnectAsync(Guid departmentId, Guid connectedByUserId, string code, string redirectUri, CancellationToken ct = default)
+    public async Task<EmailConnectionStatus> ConnectAsync(Guid departmentId, Guid connectedByUserId, string code, string redirectUri, string? codeVerifier, CancellationToken ct = default)
     {
         var form = new Dictionary<string, string>
         {
@@ -69,6 +83,9 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
             ["grant_type"] = "authorization_code",
             ["scope"] = Scopes,
         };
+        // PKCE: Microsoft checks that this matches the challenge sent when the sign-in started, so an authorization code
+        // intercepted or injected from another browser cannot be exchanged.
+        if (!string.IsNullOrEmpty(codeVerifier)) form["code_verifier"] = codeVerifier;
 
         JsonElement tokenResponse;
         try
@@ -110,17 +127,33 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
         conn.RefreshToken = Protect(refreshToken);
         conn.AccessTokenExpiresAtUtc = DateTime.UtcNow.AddSeconds(expiresIn);
         conn.UpdatedAt = DateTime.UtcNow;
+
+        // Who connected which branch's mailbox, and when. Recorded without the address itself.
+        _db.AuditLogs.Add(new AuditLog
+        {
+            UserId = connectedByUserId,
+            Action = "MailboxConnected",
+            EntityType = nameof(EmailConnection),
+            EntityId = departmentId
+        });
         await _db.SaveChangesAsync(ct);
 
         return new EmailConnectionStatus(true, conn.ConnectedEmail);
     }
 
-    public async Task DisconnectAsync(Guid departmentId, CancellationToken ct = default)
+    public async Task DisconnectAsync(Guid departmentId, Guid disconnectedByUserId, CancellationToken ct = default)
     {
         var conn = await _db.EmailConnections.FirstOrDefaultAsync(c => c.DepartmentId == departmentId, ct);
         if (conn is not null)
         {
             _db.EmailConnections.Remove(conn);
+            _db.AuditLogs.Add(new AuditLog
+            {
+                UserId = disconnectedByUserId,
+                Action = "MailboxDisconnected",
+                EntityType = nameof(EmailConnection),
+                EntityId = departmentId
+            });
             await _db.SaveChangesAsync(ct);
         }
     }

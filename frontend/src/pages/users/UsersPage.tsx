@@ -277,6 +277,12 @@ export default function UsersPage() {
         </span>
       </div>
       <ErrorText>{listError}</ErrorText>
+      {!isAdmin && (
+        <p className="text-xs text-slate-400">
+          You see the clients who have tickets in your branch. To open a ticket for any other client, use "New ticket on behalf" and
+          type their full email address.
+        </p>
+      )}
 
       <Card className="overflow-hidden">
         <table className="w-full text-sm">

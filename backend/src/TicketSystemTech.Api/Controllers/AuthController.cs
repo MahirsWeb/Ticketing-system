@@ -28,6 +28,7 @@ public class AuthController : ControllerBase
     private readonly AppDbContext _db;
     private readonly INotificationPublisher _notificationPublisher;
     private readonly IMemoryCache _cache;
+    private readonly IBackgroundEmailQueue _emailQueue;
 
     public AuthController(
         UserManager<ApplicationUser> userManager,
@@ -36,9 +37,11 @@ public class AuthController : ControllerBase
         IOptions<FrontendOptions> frontendOptions,
         AppDbContext db,
         INotificationPublisher notificationPublisher,
-        IMemoryCache cache)
+        IMemoryCache cache,
+        IBackgroundEmailQueue emailQueue)
     {
         _cache = cache;
+        _emailQueue = emailQueue;
         _userManager = userManager;
         _tokenService = tokenService;
         _emailSender = emailSender;
@@ -47,26 +50,44 @@ public class AuthController : ControllerBase
         _notificationPublisher = notificationPublisher;
     }
 
+    /// <summary>The one answer to every failed sign-in: wrong password, unknown email, inactive account or locked account.
+    /// Telling a locked account apart ("423") confirmed that the email exists to anyone who made five wrong guesses.</summary>
+    private const string InvalidCredentials =
+        "Invalid email or password. After several failed attempts an account is locked for a few minutes.";
+
+    // PBKDF2 takes noticeable time. A request for an unknown or locked account used to skip it and answer instantly, so
+    // response time alone told "no such account" from "wrong password". These make those paths do the same work.
+    private static readonly ApplicationUser DummyUser = new();
+    private static readonly Lazy<string> DummyHash = new(() => new PasswordHasher<ApplicationUser>().HashPassword(DummyUser, "not-a-real-password"));
+
+    private void SpendPasswordHashTime(string password) =>
+        _userManager.PasswordHasher.VerifyHashedPassword(DummyUser, DummyHash.Value, password);
+
     [HttpPost("login")]
     public async Task<ActionResult<LoginResponse>> Login(LoginRequest request)
     {
         var user = await _userManager.FindByEmailAsync(request.Email);
         if (user is null || !user.IsActive)
-            return Unauthorized(new { message = "Invalid email or password." });
+        {
+            SpendPasswordHashTime(request.Password);
+            return Unauthorized(new { message = InvalidCredentials });
+        }
 
         if (await _userManager.IsLockedOutAsync(user))
         {
-            return StatusCode(423, new
-            {
-                code = "ACCOUNT_LOCKED",
-                message = "Too many failed sign-in attempts. Please try again in a few minutes, or reset your password."
-            });
+            SpendPasswordHashTime(request.Password);
+            return Unauthorized(new { message = InvalidCredentials });
         }
 
         if (!await _userManager.CheckPasswordAsync(user, request.Password))
         {
             await _userManager.AccessFailedAsync(user); // increments the failure count; locks the account out once the threshold is reached
-            return Unauthorized(new { message = "Invalid email or password." });
+
+            // The account's owner learns about it by email (to the address on file), not from the sign-in screen.
+            if (await _userManager.IsLockedOutAsync(user))
+                _emailQueue.Enqueue(user.Email!, "Your account was temporarily locked", EmailTemplates.AccountLocked(user.FirstName));
+
+            return Unauthorized(new { message = InvalidCredentials });
         }
         await _userManager.ResetAccessFailedCountAsync(user);
 
@@ -97,6 +118,9 @@ public class AuthController : ControllerBase
         return Ok(new LoginResponse(false, token, expiresAt, await ToSummaryAsync(user)));
     }
 
+    private const string TempPasswordRejected =
+        "The temporary password is not valid or has expired. Ask an admin or consultant to generate a new one.";
+
     [HttpPost("set-new-password")]
     public async Task<IActionResult> SetNewPassword(SetNewPasswordRequest request)
     {
@@ -104,29 +128,50 @@ public class AuthController : ControllerBase
             return BadRequest(new { message = "New password and confirmation do not match." });
 
         var user = await _userManager.FindByEmailAsync(request.Email);
-        if (user is null || !user.MustChangePassword)
-            return BadRequest(new { message = "Invalid request." });
 
-        if (user.TemporaryPasswordExpiresAtUtc is null || user.TemporaryPasswordExpiresAtUtc < DateTime.UtcNow)
-            return BadRequest(new { code = "TEMP_PASSWORD_EXPIRED", message = "Your temporary password has expired." });
+        // One answer for every way this can fail (no such account, inactive, no pending temporary password, expired,
+        // locked, wrong password). Three different answers used to reveal which accounts had a live temporary password,
+        // and the endpoint neither counted wrong guesses nor honoured the lockout, so it was an unthrottled guessing oracle.
+        var usable = user is not null
+            && user.IsActive
+            && user.MustChangePassword
+            && user.TemporaryPasswordExpiresAtUtc is not null
+            && user.TemporaryPasswordExpiresAtUtc >= DateTime.UtcNow
+            && !await _userManager.IsLockedOutAsync(user);
+        if (!usable)
+        {
+            SpendPasswordHashTime(request.TemporaryPassword);
+            return BadRequest(new { code = "TEMP_PASSWORD_INVALID", message = TempPasswordRejected });
+        }
 
-        var changeResult = await _userManager.ChangePasswordAsync(user, request.TemporaryPassword, request.NewPassword);
+        var account = user!; // non-null: established by the check above
+        var changeResult = await _userManager.ChangePasswordAsync(account, request.TemporaryPassword, request.NewPassword);
         if (!changeResult.Succeeded)
+        {
+            if (changeResult.Errors.Any(e => e.Code == nameof(IdentityErrorDescriber.PasswordMismatch)))
+            {
+                await _userManager.AccessFailedAsync(account); // counted like a wrong sign-in, so it can lock the account too
+                return BadRequest(new { code = "TEMP_PASSWORD_INVALID", message = TempPasswordRejected });
+            }
+
+            // The temporary password was right; the NEW password broke a rule, which the person needs to be told.
             return BadRequest(new { message = string.Join(" ", changeResult.Errors.Select(e => e.Description)) });
+        }
+        await _userManager.ResetAccessFailedCountAsync(account);
 
-        user.MustChangePassword = false;
-        user.TemporaryPasswordExpiresAtUtc = null;
-        await _userManager.UpdateAsync(user);
+        account.MustChangePassword = false;
+        account.TemporaryPasswordExpiresAtUtc = null;
+        await _userManager.UpdateAsync(account);
 
-        await NotifyAdminsOfInviteAcceptedAsync(user);
+        await NotifyAdminsOfInviteAcceptedAsync(account);
 
         // Employees are trusted on creation and skip email verification; only clients need to verify.
-        if (user.Role == Domain.Enums.UserRole.Client && !user.EmailConfirmed)
+        if (account.Role == Domain.Enums.UserRole.Client && !account.EmailConfirmed)
         {
-            var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-            var link = $"{_frontendOptions.BaseUrl}/verify-email?userId={user.Id}&token={Uri.EscapeDataString(token)}";
-            await _emailSender.SendAsync(user.Email!, "Please verify your email address",
-                EmailTemplates.VerifyEmail(user.FirstName, link));
+            var token = await _userManager.GenerateEmailConfirmationTokenAsync(account);
+            var link = $"{_frontendOptions.BaseUrl}/verify-email?userId={account.Id}&token={Uri.EscapeDataString(token)}";
+            await _emailSender.SendAsync(account.Email!, "Please verify your email address",
+                EmailTemplates.VerifyEmail(account.FirstName, link));
 
             return Ok(new { message = "Password set. Please check your email to verify your account before logging in." });
         }
@@ -156,8 +201,9 @@ public class AuthController : ControllerBase
         {
             var token = await _userManager.GeneratePasswordResetTokenAsync(user);
             var link = $"{_frontendOptions.BaseUrl}/reset-password?userId={user.Id}&token={Uri.EscapeDataString(token)}";
-            await _emailSender.SendAsync(user.Email!, "Reset your password",
-                EmailTemplates.ForgotPassword(user.FirstName, link));
+            // Queued rather than awaited: only existing accounts get an email, so waiting for the send made the response time
+            // reveal whether the address is registered.
+            _emailQueue.Enqueue(user.Email!, "Reset your password", EmailTemplates.ForgotPassword(user.FirstName, link));
         }
 
         // Always return 200 so we don't leak which emails are registered.
@@ -180,6 +226,11 @@ public class AuthController : ControllerBase
 
         // The reset rotated the security stamp: drop the cached status so sessions opened with the old password die at once.
         _cache.Remove(UserStatusCache.Key(user.Id));
+
+        // The person just proved they control the account's mailbox, so a lockout caused by someone else's wrong guesses ends
+        // here: it would otherwise be a way to keep a known account out for as long as an attacker cares to keep trying.
+        await _userManager.ResetAccessFailedCountAsync(user);
+        await _userManager.SetLockoutEndDateAsync(user, null);
 
         // A successful reset always supersedes any pending temporary-password requirement — otherwise a user
         // whose temp password expired would reset via email and still be blocked by the MustChangePassword check on login.

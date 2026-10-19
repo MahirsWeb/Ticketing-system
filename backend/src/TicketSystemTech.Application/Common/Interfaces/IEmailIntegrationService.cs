@@ -22,9 +22,9 @@ public interface IEmailIntegrationService
     Task<EmailConnectionStatus> GetStatusAsync(Guid departmentId, CancellationToken ct = default);
 
     /// <summary>Exchanges an OAuth authorization code for tokens and stores the connection for this branch.</summary>
-    Task<EmailConnectionStatus> ConnectAsync(Guid departmentId, Guid connectedByUserId, string code, string redirectUri, CancellationToken ct = default);
+    Task<EmailConnectionStatus> ConnectAsync(Guid departmentId, Guid connectedByUserId, string code, string redirectUri, string? codeVerifier, CancellationToken ct = default);
 
-    Task DisconnectAsync(Guid departmentId, CancellationToken ct = default);
+    Task DisconnectAsync(Guid departmentId, Guid disconnectedByUserId, CancellationToken ct = default);
 
     Task<List<InboxMessageSummary>> ListInboxAsync(Guid departmentId, int take, CancellationToken ct = default);
 

@@ -135,6 +135,45 @@ public class FileStorageTests : IDisposable
         Assert.Matches(@"^/uploads/[0-9a-f-]{36}(\.[a-z0-9]+)?$", reference);
     }
 
+    [Fact]
+    public async Task Deleting_a_stored_file_removes_it_and_a_second_delete_is_harmless()
+    {
+        var storage = NewStorage();
+        var reference = await storage.SaveAsync("manual.pdf", "application/pdf", new MemoryStream(new byte[] { 1, 2, 3 }));
+        var key = reference["/uploads/".Length..];
+
+        Assert.True(storage.Delete(reference));
+        Assert.False(File.Exists(Path.Combine(_root, "private", key)));
+        Assert.Null(storage.OpenRead(key));
+        Assert.False(storage.Delete(reference)); // nothing left to delete
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("../../secret.txt")]
+    [InlineData(@"C:\Windows\win.ini")]
+    [InlineData("/uploads/not-a-guid.pdf")]
+    public void Delete_ignores_anything_that_is_not_a_stored_key(string? reference) =>
+        Assert.False(NewStorage().Delete(reference));
+
+    [Fact]
+    public async Task A_replaced_profile_picture_is_deleted_but_only_from_the_avatars_folder()
+    {
+        var storage = NewStorage();
+        var url = await storage.SavePublicImageAsync("me.png", "image/png", new MemoryStream(new byte[] { 9 }));
+        var key = url[(url.LastIndexOf('/') + 1)..];
+        var avatarPath = Path.Combine(_root, "wwwroot", "avatars", key);
+        Assert.True(File.Exists(avatarPath));
+
+        // a URL that does not point into /avatars/ is refused, even with a perfectly valid key
+        Assert.False(storage.DeletePublicImage("https://host.example/uploads/" + key));
+        Assert.True(File.Exists(avatarPath));
+
+        Assert.True(storage.DeletePublicImage(url));
+        Assert.False(File.Exists(avatarPath));
+    }
+
     [Theory]
     [InlineData(".html")]
     [InlineData(".svg")]

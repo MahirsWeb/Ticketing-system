@@ -76,8 +76,8 @@ public class AttachmentsController : ControllerBase
     private bool CanAccess(Domain.Entities.Ticket ticket) => _currentUser.Role switch
     {
         Domain.Enums.UserRole.Admin => true,
-        // Branches are isolated: staff can access unrouted (New) tickets for triage, plus tickets routed to their own branch.
-        Domain.Enums.UserRole.Employee => ticket.DepartmentId == null || ticket.DepartmentId == _currentUser.DepartmentId,
+        // Branches are isolated, strictly: an employee reaches only their own branch's tickets.
+        Domain.Enums.UserRole.Employee => ticket.DepartmentId != null && ticket.DepartmentId == _currentUser.DepartmentId,
         Domain.Enums.UserRole.Client => ticket.ClientId == _currentUser.UserId,
         _ => false
     };

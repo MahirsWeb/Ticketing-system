@@ -2,7 +2,10 @@ namespace TicketSystemTech.Application.Common.Interfaces;
 
 /// <summary>One searchable chunk held in memory. <see cref="Unit"/> is the embedding scaled to length 1, so cosine
 /// similarity with a (also normalised) query is just a dot product.</summary>
-public sealed record VectorEntry(Guid ChunkId, Guid? TicketId, Guid? DocumentId, float[] Unit);
+/// <param name="DepartmentId">The branch of the chunk's ticket at the time the index was loaded (null for documentation).
+/// Search uses it to keep one branch's tickets out of another branch's AI answers; it can be a little stale after a transfer,
+/// so the ticket's current branch is checked again when the results are resolved.</param>
+public sealed record VectorEntry(Guid ChunkId, Guid? TicketId, Guid? DocumentId, Guid? DepartmentId, float[] Unit);
 
 /// <summary>
 /// An in-memory copy of every chunk that can appear in a search result. Before this existed, every question loaded

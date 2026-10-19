@@ -50,9 +50,17 @@ public class EmailIntegrationController : ControllerBase
     public async Task<ActionResult<EmailConnectionStatusDto>> Connect(ConnectEmailRequest request)
     {
         if (RequireDepartment() is BadRequestObjectResult noBranch) return noBranch;
+
+        // The mailbox is shared by every employee of the branch. Replacing it must be a deliberate act (disconnect first,
+        // which asks for confirmation and is audited), not a side effect of any colleague running the connect flow again.
+        // Checked before the authorization code is spent, so a refusal does not burn the user's sign-in.
+        var current = await _emailService.GetStatusAsync(_currentUser.DepartmentId!.Value);
+        if (current.Connected)
+            return Conflict(new { code = "MAILBOX_ALREADY_CONNECTED", message = "This branch already has a mailbox connected. Disconnect it first if you want to connect a different one." });
+
         try
         {
-            var status = await _emailService.ConnectAsync(_currentUser.DepartmentId!.Value, _currentUser.UserId!.Value, request.Code, request.RedirectUri);
+            var status = await _emailService.ConnectAsync(_currentUser.DepartmentId!.Value, _currentUser.UserId!.Value, request.Code, request.RedirectUri, request.CodeVerifier);
             return Ok(new EmailConnectionStatusDto(status.Connected, status.ConnectedEmail));
         }
         catch (ExternalServiceException ex)
@@ -67,7 +75,7 @@ public class EmailIntegrationController : ControllerBase
     public async Task<IActionResult> Disconnect()
     {
         if (RequireDepartment() is BadRequestObjectResult noBranch) return noBranch;
-        await _emailService.DisconnectAsync(_currentUser.DepartmentId!.Value);
+        await _emailService.DisconnectAsync(_currentUser.DepartmentId!.Value, _currentUser.UserId!.Value);
         return Ok();
     }
 
@@ -127,7 +135,7 @@ public class EmailIntegrationController : ControllerBase
             .Select(t => new { t.DepartmentId })
             .FirstOrDefaultAsync();
         if (ticket is null) return NotFound();
-        if (ticket.DepartmentId is not null && ticket.DepartmentId != departmentId) return Forbid();
+        if (ticket.DepartmentId != departmentId) return Forbid();
 
         await _emailService.ImportAttachmentsToTicketAsync(departmentId, _currentUser.UserId!.Value, messageId, ticketId);
         await _emailService.MarkConvertedAsync(departmentId, messageId, ticketId);

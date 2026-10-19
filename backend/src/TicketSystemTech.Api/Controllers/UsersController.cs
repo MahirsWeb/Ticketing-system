@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using TicketSystemTech.Api.Contracts;
 using TicketSystemTech.Api.Emails;
 using TicketSystemTech.Api.Middleware;
+using TicketSystemTech.Api.Security;
 using TicketSystemTech.Application.Common.Interfaces;
 using TicketSystemTech.Application.Common.Options;
 using TicketSystemTech.Domain.Entities;
@@ -257,12 +258,15 @@ public class UsersController : ControllerBase
         if (departmentId.HasValue) query = query.Where(u => u.DepartmentId == departmentId.Value);
         if (subBranchId.HasValue) query = query.Where(u => u.SubBranchId == subBranchId.Value);
 
-        // Branches are isolated for browsing the whole staff directory unscoped — but if the caller asked
-        // about one specific branch (e.g. picking who to assign a ticket to after routing it there), let
-        // them see that branch's staff even if it isn't their own; staff can now route tickets to any branch.
-        if (_currentUser.Role != UserRole.Admin && !departmentId.HasValue)
+        // Clients are limited to those with a ticket in the employee's branch. Staff are limited to the employee's own branch
+        // too, except when the caller asks about one specific branch (e.g. picking who to assign a ticket to after routing it
+        // there): staff can route tickets to any branch, so the people of that branch have to be visible to choose from.
+        if (_currentUser.Role != UserRole.Admin)
         {
-            query = query.Where(u => u.Role == UserRole.Client || u.DepartmentId == _currentUser.DepartmentId);
+            var branchClients = await ClientVisibility.ClientsOfBranchAsync(_db, _currentUser, HttpContext.RequestAborted);
+            query = departmentId.HasValue
+                ? query.Where(u => u.Role != UserRole.Client || branchClients.Contains(u.Id))
+                : query.VisibleTo(_currentUser, branchClients);
         }
 
         var users = await query.OrderBy(u => u.FirstName).ToListAsync();
@@ -299,10 +303,9 @@ public class UsersController : ControllerBase
         pageSize = Math.Clamp(pageSize, 1, 100);
         var wantStaff = string.Equals(group, "staff", StringComparison.OrdinalIgnoreCase);
 
-        // Same visibility as the unpaged list: branches are isolated for staff, clients are shared across branches.
-        var scope = _userManager.Users.AsNoTracking().AsQueryable();
-        if (_currentUser.Role != UserRole.Admin)
-            scope = scope.Where(u => u.Role == UserRole.Client || u.DepartmentId == _currentUser.DepartmentId);
+        // An employee sees the clients who have a ticket in their branch and the staff of their own branch; Admin sees everyone.
+        var branchClients = await ClientVisibility.ClientsOfBranchAsync(_db, _currentUser, ct);
+        var scope = _userManager.Users.AsNoTracking().VisibleTo(_currentUser, branchClients);
 
         var clientCount = await scope.CountAsync(u => u.Role == UserRole.Client, ct);
         var staffCount = await scope.CountAsync(u => u.Role != UserRole.Client, ct);
@@ -359,9 +362,14 @@ public class UsersController : ControllerBase
         var u = await _userManager.FindByIdAsync(id.ToString());
         if (u is null) return NotFound();
 
-        // Branches are isolated: non-admin staff may only look up staff from their own branch. Clients are shared across branches.
-        if (_currentUser.Role != UserRole.Admin && u.Role != UserRole.Client && u.DepartmentId != _currentUser.DepartmentId)
-            return NotFound();
+        // Branches are isolated: an employee may open staff of their own branch and clients who have a ticket in it.
+        if (_currentUser.Role != UserRole.Admin)
+        {
+            var allowed = u.Role == UserRole.Client
+                ? ClientVisibility.CanSeeClient(_db, _currentUser, u.Id)
+                : u.DepartmentId == _currentUser.DepartmentId;
+            if (!allowed) return NotFound();
+        }
 
         string? companyName = u.CompanyId.HasValue
             ? await _db.Companies.Where(c => c.Id == u.CompanyId).Select(c => c.Name).FirstOrDefaultAsync()
@@ -404,8 +412,10 @@ public class UsersController : ControllerBase
         await using var stream = file.OpenReadStream();
         var url = await _fileStorage.SavePublicImageAsync(file.FileName, file.ContentType, stream);
 
+        var previousPicture = user.ProfilePictureUrl;
         user.ProfilePictureUrl = url;
         await _userManager.UpdateAsync(user);
+        _fileStorage.DeletePublicImage(previousPicture); // the old picture is no longer referenced by anything
         return Ok(new { profilePictureUrl = url });
     }
 
@@ -427,7 +437,24 @@ public class UsersController : ControllerBase
             ? await _db.Companies.Where(c => c.Id == user.CompanyId).Select(c => c.Name).FirstOrDefaultAsync()
             : null;
 
-        return Ok(new ClientLookupResult(user.Id, user.FirstName, user.LastName, user.Email!, user.PhoneNumber, user.CompanyId, companyName));
+        // Opening a ticket on behalf of a client who has not written to this branch before needs this lookup, so it stays: but
+        // it requires knowing the exact address (it cannot be used to browse), a client from outside the branch is returned
+        // without their phone number, and each such lookup is recorded.
+        var inMyBranch = ClientVisibility.CanSeeClient(_db, _currentUser, user.Id);
+        if (!inMyBranch)
+        {
+            _db.AuditLogs.Add(new AuditLog
+            {
+                UserId = _currentUser.UserId,
+                Action = "ClientLookupOutsideBranch",
+                EntityType = nameof(ApplicationUser),
+                EntityId = user.Id
+            });
+            await _db.SaveChangesAsync();
+        }
+
+        return Ok(new ClientLookupResult(user.Id, user.FirstName, user.LastName, user.Email!,
+            inMyBranch ? user.PhoneNumber : null, user.CompanyId, companyName));
     }
 
     [HttpPatch("me/phone")]

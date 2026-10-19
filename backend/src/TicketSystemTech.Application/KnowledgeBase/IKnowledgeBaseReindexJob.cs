@@ -30,6 +30,9 @@ public interface IKnowledgeBaseReindexJob
 {
     ReindexStatus GetStatus();
 
-    /// <summary>Queues a run. False when one is already running (there is only ever one).</summary>
+    /// <summary>Queues a run over every ticket that still needs an embedding. False when one is already running (there is only ever one).</summary>
     bool TryStart();
+
+    /// <summary>Queues the rebuild of one uploaded document. Shares the single-run rule with <see cref="TryStart"/>.</summary>
+    bool TryStartDocument(Guid documentId);
 }

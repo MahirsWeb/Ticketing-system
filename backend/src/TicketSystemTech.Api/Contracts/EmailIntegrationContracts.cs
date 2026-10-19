@@ -8,7 +8,8 @@ public record EmailConnectionStatusDto(bool Connected, string? ConnectedEmail);
 
 public record ConnectEmailRequest(
     [Required] string Code,
-    [Required] string RedirectUri
+    [Required] string RedirectUri,
+    string? CodeVerifier = null // PKCE: the secret whose hash was sent when the sign-in started; binds the code to this browser.
 );
 
 public record SetMarkedRequest(bool Marked);

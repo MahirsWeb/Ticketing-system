@@ -13,7 +13,12 @@ export default function EmailCallbackPage() {
     const code = params.get('code');
     const state = params.get('state');
     const expectedState = sessionStorage.getItem('ms_oauth_state');
+    const codeVerifier = sessionStorage.getItem('ms_oauth_verifier') ?? undefined;
     const oauthError = params.get('error_description') || params.get('error');
+
+    // The one-time values are spent whatever happens next: a page reload must not be able to replay them.
+    sessionStorage.removeItem('ms_oauth_state');
+    sessionStorage.removeItem('ms_oauth_verifier');
 
     if (oauthError) {
       setStatus('error');
@@ -25,7 +30,9 @@ export default function EmailCallbackPage() {
       setMessage('No authorization code was returned by Microsoft.');
       return;
     }
-    if (expectedState && state !== expectedState) {
+    // Fails closed: a missing stored state (this page opened directly, or from a link someone else crafted) is as much a
+    // failure as a different one. It used to be skipped when nothing was stored, which let a forged callback through.
+    if (!expectedState || state !== expectedState) {
       setStatus('error');
       setMessage('Security check failed (state mismatch). Please try connecting again.');
       return;
@@ -33,11 +40,10 @@ export default function EmailCallbackPage() {
 
     const redirectUri = `${window.location.origin}/emails/callback`;
     emailIntegrationApi
-      .connect(code, redirectUri)
+      .connect(code, redirectUri, codeVerifier)
       .then((res) => {
         setStatus('success');
         setMessage(`Connected: ${res.connectedEmail}`);
-        sessionStorage.removeItem('ms_oauth_state');
         setTimeout(() => navigate('/emails'), 1500);
       })
       .catch((err) => {

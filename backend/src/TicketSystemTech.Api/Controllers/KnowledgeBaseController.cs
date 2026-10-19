@@ -59,6 +59,7 @@ public class KnowledgeBaseController : ControllerBase
     private readonly IKnowledgeBaseDocumentIndexer _documentIndexer;
     private readonly IEmbeddingService _embeddingService;
     private readonly IFileLinkService _links;
+    private readonly IFileStorage _fileStorage;
     private readonly IVectorIndex _vectorIndex;
     private readonly IKnowledgeBaseReindexJob _reindexJob;
 
@@ -69,6 +70,14 @@ public class KnowledgeBaseController : ControllerBase
     /// </summary>
     private CancellationToken Ct => HttpContext.RequestAborted;
 
+    /// <summary>
+    /// Branches are isolated, and the AI assistant is no exception: an answer may quote a ticket (its description, internal notes
+    /// and resolution), so an employee's questions only ever draw on their own branch's tickets. Admin sees every branch.
+    /// Official documentation is shared by everyone.
+    /// </summary>
+    private bool MayUseTicketFrom(Guid? ticketBranchId) =>
+        _currentUser.Role == UserRole.Admin || (ticketBranchId.HasValue && ticketBranchId == _currentUser.DepartmentId);
+
     public KnowledgeBaseController(
         AppDbContext db,
         ICurrentUserService currentUser,
@@ -77,8 +86,10 @@ public class KnowledgeBaseController : ControllerBase
         IEmbeddingService embeddingService,
         IFileLinkService links,
         IVectorIndex vectorIndex,
-        IKnowledgeBaseReindexJob reindexJob)
+        IKnowledgeBaseReindexJob reindexJob,
+        IFileStorage fileStorage)
     {
+        _fileStorage = fileStorage;
         _vectorIndex = vectorIndex;
         _reindexJob = reindexJob;
         _db = db;
@@ -100,6 +111,19 @@ public class KnowledgeBaseController : ControllerBase
     public IActionResult ReindexAll()
     {
         if (!_reindexJob.TryStart())
+            return Conflict(new { message = "A reindex is already running.", status = _reindexJob.GetStatus() });
+
+        return Accepted(_reindexJob.GetStatus());
+    }
+
+    /// <summary>Rebuilds one uploaded document's chunks and embeddings from its stored original, in the background (progress is
+    /// reported by <c>reindex-status</c>, like the ticket reindex). Previously the only way was deleting and re-uploading it.</summary>
+    [HttpPost("documents/{id:guid}/reindex")]
+    [Authorize(Roles = nameof(UserRole.Admin))]
+    public async Task<IActionResult> ReindexDocument(Guid id)
+    {
+        if (!await _db.KnowledgeBaseDocuments.AnyAsync(d => d.Id == id, Ct)) return NotFound();
+        if (!_reindexJob.TryStartDocument(id))
             return Conflict(new { message = "A reindex is already running.", status = _reindexJob.GetStatus() });
 
         return Accepted(_reindexJob.GetStatus());
@@ -274,6 +298,7 @@ public class KnowledgeBaseController : ControllerBase
         _db.KnowledgeBaseDocuments.Remove(doc); // cascades to its chunks
         await _db.SaveChangesAsync();
         _vectorIndex.Invalidate();
+        _fileStorage.Delete(doc.FileUrl); // the stored original goes with it; it used to stay on disk with no owner
         return NoContent();
     }
 
@@ -294,7 +319,10 @@ public class KnowledgeBaseController : ControllerBase
         if (!includeTicketSources)
             return query.Where(c => c.DocumentId != null);
 
+        var isAdmin = _currentUser.Role == UserRole.Admin;
+        var myBranch = _currentUser.DepartmentId;
         return query.Where(c => c.DocumentId != null || (c.TicketId != null &&
+            (isAdmin || (c.Ticket!.DepartmentId != null && c.Ticket.DepartmentId == myBranch)) &&
             _db.TicketMessages
                 .Where(m => m.TicketId == c.TicketId && m.Type == MessageType.InternalNote)
                 .Sum(m => (int?)m.BodyHtml.Length) >= MinInternalNoteChars));
@@ -327,7 +355,7 @@ public class KnowledgeBaseController : ControllerBase
         // question costs one dot product per eligible chunk instead of a SQL round trip that parsed ~100 MB of JSON.
         var query = IVectorIndex.Normalize(queryEmbedding);
         var top = (await _vectorIndex.GetAsync(Ct))
-            .Where(e => includeTicketSources || e.DocumentId != null)
+            .Where(e => e.DocumentId != null || (includeTicketSources && MayUseTicketFrom(e.DepartmentId)))
             .Select(e => new { Id = e.ChunkId, e.TicketId, e.DocumentId, Similarity = IVectorIndex.Dot(query, e.Unit) })
             .OrderByDescending(x => x.Similarity)
             .Take(Math.Clamp(take, 1, 500))
@@ -387,8 +415,12 @@ public class KnowledgeBaseController : ControllerBase
         var ticketIds = list.Where(s => s.TicketId != null).Select(s => s.TicketId!.Value).Distinct().ToList();
         var documentIds = list.Where(s => s.DocumentId != null).Select(s => s.DocumentId!.Value).Distinct().ToList();
 
+        // The branch is checked against the ticket's CURRENT branch (the cached index may be a few minutes behind a transfer).
+        var isAdmin = _currentUser.Role == UserRole.Admin;
+        var myBranch = _currentUser.DepartmentId;
         var tickets = await _db.Tickets.AsNoTracking()
-            .Where(t => ticketIds.Contains(t.Id) && t.Status != TicketStatus.Open)
+            .Where(t => ticketIds.Contains(t.Id) && t.Status != TicketStatus.Open
+                && (isAdmin || (t.DepartmentId != null && t.DepartmentId == myBranch)))
             .ToDictionaryAsync(t => t.Id, t => t, Ct);
         var documents = await _db.KnowledgeBaseDocuments.AsNoTracking()
             .Where(d => documentIds.Contains(d.Id))
@@ -430,7 +462,7 @@ public class KnowledgeBaseController : ControllerBase
             // ticket notes/resolution) is only fetched for the ones that actually clear the cutoff.
             var unitQuery = IVectorIndex.Normalize(queryEmbedding);
             var rawScores = (await _vectorIndex.GetAsync(Ct))
-                .Where(e => e.TicketId != null)
+                .Where(e => e.TicketId != null && MayUseTicketFrom(e.DepartmentId))
                 .Select(e => new { Id = e.ChunkId, e.TicketId, Similarity = IVectorIndex.Dot(unitQuery, e.Unit) })
                 .ToList();
 

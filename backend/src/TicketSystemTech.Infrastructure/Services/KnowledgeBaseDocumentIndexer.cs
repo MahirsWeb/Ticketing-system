@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using TicketSystemTech.Application.Common.Interfaces;
+using TicketSystemTech.Application.KnowledgeBase;
 using TicketSystemTech.Domain.Entities;
 using TicketSystemTech.Infrastructure.Persistence;
 
@@ -42,7 +43,11 @@ public class KnowledgeBaseDocumentIndexer : IKnowledgeBaseDocumentIndexer
         }
 
         var text = await _textExtractor.ExtractTextAsync(fileName, content, ct);
-        if (string.IsNullOrWhiteSpace(text)) return null;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            _fileStorage.Delete(fileUrl); // nothing was indexed, so the saved original must not be left behind
+            return null;
+        }
 
         var document = new KnowledgeBaseDocument
         {
@@ -69,6 +74,52 @@ public class KnowledgeBaseDocumentIndexer : IKnowledgeBaseDocumentIndexer
         _vectorIndex.Invalidate();
 
         return document;
+    }
+
+    public async Task<DocumentReindexResult> ReindexDocumentAsync(Guid documentId, Action<int, int>? progress, CancellationToken ct = default)
+    {
+        var document = await _db.KnowledgeBaseDocuments.FirstOrDefaultAsync(d => d.Id == documentId, ct);
+        if (document is null) return new DocumentReindexResult(false, "The document no longer exists.", 0);
+
+        var key = StoredFileKey.FromReference(document.FileUrl);
+        await using var original = key is null ? null : _fileStorage.OpenRead(key);
+        if (original is null)
+            return new DocumentReindexResult(false,
+                "The original file was not kept (it was uploaded before originals were stored), so it cannot be read again. Upload it again instead.", 0);
+
+        var text = await _textExtractor.ExtractTextAsync(document.SourceFileName, original, ct);
+        if (string.IsNullOrWhiteSpace(text))
+            return new DocumentReindexResult(false, "No text could be extracted from the stored file.", 0);
+
+        var pieces = SplitIntoChunks(text).ToList();
+        var embedded = new List<(string Text, float[] Vector)>();
+        foreach (var piece in pieces)
+        {
+            var vector = await _embeddingService.EmbedAsync(piece, ct);
+            if (vector is null)
+                return new DocumentReindexResult(false,
+                    "The embedding service did not answer (check GoogleAi:ApiKey and the quota). The document was left unchanged.", 0);
+
+            embedded.Add((piece, vector));
+            progress?.Invoke(embedded.Count, pieces.Count);
+        }
+
+        // Swap only now that everything is ready, in one save: either the document has all its new chunks or all its old ones.
+        _db.KnowledgeBaseChunks.RemoveRange(await _db.KnowledgeBaseChunks.Where(c => c.DocumentId == documentId).ToListAsync(ct));
+        foreach (var (pieceText, vector) in embedded)
+        {
+            _db.KnowledgeBaseChunks.Add(new KnowledgeBaseChunk
+            {
+                DocumentId = documentId,
+                Content = pieceText,
+                Embedding = vector,
+                EmbeddingModel = _embeddingService.ModelName
+            });
+        }
+        await _db.SaveChangesAsync(ct);
+        _vectorIndex.Invalidate();
+
+        return new DocumentReindexResult(true, $"{pieces.Count} chunk(s) rebuilt.", pieces.Count);
     }
 
     private static string ContentTypeForExtension(string extension) => extension.ToLowerInvariant() switch

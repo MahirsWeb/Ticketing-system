@@ -146,6 +146,9 @@ public class TicketsController : ControllerBase
         if (_currentUser.Role != UserRole.Admin && request.DepartmentId != _currentUser.DepartmentId)
             return BadRequest(new { message = "You can only open tickets into your own branch." });
 
+        var lookupError = await ValidateLookupsAsync(request.HelpTopicId, request.CategoryId, request.DepartmentId);
+        if (lookupError is not null) return BadRequest(new { message = lookupError });
+
         var subBranchError = await ValidateSubBranchAsync(request.DepartmentId, request.SubBranchId);
         if (subBranchError is not null) return BadRequest(new { message = subBranchError });
 
@@ -205,6 +208,19 @@ public class TicketsController : ControllerBase
         await _notificationPublisher.PushToUserAsync(client.Id, "ticketOpened", new { ticket.Id, ticket.TicketNumber, ticket.Title });
 
         return Ok(await BuildDetailDto(ticket.Id));
+    }
+
+    /// <summary>
+    /// The lookups a staff member picks when opening a ticket must exist and still be in use. An unknown id used to reach
+    /// the database and come back as a 500 (foreign-key failure); an inactive branch, topic or category was accepted, so a
+    /// ticket could be routed to a branch that no longer exists in practice.
+    /// </summary>
+    private async Task<string?> ValidateLookupsAsync(Guid helpTopicId, Guid? categoryId, Guid departmentId)
+    {
+        if (!await _db.Departments.AnyAsync(d => d.Id == departmentId && d.IsActive)) return "Branch not found.";
+        if (!await _db.HelpTopics.AnyAsync(h => h.Id == helpTopicId && h.IsActive)) return "Help topic not found.";
+        if (categoryId.HasValue && !await _db.TicketCategories.AnyAsync(c => c.Id == categoryId.Value && c.IsActive)) return "Category not found.";
+        return null;
     }
 
     private const string TicketCreateScope = "ticket-create";
@@ -280,8 +296,8 @@ public class TicketsController : ControllerBase
         {
             UserRole.Client => query.Where(t => t.ClientId == _currentUser.UserId),
             UserRole.Admin => query, // Admin sees everything across all branches
-            // Branches are isolated: staff see unrouted (New) tickets for triage, plus tickets already routed to their own branch.
-            _ => query.Where(t => t.DepartmentId == null || t.DepartmentId == _currentUser.DepartmentId)
+            // Branches are isolated, strictly: an employee sees only their own branch's tickets (a ticket without a branch is Admin's alone).
+            _ => query.Where(t => t.DepartmentId == _currentUser.DepartmentId)
         };
 
         var statuses = ParseStatuses(status);
@@ -366,7 +382,7 @@ public class TicketsController : ControllerBase
         {
             UserRole.Client => query.Where(t => t.ClientId == _currentUser.UserId),
             UserRole.Admin => query,
-            _ => query.Where(t => t.DepartmentId == null || t.DepartmentId == _currentUser.DepartmentId)
+            _ => query.Where(t => t.DepartmentId == _currentUser.DepartmentId)
         };
 
         var byStatus = await query.GroupBy(t => t.Status).Select(g => new { g.Key, Count = g.Count() }).ToListAsync();
@@ -412,6 +428,9 @@ public class TicketsController : ControllerBase
         if (!CanAccess(ticket)) return Forbid();
         if (ticket.Status != TicketStatus.New || !TicketWorkflow.CanTransition(ticket.Status, TicketStatus.Open))
             return BadRequest(new { message = "Only new tickets can be opened." });
+
+        var lookupError = await ValidateLookupsAsync(request.HelpTopicId, request.CategoryId, request.DepartmentId);
+        if (lookupError is not null) return BadRequest(new { message = lookupError });
 
         // The client's branch pick is only a suggestion — any staff member (not just Admin) can correct it
         // here, since clients don't always know which branch actually owns their issue.
@@ -855,8 +874,8 @@ public class TicketsController : ControllerBase
     private bool CanAccess(Ticket ticket) => _currentUser.Role switch
     {
         UserRole.Admin => true,
-        // Branches are isolated: staff can access unrouted (New) tickets for triage, plus tickets routed to their own branch.
-        UserRole.Employee => ticket.DepartmentId == null || ticket.DepartmentId == _currentUser.DepartmentId,
+        // Branches are isolated, strictly: an employee reaches only their own branch's tickets.
+        UserRole.Employee => ticket.DepartmentId != null && ticket.DepartmentId == _currentUser.DepartmentId,
         UserRole.Client => ticket.ClientId == _currentUser.UserId,
         _ => false
     };

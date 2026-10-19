@@ -15,4 +15,12 @@ public interface IFileStorage
 
     /// <summary>Opens a privately stored file by its key, or returns null when it does not exist.</summary>
     Stream? OpenRead(string key);
+
+    /// <summary>Deletes a privately stored file by its stored reference. Returns false when there was nothing to delete.
+    /// Files used to outlive the rows that pointed at them: deleting a document, or a failed text extraction, left the
+    /// upload behind with no owner.</summary>
+    bool Delete(string? reference);
+
+    /// <summary>Deletes a file saved with <see cref="SavePublicImageAsync"/> by its public URL (e.g. a replaced profile picture).</summary>
+    bool DeletePublicImage(string? url);
 }

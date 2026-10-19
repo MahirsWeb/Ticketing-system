@@ -159,6 +159,9 @@ builder.Services.AddScoped<ITemporaryPasswordGenerator, TemporaryPasswordGenerat
 builder.Services.AddScoped<IFileStorage, LocalFileStorage>();
 builder.Services.AddScoped<IFileLinkService, FileLinkService>();
 builder.Services.AddScoped<ITicketAssignmentService, TicketAssignmentService>();
+builder.Services.AddSingleton<TicketSystemTech.Api.BackgroundJobs.BackgroundEmailSender>();
+builder.Services.AddSingleton<IBackgroundEmailQueue>(sp => sp.GetRequiredService<TicketSystemTech.Api.BackgroundJobs.BackgroundEmailSender>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<TicketSystemTech.Api.BackgroundJobs.BackgroundEmailSender>());
 builder.Services.AddScoped<IKnowledgeBaseIndexer, KnowledgeBaseIndexer>();
 builder.Services.AddSingleton<IVectorIndex, VectorIndex>();
 builder.Services.AddSingleton<TicketSystemTech.Api.BackgroundJobs.KnowledgeBaseReindexService>();
@@ -195,6 +198,10 @@ builder.Services.AddCors(options =>
               .AllowCredentials();
     });
 });
+
+// The documentation upload endpoint accepts up to 200 MB in one request ([RequestSizeLimit]), but multipart forms are
+// capped at 128 MB by default, so the larger uploads failed with an unexplained error. The form limit follows the endpoint's.
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o => o.MultipartBodyLengthLimit = 210L * 1024 * 1024);
 
 builder.Services.AddSignalR();
 builder.Services.AddControllers()

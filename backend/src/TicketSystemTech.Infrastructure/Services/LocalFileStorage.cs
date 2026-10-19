@@ -53,6 +53,31 @@ public class LocalFileStorage : IFileStorage
         return File.Exists(path) ? new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read) : null;
     }
 
+    public bool Delete(string? reference)
+    {
+        var key = StoredFileKey.FromReference(reference);
+        if (key is null) return false;
+
+        var path = Path.Combine(_privateDir, key);
+        if (!File.Exists(path)) return false;
+        File.Delete(path);
+        return true;
+    }
+
+    public bool DeletePublicImage(string? url)
+    {
+        // Only ever a file this class wrote into the avatars folder: the URL must be in that folder and a well-formed key.
+        if (url is null || !url.Contains("/avatars/", StringComparison.Ordinal)) return false;
+        var key = StoredFileKey.FromReference(url);
+        if (key is null) return false;
+
+        var webRoot = _env.WebRootPath ?? Path.Combine(_env.ContentRootPath, "wwwroot");
+        var path = Path.Combine(webRoot, "avatars", key);
+        if (!File.Exists(path)) return false;
+        File.Delete(path);
+        return true;
+    }
+
     private static async Task<string> WriteAsync(string directory, string fileName, Stream content, CancellationToken ct)
     {
         Directory.CreateDirectory(directory);

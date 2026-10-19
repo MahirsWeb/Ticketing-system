@@ -65,6 +65,10 @@ public static class EmailTemplates
         """,
         "Sign in", loginUrl);
 
+    public static string AccountLocked(string firstName) => Wrap(
+        "Your account was temporarily locked",
+        $"<p>Hi {E(firstName)},</p><p>There were several unsuccessful attempts to sign in to your account, so it has been locked for a few minutes as a precaution. If that was you, wait a little and try again. If it was not, you can reset your password right away with &quot;Forgot your password?&quot; on the sign-in page.</p>");
+
     public static string VerifyEmail(string firstName, string link) => Wrap(
         "Verify your email address",
         $"<p>Hi {E(firstName)},</p><p>Thanks for setting your password. Please confirm your email address to finish activating your account.</p>",

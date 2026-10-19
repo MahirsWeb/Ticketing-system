@@ -789,12 +789,36 @@ function KnowledgeBaseDocumentsPanel() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<KnowledgeBaseDocumentDto | null>(null);
+  const [reindex, setReindex] = useState<ReindexStatus | null>(null);
 
   function refresh() {
     knowledgeBaseApi.listDocuments().then(setDocuments).finally(() => setLoading(false));
   }
 
   useEffect(refresh, []);
+
+  // While a document is being rebuilt, follow its progress; when it ends, reload the list (the chunk count may have changed).
+  const reindexRunning = reindex?.state === 'Running';
+  useEffect(() => {
+    if (!reindexRunning) return;
+    const timer = window.setInterval(() => {
+      knowledgeBaseApi.reindexStatus().then((s) => {
+        setReindex(s);
+        if (s.state !== 'Running') refresh();
+      }).catch(() => undefined);
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [reindexRunning]);
+
+  async function handleReindexDocument(d: KnowledgeBaseDocumentDto) {
+    setError(null);
+    try {
+      setReindex(await knowledgeBaseApi.reindexDocument(d.id));
+    } catch (err: any) {
+      if (err?.response?.status === 409 && err.response.data?.status) setReindex(err.response.data.status as ReindexStatus);
+      else setError(err?.response?.data?.message ?? 'Could not start the re-index.');
+    }
+  }
 
   async function handleFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
@@ -852,14 +876,30 @@ function KnowledgeBaseDocumentsPanel() {
                   {d.sourceFileName} · {formatBytesAsChunks(d.chunkCount)}
                 </div>
               </div>
-              <button className="shrink-0 text-xs text-red-600 hover:underline" onClick={() => setConfirmDelete(d)}>
-                Delete
-              </button>
+              <div className="flex shrink-0 items-center gap-3">
+                <button
+                  className="text-xs text-blue-700 hover:underline disabled:opacity-50"
+                  disabled={reindexRunning}
+                  onClick={() => handleReindexDocument(d)}
+                  title="Re-read the stored original and rebuild its searchable content"
+                >
+                  Re-index
+                </button>
+                <button className="text-xs text-red-600 hover:underline" onClick={() => setConfirmDelete(d)}>
+                  Delete
+                </button>
+              </div>
             </ListRow>
           ))}
         </ul>
       )}
       {!loading && documents.length === 0 && <p className="mt-4 text-sm text-slate-400">No documentation uploaded yet.</p>}
+      {reindex && reindex.state !== 'Idle' && (
+        <p className={`mt-3 text-xs ${reindex.state === 'Failed' ? 'text-red-700' : reindex.state === 'Completed' ? 'text-green-700' : 'text-slate-600'}`}>
+          {reindex.state === 'Running' && reindex.total > 0 ? `${reindex.processed} / ${reindex.total} · ` : ''}
+          {reindex.message}
+        </p>
+      )}
 
       {confirmDelete && (
         <ConfirmDialog

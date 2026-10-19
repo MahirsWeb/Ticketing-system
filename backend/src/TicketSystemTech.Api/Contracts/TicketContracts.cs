@@ -3,9 +3,17 @@ using TicketSystemTech.Domain.Enums;
 
 namespace TicketSystemTech.Api.Contracts;
 
+/// <summary>Ceiling for a rich-text body in characters. Bodies carry pasted screenshots as base64, so this is generous (about
+/// 5 MB of text), but it is a limit: the columns are nvarchar(max) and nothing else bounded what one request could store.</summary>
+public static class Limits
+{
+    public const int HtmlBody = 5_000_000;
+    public const int ResolutionSummary = 20_000;
+}
+
 public record CreateTicketRequest(
     [Required, MaxLength(300)] string Title,
-    [Required] string Description,
+    [Required, MaxLength(Limits.HtmlBody)] string Description,
     [Required] Guid DepartmentId
 );
 
@@ -13,7 +21,7 @@ public record CreateTicketRequest(
 public record CreateTicketOnBehalfRequest(
     [Required, EmailAddress] string ClientEmail,
     [Required, MaxLength(300)] string Title,
-    [Required] string Description,
+    [Required, MaxLength(Limits.HtmlBody)] string Description,
     [Required] TicketSource Source,
     [Required] Guid HelpTopicId,
     [Required] Guid DepartmentId,
@@ -38,12 +46,12 @@ public record OpenTicketRequest(
 );
 
 public record CloseTicketRequest(
-    [Required] string ResolutionSummary
+    [Required, MaxLength(Limits.ResolutionSummary)] string ResolutionSummary
 );
 
 public record AddTicketMessageRequest(
     [Required] MessageType Type,
-    [Required] string BodyHtml
+    [Required, MaxLength(Limits.HtmlBody)] string BodyHtml
 );
 
 public record ChangeTicketStatusRequest(

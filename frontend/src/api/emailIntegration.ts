@@ -31,8 +31,8 @@ export const emailIntegrationApi = {
 
   getStatus: () => apiClient.get<EmailConnectionStatusDto>('/api/email-integration/status').then((r) => r.data),
 
-  connect: (code: string, redirectUri: string) =>
-    apiClient.post<EmailConnectionStatusDto>('/api/email-integration/connect', { code, redirectUri }).then((r) => r.data),
+  connect: (code: string, redirectUri: string, codeVerifier?: string) =>
+    apiClient.post<EmailConnectionStatusDto>('/api/email-integration/connect', { code, redirectUri, codeVerifier }).then((r) => r.data),
 
   disconnect: () => apiClient.post('/api/email-integration/disconnect').then((r) => r.data),
 

@@ -53,9 +53,9 @@ export default function LoginPage() {
         setError(t('login_errEmailNotVerified'));
       } else if (code === 'TEMP_PASSWORD_EXPIRED') {
         setError(t('login_errTempPasswordExpired'));
-      } else if (code === 'ACCOUNT_LOCKED') {
-        setError(t('login_errAccountLocked'));
       } else {
+        // A locked account gets the same answer as a wrong password (the server no longer distinguishes them), so there
+        // is deliberately no "account locked" message here.
         setError(err?.response?.data?.message ?? t('login_errGeneric'));
       }
     } finally {

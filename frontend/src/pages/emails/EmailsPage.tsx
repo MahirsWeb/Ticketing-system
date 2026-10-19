@@ -7,8 +7,9 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { SafeHtml } from '../../components/SafeHtml';
 import { format, formatDistanceToNow } from 'date-fns';
 import { useAuthStore } from '../../store/authStore';
+import { createPkce, randomToken } from '../../lib/oauth';
 
-function buildMicrosoftAuthUrl(clientId: string, redirectUri: string, state: string) {
+function buildMicrosoftAuthUrl(clientId: string, redirectUri: string, state: string, codeChallenge: string | null) {
   const params = new URLSearchParams({
     client_id: clientId,
     response_type: 'code',
@@ -20,6 +21,7 @@ function buildMicrosoftAuthUrl(clientId: string, redirectUri: string, state: str
     // Microsoft account already has an active browser session, which isn't necessarily the
     // branch mailbox account the person meant to sign in with.
     prompt: 'select_account',
+    ...(codeChallenge ? { code_challenge: codeChallenge, code_challenge_method: 'S256' } : {}),
   });
   return `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params.toString()}`;
 }
@@ -67,9 +69,12 @@ export default function EmailsPage() {
       return;
     }
     const redirectUri = `${window.location.origin}/emails/callback`;
-    const state = Math.random().toString(36).slice(2);
+    const state = randomToken(16);
+    const pkce = await createPkce();
     sessionStorage.setItem('ms_oauth_state', state);
-    window.location.href = buildMicrosoftAuthUrl(clientId, redirectUri, state);
+    if (pkce) sessionStorage.setItem('ms_oauth_verifier', pkce.verifier);
+    else sessionStorage.removeItem('ms_oauth_verifier');
+    window.location.href = buildMicrosoftAuthUrl(clientId, redirectUri, state, pkce?.challenge ?? null);
   }
 
   async function handleDisconnectConfirmed() {

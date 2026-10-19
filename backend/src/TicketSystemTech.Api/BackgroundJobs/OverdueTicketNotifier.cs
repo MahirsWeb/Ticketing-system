@@ -114,7 +114,8 @@ public class OverdueTicketNotifier : BackgroundService
                     EmailTemplates.TicketOverdue(assignee.FirstName, ticket.TicketNumber, ticket.Title, reason), ct);
             }
 
-            notified.Add((ticket, assigneeIds));
+            // Only to people who can still act on it (the e-mails and in-app notifications above already skip inactive accounts).
+            notified.Add((ticket, assignees.Select(a => a.Id).ToList()));
         }
 
         foreach (var (ticket, userIds) in notified)
