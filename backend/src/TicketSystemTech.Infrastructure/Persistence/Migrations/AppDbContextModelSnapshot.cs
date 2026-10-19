@@ -364,6 +364,39 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                     b.ToTable("HelpTopics");
                 });
 
+            modelBuilder.Entity("TicketSystemTech.Domain.Entities.IdempotencyRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid>("ResourceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Scope", "Key")
+                        .IsUnique();
+
+                    b.ToTable("IdempotencyRecords");
+                });
+
             modelBuilder.Entity("TicketSystemTech.Domain.Entities.KnowledgeBaseChunk", b =>
                 {
                     b.Property<Guid>("Id")
@@ -380,8 +413,13 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("DocumentId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("Embedding")
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<byte[]>("Embedding")
+                        .HasColumnType("varbinary(max)")
+                        .HasColumnName("EmbeddingBinary");
+
+                    b.Property<string>("EmbeddingModel")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<Guid?>("TicketId")
                         .HasColumnType("uniqueidentifier");

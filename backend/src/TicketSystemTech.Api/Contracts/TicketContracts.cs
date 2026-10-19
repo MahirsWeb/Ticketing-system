@@ -46,6 +46,10 @@ public record AddTicketMessageRequest(
     [Required] string BodyHtml
 );
 
+public record ChangeTicketStatusRequest(
+    [Required] TicketStatus Status
+);
+
 public record AddTicketAssigneeRequest(
     [Required] Guid UserId
 );

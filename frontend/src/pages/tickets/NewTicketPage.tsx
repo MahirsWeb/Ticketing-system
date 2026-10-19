@@ -5,6 +5,7 @@ import { lookupsApi } from '../../api/lookups';
 import type { DepartmentItemFull } from '../../types';
 import { Button, Card, ErrorText, Input, Label, Select } from '../../components/ui';
 import { RichTextEditor } from '../../components/RichTextEditor';
+import { newIdempotencyKey } from '../../lib/idempotency';
 
 export default function NewTicketPage() {
   const navigate = useNavigate();
@@ -15,6 +16,8 @@ export default function NewTicketPage() {
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // One key per visit to this form: a retry of the same submission gets the existing ticket back, not a duplicate.
+  const [idempotencyKey] = useState(newIdempotencyKey);
 
   useEffect(() => {
     lookupsApi.departments().then(setDepartments);
@@ -41,7 +44,7 @@ export default function NewTicketPage() {
     }
     setLoading(true);
     try {
-      const ticket = await ticketsApi.create(title, description, departmentId);
+      const ticket = await ticketsApi.create(title, description, departmentId, idempotencyKey);
       if (files.length > 0) {
         await ticketsApi.uploadAttachments(ticket.id, files);
       }

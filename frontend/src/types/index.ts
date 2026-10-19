@@ -242,7 +242,7 @@ export interface ReportSummaryDto {
   totalOpen: number;
   totalClosed: number;
   avgResolutionHours: number;
-  slaComplianceRate: number;
+  slaComplianceRate: number | null;
 }
 
 export interface TimeSeriesPointDto {

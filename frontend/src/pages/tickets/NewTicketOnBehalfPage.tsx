@@ -8,6 +8,7 @@ import type { ClientLookupResult, DepartmentItemFull, LookupItem, SlaPlanItem, S
 import { Button, Card, ErrorText, Input, Label, Select } from '../../components/ui';
 import { RichTextEditor } from '../../components/RichTextEditor';
 import { useAuthStore } from '../../store/authStore';
+import { newIdempotencyKey } from '../../lib/idempotency';
 
 const SOURCES: TicketSource[] = ['Phone', 'Email', 'TicketSystem', 'Other'];
 const PRIORITIES: TicketPriority[] = ['Emergency', 'High', 'Medium', 'Low'];
@@ -46,6 +47,8 @@ export default function NewTicketOnBehalfPage() {
   const [subBranchId, setSubBranchId] = useState('');
   const [slaPlanId, setSlaPlanId] = useState('');
   const [dueDate, setDueDate] = useState('');
+  // One key per visit to this form: a retry of the same submission gets the existing ticket back, not a duplicate.
+  const [idempotencyKey] = useState(newIdempotencyKey);
   const [assignedToUserId, setAssignedToUserId] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -181,20 +184,23 @@ export default function NewTicketOnBehalfPage() {
     }
     setLoading(true);
     try {
-      const ticket = await ticketsApi.createOnBehalf({
-        clientEmail: client.email,
-        title,
-        description,
-        source,
-        helpTopicId,
-        departmentId,
-        subBranchId: subBranchId || undefined,
-        slaPlanId,
-        priority,
-        dueDateUtc: dueDate ? new Date(`${dueDate}T23:59:59`).toISOString() : null,
-        assignedToUserId,
-        categoryId: categoryId || undefined,
-      });
+      const ticket = await ticketsApi.createOnBehalf(
+        {
+          clientEmail: client.email,
+          title,
+          description,
+          source,
+          helpTopicId,
+          departmentId,
+          subBranchId: subBranchId || undefined,
+          slaPlanId,
+          priority,
+          dueDateUtc: dueDate ? new Date(`${dueDate}T23:59:59`).toISOString() : null,
+          assignedToUserId,
+          categoryId: categoryId || undefined,
+        },
+        idempotencyKey
+      );
       if (files.length > 0) {
         await ticketsApi.uploadAttachments(ticket.id, files);
       }
@@ -349,13 +355,14 @@ export default function NewTicketOnBehalfPage() {
                 </Select>
               </div>
               <div>
-                <Label>Due date</Label>
+                <Label>Due date (optional)</Label>
                 <input
                   type="date"
                   className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
                 />
+                <p className="mt-1 text-xs text-slate-400">Leave empty to use the SLA plan&apos;s resolution time.</p>
               </div>
               <div>
                 <Label>Assign to</Label>

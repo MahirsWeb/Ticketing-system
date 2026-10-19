@@ -16,6 +16,10 @@ public class KnowledgeBaseChunk : BaseEntity
 
     public string Content { get; set; } = string.Empty;
 
-    /// <summary>Embedding vector (stored as JSON in Infrastructure — see AppDbContext).</summary>
+    /// <summary>Embedding vector (stored as raw float32 bytes in Infrastructure — see AppDbContext).</summary>
     public float[]? Embedding { get; set; }
+
+    /// <summary>The embedding model that produced <see cref="Embedding"/>. Vectors from different models cannot be
+    /// compared, so search only uses chunks whose model matches the one currently configured.</summary>
+    public string? EmbeddingModel { get; set; }
 }

@@ -11,6 +11,7 @@ using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using TicketSystemTech.Application.Common.Interfaces;
 using TicketSystemTech.Application.Common.Options;
+using TicketSystemTech.Application.KnowledgeBase;
 using TicketSystemTech.Infrastructure.Identity;
 using TicketSystemTech.Infrastructure.Persistence;
 using TicketSystemTech.Infrastructure.Services;
@@ -144,6 +145,9 @@ builder.Services.AddRateLimiter(options =>
 // ---- Application services ----
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IHtmlSanitizerService, HtmlSanitizerService>();
+builder.Services.Configure<SlaOptions>(builder.Configuration.GetSection("Sla"));
+builder.Services.AddSingleton<ISlaCalculator>(sp =>
+    new TicketSystemTech.Application.Sla.SlaCalculator(sp.GetRequiredService<IOptions<SlaOptions>>().Value));
 builder.Services.AddScoped<IEmailSender, BrevoEmailSender>();
 builder.Services.AddScoped<ITicketNumberGenerator, TicketNumberGenerator>();
 builder.Services.AddScoped<IDateTimeProvider, DateTimeProvider>();
@@ -153,6 +157,10 @@ builder.Services.AddScoped<IFileStorage, LocalFileStorage>();
 builder.Services.AddScoped<IFileLinkService, FileLinkService>();
 builder.Services.AddScoped<IEmbeddingService, GoogleAiEmbeddingService>();
 builder.Services.AddScoped<IKnowledgeBaseIndexer, KnowledgeBaseIndexer>();
+builder.Services.AddSingleton<IVectorIndex, VectorIndex>();
+builder.Services.AddSingleton<TicketSystemTech.Api.BackgroundJobs.KnowledgeBaseReindexService>();
+builder.Services.AddSingleton<IKnowledgeBaseReindexJob>(sp => sp.GetRequiredService<TicketSystemTech.Api.BackgroundJobs.KnowledgeBaseReindexService>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<TicketSystemTech.Api.BackgroundJobs.KnowledgeBaseReindexService>());
 builder.Services.AddScoped<IDocumentTextExtractor, DocumentTextExtractor>();
 builder.Services.AddScoped<IKnowledgeBaseDocumentIndexer, KnowledgeBaseDocumentIndexer>();
 builder.Services.AddScoped<IChatCompletionService, GeminiChatCompletionService>();
@@ -220,6 +228,8 @@ using (var scope = app.Services.CreateScope())
     var piiProtector = scope.ServiceProvider.GetRequiredService<IPiiProtector>();
     await db.Database.MigrateAsync();
     await TicketSystemTech.Infrastructure.Persistence.PiiBackfillMigration.RunAsync(db, piiProtector, startupLogger);
+    await TicketSystemTech.Infrastructure.Persistence.EmbeddingFormatBackfill.RunAsync(
+        db, TicketSystemTech.Infrastructure.Services.GoogleAiEmbeddingService.Model, startupLogger);
     await TicketSystemTech.Infrastructure.Persistence.DbSeeder.SeedAsync(
         db, userManager, startupLogger, builder.Configuration, seedPasswordGenerator, tempPasswordOptions);
 }

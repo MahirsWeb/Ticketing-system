@@ -321,7 +321,7 @@ export default function DashboardPage() {
         />
         <KpiCard
           label="SLA compliance"
-          value={summary ? `${summary.slaComplianceRate}%` : '—'}
+          value={summary?.slaComplianceRate != null ? `${summary.slaComplianceRate}%` : '—'}
           accent="text-blue-700"
           hint="Share of closed tickets (with a due date) that were resolved by their SLA due date."
         />

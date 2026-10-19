@@ -71,9 +71,10 @@ public class ReportsController : ControllerBase
 
         var closedWithDueDate = closed.Where(x => x.DueDateUtc.HasValue).ToList();
         var compliant = closedWithDueDate.Count(x => x.ClosedAtUtc <= x.DueDateUtc);
-        var slaRate = closedWithDueDate.Count > 0 ? (double)compliant / closedWithDueDate.Count * 100 : 100;
+        // No closed tickets with a due date means there is nothing to measure, which must not read as perfect compliance.
+        double? slaRate = closedWithDueDate.Count > 0 ? Math.Round((double)compliant / closedWithDueDate.Count * 100, 1) : null;
 
-        return Ok(new ReportSummaryDto(totalNew, totalOpen, closed.Count, Math.Round(avgResolution, 1), Math.Round(slaRate, 1)));
+        return Ok(new ReportSummaryDto(totalNew, totalOpen, closed.Count, Math.Round(avgResolution, 1), slaRate));
     }
 
     [HttpGet("timeseries")]

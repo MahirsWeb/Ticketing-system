@@ -10,6 +10,7 @@ import { useAuthStore } from '../../store/authStore';
 import { OpenTicketForm } from './OpenTicketForm';
 import { CloseTicketForm } from './CloseTicketForm';
 import { TransferBranchForm } from './TransferBranchForm';
+import { TicketStatusActions } from './TicketStatusActions';
 import { TicketActivityFeed } from './TicketActivityFeed';
 import { TicketAssigneesPanel } from './TicketAssigneesPanel';
 import { WorkTimeEditor } from './WorkTimeEditor';
@@ -70,7 +71,7 @@ export default function TicketDetailPage() {
   const canOpen = isStaff && ticket.status === 'New';
   const canClose = isStaff && ticket.status !== 'New' && ticket.status !== 'Closed';
   const canReopen = isStaff && ticket.status === 'Closed';
-  const canTransfer = isStaff && ticket.status !== 'New';
+  const canTransfer = isStaff && ticket.status !== 'New' && ticket.status !== 'Closed';
   const canSeeInternalNotes = user.role !== 'Client';
   const canReplyResponse = ticket.status !== 'Closed';
   const canReplyInternal = ticket.status !== 'Closed' && canSeeInternalNotes;
@@ -95,6 +96,11 @@ export default function TicketDetailPage() {
           />{' '}
           ({ticket.companyName}) on {format(new Date(ticket.createdAt), 'dd.MM.yyyy HH:mm')}
         </p>
+        {isStaff && (
+          <div className="mt-3">
+            <TicketStatusActions ticket={ticket} onChanged={setTicket} />
+          </div>
+        )}
       </div>
 
       {ticket.status !== 'New' && (

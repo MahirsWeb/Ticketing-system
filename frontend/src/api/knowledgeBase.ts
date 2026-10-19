@@ -9,6 +9,19 @@ export interface KnowledgeBaseAskResponse {
   similarPercentage: number;
 }
 
+export type ReindexState = 'Idle' | 'Running' | 'Completed' | 'Failed';
+
+export interface ReindexStatus {
+  state: ReindexState;
+  total: number;
+  processed: number;
+  embedded: number;
+  failed: number;
+  startedAtUtc: string | null;
+  finishedAtUtc: string | null;
+  message: string | null;
+}
+
 export const knowledgeBaseApi = {
   search: (query: string) =>
     apiClient
@@ -27,7 +40,10 @@ export const knowledgeBaseApi = {
       .get<SimilarTicketsResponseDto>('/api/knowledge-base/similar-tickets', { params: { query } })
       .then((r) => r.data),
 
-  reindexAll: () => apiClient.post<{ indexed: number }>('/api/knowledge-base/reindex-all').then((r) => r.data),
+  /** Starts the background reindex. Resolves with the status; rejects with 409 if one is already running. */
+  reindexAll: () => apiClient.post<ReindexStatus>('/api/knowledge-base/reindex-all').then((r) => r.data),
+
+  reindexStatus: () => apiClient.get<ReindexStatus>('/api/knowledge-base/reindex-status').then((r) => r.data),
 
   listDocuments: () =>
     apiClient.get<KnowledgeBaseDocumentDto[]>('/api/knowledge-base/documents').then((r) => r.data),

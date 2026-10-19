@@ -27,24 +27,33 @@ export interface TicketListParams {
   pageSize?: number;
 }
 
-export const ticketsApi = {
-  create: (title: string, description: string, departmentId: string) =>
-    apiClient.post<TicketDetailDto>('/api/tickets', { title, description, departmentId }).then((r) => r.data),
+function idempotencyHeaders(key?: string) {
+  return key ? { headers: { 'Idempotency-Key': key } } : undefined;
+}
 
-  createOnBehalf: (payload: {
-    clientEmail: string;
-    title: string;
-    description: string;
-    source: TicketSource;
-    helpTopicId: string;
-    departmentId: string;
-    subBranchId?: string;
-    slaPlanId: string;
-    priority: TicketPriority;
-    dueDateUtc: string | null;
-    assignedToUserId: string;
-    categoryId?: string;
-  }) => apiClient.post<TicketDetailDto>('/api/tickets/on-behalf', payload).then((r) => r.data),
+export const ticketsApi = {
+  create: (title: string, description: string, departmentId: string, idempotencyKey?: string) =>
+    apiClient
+      .post<TicketDetailDto>('/api/tickets', { title, description, departmentId }, idempotencyHeaders(idempotencyKey))
+      .then((r) => r.data),
+
+  createOnBehalf: (
+    payload: {
+      clientEmail: string;
+      title: string;
+      description: string;
+      source: TicketSource;
+      helpTopicId: string;
+      departmentId: string;
+      subBranchId?: string;
+      slaPlanId: string;
+      priority: TicketPriority;
+      dueDateUtc: string | null;
+      assignedToUserId: string;
+      categoryId?: string;
+    },
+    idempotencyKey?: string
+  ) => apiClient.post<TicketDetailDto>('/api/tickets/on-behalf', payload, idempotencyHeaders(idempotencyKey)).then((r) => r.data),
 
   list: (params: TicketListParams) =>
     apiClient.get<PagedResult<TicketListItem>>('/api/tickets', { params }).then((r) => r.data),
@@ -72,6 +81,9 @@ export const ticketsApi = {
     apiClient.post<TicketDetailDto>(`/api/tickets/${id}/close`, { resolutionSummary }).then((r) => r.data),
 
   reopen: (id: string) => apiClient.post<TicketDetailDto>(`/api/tickets/${id}/reopen`).then((r) => r.data),
+
+  setStatus: (id: string, status: 'Open' | 'InProgress' | 'Resolved') =>
+    apiClient.post<TicketDetailDto>(`/api/tickets/${id}/status`, { status }).then((r) => r.data),
 
   transferBranch: (id: string, departmentId: string) =>
     apiClient.post<TicketDetailDto>(`/api/tickets/${id}/transfer-branch`, { departmentId }).then((r) => r.data),

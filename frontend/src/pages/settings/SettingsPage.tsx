@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
 import { lookupsApi } from '../../api/lookups';
 import { settingsApi } from '../../api/settings';
-import { knowledgeBaseApi } from '../../api/knowledgeBase';
+import { knowledgeBaseApi, type ReindexStatus } from '../../api/knowledgeBase';
 import type { DepartmentItemFull, KnowledgeBaseDocumentDto, LookupItemFull, SlaPlanItemFull, SubBranchItemFull } from '../../types';
 import { Button, Card, ErrorText, Input, Label, StatusPill, SuccessText } from '../../components/ui';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
@@ -875,23 +875,39 @@ function KnowledgeBaseDocumentsPanel() {
 }
 
 function KnowledgeBaseMaintenancePanel() {
-  const [reindexing, setReindexing] = useState(false);
-  const [result, setResult] = useState<number | null>(null);
+  const [status, setStatus] = useState<ReindexStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const running = status?.state === 'Running';
+
+  // Picks up a run that is already in progress (started earlier, or from another tab) as soon as the panel opens.
+  useEffect(() => {
+    knowledgeBaseApi.reindexStatus().then(setStatus).catch(() => undefined);
+  }, []);
+
+  // The reindex runs on the server in the background; poll until it finishes.
+  useEffect(() => {
+    if (!running) return;
+    const timer = window.setInterval(() => {
+      knowledgeBaseApi.reindexStatus().then(setStatus).catch(() => undefined);
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [running]);
+
   async function handleReindex() {
-    setReindexing(true);
     setError(null);
-    setResult(null);
     try {
-      const res = await knowledgeBaseApi.reindexAll();
-      setResult(res.indexed);
+      setStatus(await knowledgeBaseApi.reindexAll());
     } catch (err: any) {
-      setError(err?.response?.data?.message ?? 'Could not reindex the knowledge base.');
-    } finally {
-      setReindexing(false);
+      if (err?.response?.status === 409 && err.response.data?.status) {
+        setStatus(err.response.data.status as ReindexStatus);
+      } else {
+        setError(err?.response?.data?.message ?? 'Could not start the reindex.');
+      }
     }
   }
+
+  const progress = status && status.total > 0 ? `${status.processed} / ${status.total}` : null;
 
   return (
     <Panel className="max-w-lg">
@@ -899,13 +915,21 @@ function KnowledgeBaseMaintenancePanel() {
       <p className="mt-0.5 mb-4 text-xs text-slate-400">
         AI search only picks up a ticket once it's been indexed — normally that happens automatically the moment a
         ticket is closed through the app. Tickets inserted directly (e.g. bulk-imported demo data) skip that step, so
-        they won't show up in AI search or chat until you reindex. This rebuilds the knowledge base entry for every
-        ticket in the system — safe to run any time.
+        they won't show up in AI search or chat until you reindex. This embeds the tickets that still lack an entry —
+        only ones with enough internal notes to ever be a search result — in the background, so you can leave this page.
+        Safe to run any time, and it continues where it stopped.
       </p>
       <ErrorText>{error}</ErrorText>
-      {result !== null && <SuccessText>{`Reindexed ${result} tickets.`}</SuccessText>}
-      <Button onClick={handleReindex} disabled={reindexing}>
-        {reindexing ? 'Reindexing…' : 'Reindex all tickets'}
+      {status && status.state !== 'Idle' && (
+        <p className={`mb-3 text-sm ${status.state === 'Failed' ? 'text-red-700' : status.state === 'Completed' ? 'text-green-700' : 'text-slate-700'}`}>
+          {progress && <span className="font-semibold">{progress}</span>} {progress && '· '}
+          {status.state === 'Running' ? 'Running… ' : ''}
+          {status.message}
+          {status.embedded > 0 && status.state !== 'Running' ? ` (${status.embedded} embedded)` : ''}
+        </p>
+      )}
+      <Button onClick={handleReindex} disabled={running}>
+        {running ? 'Reindexing…' : 'Reindex missing tickets'}
       </Button>
     </Panel>
   );

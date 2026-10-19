@@ -59,11 +59,25 @@ public class BrevoEmailSender : IEmailSender
             htmlContent = htmlBody
         });
 
-        var response = await _httpClient.SendAsync(request, ct);
-        if (!response.IsSuccessStatusCode)
+        // Email is a side effect of an action that has ALREADY been committed. If this threw, the caller's request
+        // would fail with a 500 for a write that succeeded, and the user would naturally repeat it (a second ticket).
+        // So transport failures are logged and swallowed, exactly like an HTTP error status from Brevo is.
+        try
         {
-            var body = await response.Content.ReadAsStringAsync(ct);
-            _logger.LogError("Brevo email send failed ({Status}) to {Email}: {Body}", response.StatusCode, toEmail, body);
+            var response = await _httpClient.SendAsync(request, ct);
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(ct);
+                _logger.LogError("Brevo email send failed ({Status}) to {Email}: {Body}", response.StatusCode, toEmail, body);
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "Brevo email send failed (network) to {Email}", toEmail);
+        }
+        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            _logger.LogError(ex, "Brevo email send timed out to {Email}", toEmail);
         }
     }
 }

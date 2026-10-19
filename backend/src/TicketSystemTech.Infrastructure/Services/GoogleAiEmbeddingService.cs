@@ -9,6 +9,11 @@ namespace TicketSystemTech.Infrastructure.Services;
 /// <summary>Generates embeddings via Google AI Studio's gemini-embedding-001 model, when configured.</summary>
 public class GoogleAiEmbeddingService : IEmbeddingService
 {
+    /// <summary>Also part of the request URL below.</summary>
+    public const string Model = "gemini-embedding-001";
+
+    public string ModelName => Model;
+
     private readonly HttpClient _httpClient;
     private readonly IConfiguration _configuration;
     private readonly ILogger<GoogleAiEmbeddingService> _logger;
@@ -42,7 +47,7 @@ public class GoogleAiEmbeddingService : IEmbeddingService
             return null;
 
         // Key goes in a header, not the query string, so it never appears in HttpClient's request-URI logging.
-        const string url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent";
+        const string url = "https://generativelanguage.googleapis.com/v1beta/models/" + Model + ":embedContent";
 
         for (var attempt = 0; attempt <= MaxRetries; attempt++)
         {

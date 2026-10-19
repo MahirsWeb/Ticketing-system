@@ -171,13 +171,14 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
           </Select>
         </div>
         <div>
-          <Label>Due date</Label>
+          <Label>Due date (optional)</Label>
           <input
             type="date"
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
           />
+          <p className="mt-1 text-xs text-slate-400">Leave empty to use the SLA plan&apos;s resolution time.</p>
         </div>
         <div>
           <Label>Assign to</Label>

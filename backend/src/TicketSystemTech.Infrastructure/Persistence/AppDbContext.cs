@@ -37,6 +37,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<KnowledgeBaseDocument> KnowledgeBaseDocuments => Set<KnowledgeBaseDocument>();
     public DbSet<KnowledgeBaseChunk> KnowledgeBaseChunks => Set<KnowledgeBaseChunk>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
     public DbSet<EmailConnection> EmailConnections => Set<EmailConnection>();
     public DbSet<EmailTicketMark> EmailTicketMarks => Set<EmailTicketMark>();
     public DbSet<TicketAssignee> TicketAssignees => Set<TicketAssignee>();
@@ -162,18 +163,20 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
             e.HasOne(c => c.Document).WithMany(d => d.Chunks).HasForeignKey(c => c.DocumentId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(c => c.Ticket).WithMany().HasForeignKey(c => c.TicketId).OnDelete(DeleteBehavior.Cascade);
 
-            // SQL Server has no native float-array column type (unlike Postgres' real[]), so the
-            // embedding is stored as a JSON string instead. Similarity is already computed in C# after
-            // loading matches into memory (see KnowledgeBaseController), never pushed down to SQL, so
-            // this doesn't change any query semantics.
-            var embeddingConverter = new ValueConverter<float[]?, string?>(
-                v => v == null ? null : JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
-                v => v == null ? null : JsonSerializer.Deserialize<float[]>(v, (JsonSerializerOptions?)null));
+            // SQL Server has no native float-array column type, so the vector is stored as the raw bytes of its
+            // float32 values (varbinary): 12 KB for a 3072-number vector instead of ~78 KB of JSON text, and no
+            // per-number parsing on load. Similarity is computed in C#, never pushed down to SQL.
+            // The pre-binary JSON lives on in the legacy EmbeddingJson column, which is deliberately NOT part of
+            // the model: EmbeddingFormatBackfill converts it, and a later migration drops it once that is verified.
+            var embeddingConverter = new ValueConverter<float[]?, byte[]?>(
+                v => v == null ? null : EmbeddingCodec.Encode(v),
+                v => v == null ? null : EmbeddingCodec.Decode(v));
             var embeddingComparer = new ValueComparer<float[]?>(
                 (a, b) => (a == null && b == null) || (a != null && b != null && a.SequenceEqual(b)),
                 v => v == null ? 0 : v.Aggregate(0, (h, f) => HashCode.Combine(h, f)),
                 v => v == null ? null : (float[])v.Clone());
-            e.Property(c => c.Embedding).HasConversion(embeddingConverter, embeddingComparer);
+            e.Property(c => c.Embedding).HasColumnName("EmbeddingBinary").HasConversion(embeddingConverter, embeddingComparer);
+            e.Property(c => c.EmbeddingModel).HasMaxLength(100);
         });
 
         builder.Entity<EmailConnection>(e =>
@@ -190,6 +193,14 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
         {
             e.HasIndex(a => new { a.TicketId, a.UserId }).IsUnique();
             e.HasOne(a => a.Ticket).WithMany(t => t.Assignees).HasForeignKey(a => a.TicketId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<IdempotencyRecord>(e =>
+        {
+            e.Property(r => r.Scope).HasMaxLength(50).IsRequired();
+            e.Property(r => r.Key).HasMaxLength(64).IsRequired();
+            // The uniqueness is what makes two simultaneous identical requests safe: the second insert fails.
+            e.HasIndex(r => new { r.UserId, r.Scope, r.Key }).IsUnique();
         });
 
         builder.Entity<SubBranch>(e =>

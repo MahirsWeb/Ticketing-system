@@ -60,7 +60,7 @@ public class OverdueTicketNotifier : BackgroundService
             return;
 
         var now = DateTime.UtcNow;
-        var candidates = await db.Tickets
+        var candidates = await db.Tickets.AsNoTracking()
             .Where(t => (t.Status == TicketStatus.Open || t.Status == TicketStatus.InProgress) && t.OverdueNotifiedAtUtc == null)
             .ToListAsync(ct);
 
@@ -80,8 +80,18 @@ public class OverdueTicketNotifier : BackgroundService
 
         if (overdue.Count == 0) return;
 
+        var notified = new List<(Ticket Ticket, List<Guid> UserIds)>();
         foreach (var (ticket, reason) in overdue)
         {
+            // Claim the ticket BEFORE telling anyone, with one conditional UPDATE. Marking it after sending meant a
+            // failure half-way through re-sent every email already delivered on the next run, and two instances
+            // running the same job each sent everything. Now only the run whose UPDATE changes the row sends; the
+            // price is that a notification whose delivery fails is logged and not retried, which beats spamming.
+            var claimed = await db.Tickets
+                .Where(t => t.Id == ticket.Id && t.OverdueNotifiedAtUtc == null)
+                .ExecuteUpdateAsync(set => set.SetProperty(t => t.OverdueNotifiedAtUtc, now), ct);
+            if (claimed == 0) continue;
+
             var assigneeIds = await db.TicketAssignees.Where(a => a.TicketId == ticket.Id).Select(a => a.UserId).ToListAsync(ct);
             if (assigneeIds.Count == 0 && ticket.AssignedToUserId.HasValue) assigneeIds.Add(ticket.AssignedToUserId.Value);
 
@@ -95,22 +105,24 @@ public class OverdueTicketNotifier : BackgroundService
                     Message = $"Ticket #{ticket.TicketNumber} is overdue",
                     TicketId = ticket.Id
                 });
+            }
+            await db.SaveChangesAsync(ct);
+
+            foreach (var assignee in assignees)
+            {
                 await emailSender.SendAsync(assignee.Email!, $"Ticket #{ticket.TicketNumber} is overdue",
-                    EmailTemplates.TicketOverdue(assignee.FirstName, ticket.TicketNumber, ticket.Title, reason));
+                    EmailTemplates.TicketOverdue(assignee.FirstName, ticket.TicketNumber, ticket.Title, reason), ct);
             }
 
-            ticket.OverdueNotifiedAtUtc = now;
+            notified.Add((ticket, assigneeIds));
         }
 
-        await db.SaveChangesAsync(ct);
-
-        foreach (var (ticket, _) in overdue)
+        foreach (var (ticket, userIds) in notified)
         {
-            var assigneeIds = await db.TicketAssignees.AsNoTracking().Where(a => a.TicketId == ticket.Id).Select(a => a.UserId).ToListAsync(ct);
-            foreach (var userId in assigneeIds)
-                await notificationPublisher.PushToUserAsync(userId, "ticketOverdue", new { ticket.Id, ticket.TicketNumber, ticket.Title });
+            foreach (var userId in userIds)
+                await notificationPublisher.PushToUserAsync(userId, "ticketOverdue", new { ticket.Id, ticket.TicketNumber, ticket.Title }, ct);
         }
 
-        _logger.LogInformation("Sent overdue notifications for {Count} ticket(s)", overdue.Count);
+        _logger.LogInformation("Sent overdue notifications for {Count} ticket(s)", notified.Count);
     }
 }

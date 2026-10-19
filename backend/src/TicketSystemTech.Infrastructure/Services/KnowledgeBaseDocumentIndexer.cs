@@ -15,10 +15,12 @@ public class KnowledgeBaseDocumentIndexer : IKnowledgeBaseDocumentIndexer
     private readonly AppDbContext _db;
     private readonly IDocumentTextExtractor _textExtractor;
     private readonly IEmbeddingService _embeddingService;
+    private readonly IVectorIndex _vectorIndex;
     private readonly IFileStorage _fileStorage;
 
-    public KnowledgeBaseDocumentIndexer(AppDbContext db, IDocumentTextExtractor textExtractor, IEmbeddingService embeddingService, IFileStorage fileStorage)
+    public KnowledgeBaseDocumentIndexer(AppDbContext db, IDocumentTextExtractor textExtractor, IEmbeddingService embeddingService, IFileStorage fileStorage, IVectorIndex vectorIndex)
     {
+        _vectorIndex = vectorIndex;
         _db = db;
         _textExtractor = textExtractor;
         _embeddingService = embeddingService;
@@ -59,10 +61,12 @@ public class KnowledgeBaseDocumentIndexer : IKnowledgeBaseDocumentIndexer
             {
                 DocumentId = document.Id,
                 Content = chunkText,
-                Embedding = embedding
+                Embedding = embedding,
+                EmbeddingModel = embedding is null ? null : _embeddingService.ModelName
             });
         }
         await _db.SaveChangesAsync(ct);
+        _vectorIndex.Invalidate();
 
         return document;
     }

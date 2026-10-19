@@ -194,6 +194,9 @@ direktno u bazi.
 | `Pii:HashKey` | ✅ Da (obavezno izvan Development) | Ključ HMAC hasha kojim se nalozi traže po emailu. **Ne mijenjaj ga nakon što već postoje nalozi** — niko se više ne bi mogao ulogovati. Enkripcija sadržaja koristi ključeve iz tabele `DataProtectionKeys`, koja mora biti u svakom backupu. |
 | `Storage:UploadsPath` | Ne | Folder za priloge tiketa i dokumente baze znanja (default `App_Data/uploads` pored aplikacije). Ne servira se javno; za produkciju postavi putanju **van** foldera koji se redeploya. Prilozi se otvaraju kroz potpisane linkove koji ističu za 4 sata. |
 | `SeedAdmin:Email` / `Password` | ✅ Email da, lozinka ne | Email za prvi Admin nalog koji se automatski pravi. Ako ostaviš `Password` prazno, generiše se nasumična privremena lozinka (ispiše se u terminalu). |
+| `Sla:Mode` | Ne (default `CalendarHours`) | Kako se računa rok tiketa iz SLA plana. `CalendarHours` = sati teku non-stop (plan od 24 h = rok za 24 h). `BusinessHours` = broje se samo radni sati. Rok koji osoblje ručno unese uvijek ima prednost. |
+| `Sla:TimeZoneId`, `Sla:WorkdayStart`, `Sla:WorkdayEnd` | Ne | Samo za `BusinessHours`: vremenska zona (default `Europe/Sarajevo`) i radno vrijeme (default `08:00`–`16:00`). |
+| `Sla:WorkDays`, `Sla:Holidays` | Ne | Samo za `BusinessHours`: radni dani (default ponedjeljak–petak) i neradni datumi (`yyyy-MM-dd`). Ako ih postaviš, **zamjenjuju** default; ne dodaju se na njega. |
 | `GoogleAi:ApiKey` | Za AI funkcije | Bez ovoga, AI asistent i pretraga tiketa ne rade (ostatak aplikacije radi normalno). |
 | `Brevo:ApiKey` | Za slanje email-ova | Bez ovoga, "zaboravljena lozinka" i pozivnice se ne šalju (upozorenje u logu, aplikacija ne puca). |
 | `MicrosoftGraph:ClientId` / `ClientSecret` | Za Outlook integraciju | Bez ovoga, samo Settings → Email Integracija ostaje neaktivna; ostatak aplikacije radi normalno. |
@@ -242,7 +245,15 @@ pokreni frontend sa `npm run dev -- --port 5174` pa prilagodi `VITE_API_BASE_URL
 
 **AI asistent kaže da nema dovoljno informacija za sve**
 → Provjeri da je `GoogleAi:ApiKey` postavljen, i da si pokrenuo indeksiranje (Admin → Settings →
-Knowledge Base → "Reindex all tickets") barem jednom.
+Knowledge Base → "Reindex missing tickets") barem jednom. Indeksiranje radi u pozadini (možeš napustiti stranicu),
+pokazuje napredak, i nastavlja gdje je stalo. Embeduju se samo tiketi koje pretraga može vratiti (imaju dovoljno
+internih bilješki), pa je to znatno manje posla nego ranije.
+
+**Nakon nadogradnje na binarne vektore (jednokratno)**
+→ Pri prvom pokretanju backend pretvara postojeće vektore iz JSON-a u binarni oblik (~1,5 minuta za 20 hiljada
+tiketa, prikazuje napredak u logu). Stari JSON ostaje u koloni `EmbeddingJson` kao sigurnosna kopija. Kad
+provjeriš da AI pretraga radi, možeš osloboditi prostor:
+`UPDATE KnowledgeBaseChunks SET EmbeddingJson = NULL WHERE EmbeddingBinary IS NOT NULL;`
 
 **Zaboravio sam admin lozinku**
 → Restartuj backend — ako nalog i dalje postoji (samo je lozinka nepoznata), obriši ga direktno u bazi

@@ -7,5 +7,7 @@ namespace TicketSystemTech.Application.Common.Interfaces;
 /// </summary>
 public interface IKnowledgeBaseIndexer
 {
-    Task IndexTicketAsync(Guid ticketId, CancellationToken ct = default);
+    /// <summary>Indexes one ticket. Returns true when the ticket now has an embedding; false when it was skipped
+    /// (too little internal documentation to ever be a search result) or the embedding provider gave nothing back.</summary>
+    Task<bool> IndexTicketAsync(Guid ticketId, CancellationToken ct = default);
 }

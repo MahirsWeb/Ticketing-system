@@ -5,7 +5,7 @@ public record ReportSummaryDto(
     int TotalOpen,
     int TotalClosed,
     double AvgResolutionHours,
-    double SlaComplianceRate
+    double? SlaComplianceRate // null when no closed ticket in range has a due date: "no data" is not 100 %
 );
 
 public record TimeSeriesPointDto(DateOnly Date, int Opened, int Closed);

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using TicketSystemTech.Api.Contracts;
 using TicketSystemTech.Application.Common.Interfaces;
+using TicketSystemTech.Application.KnowledgeBase;
 using TicketSystemTech.Domain.Entities;
 using TicketSystemTech.Domain.Enums;
 using TicketSystemTech.Infrastructure.Persistence;
@@ -17,9 +18,7 @@ public class KnowledgeBaseController : ControllerBase
 {
     private const long MaxDocumentSizeBytes = 20 * 1024 * 1024; // 20 MB
 
-    /// <summary>A ticket only qualifies as an AI source once its internal notes carry at least this many
-    /// characters — screens out tickets that were never really documented internally.</summary>
-    private const int MinInternalNoteChars = 100;
+    private const int MinInternalNoteChars = KnowledgeBaseRules.MinInternalNoteChars;
 
     /// <summary>"Similar" for the report means the top slice of THIS query's own score range, not a fixed
     /// cosine-similarity cutoff. Measured against real production data: Gemini embedding similarity for
@@ -57,51 +56,51 @@ public class KnowledgeBaseController : ControllerBase
     private readonly AppDbContext _db;
     private readonly ICurrentUserService _currentUser;
     private readonly IChatCompletionService _chatCompletionService;
-    private readonly IKnowledgeBaseIndexer _indexer;
     private readonly IKnowledgeBaseDocumentIndexer _documentIndexer;
     private readonly IEmbeddingService _embeddingService;
     private readonly IFileLinkService _links;
+    private readonly IVectorIndex _vectorIndex;
+    private readonly IKnowledgeBaseReindexJob _reindexJob;
 
     public KnowledgeBaseController(
         AppDbContext db,
         ICurrentUserService currentUser,
         IChatCompletionService chatCompletionService,
-        IKnowledgeBaseIndexer indexer,
         IKnowledgeBaseDocumentIndexer documentIndexer,
         IEmbeddingService embeddingService,
-        IFileLinkService links)
+        IFileLinkService links,
+        IVectorIndex vectorIndex,
+        IKnowledgeBaseReindexJob reindexJob)
     {
+        _vectorIndex = vectorIndex;
+        _reindexJob = reindexJob;
         _db = db;
         _currentUser = currentUser;
         _chatCompletionService = chatCompletionService;
-        _indexer = indexer;
         _documentIndexer = documentIndexer;
         _embeddingService = embeddingService;
         _links = links;
     }
 
     /// <summary>
-    /// Backfills the knowledge base for tickets that predate KB indexing (e.g. closed before this feature
-    /// shipped, or bulk-imported directly into the database). Skips tickets that already have an embedded
-    /// chunk, so re-running after a partial/rate-limited run only processes what's still missing instead
-    /// of redoing everything from scratch.
+    /// Starts rebuilding the embeddings that are missing, in the background, and returns at once. Only tickets search
+    /// could actually return are processed (enough internal notes), and tickets that already have an embedding are
+    /// skipped, so re-running after a rate-limited or interrupted run only does what is still missing. Progress is
+    /// available from <c>reindex-status</c>.
     /// </summary>
     [HttpPost("reindex-all")]
     [Authorize(Roles = nameof(UserRole.Admin))]
-    public async Task<IActionResult> ReindexAll()
+    public IActionResult ReindexAll()
     {
-        var allTicketIds = await _db.Tickets.AsNoTracking().Select(t => t.Id).ToListAsync();
-        var alreadyEmbedded = await _db.KnowledgeBaseChunks.AsNoTracking()
-            .Where(c => c.TicketId != null && c.Embedding != null)
-            .Select(c => c.TicketId!.Value)
-            .ToListAsync();
-        var ticketIds = allTicketIds.Except(alreadyEmbedded).ToList();
+        if (!_reindexJob.TryStart())
+            return Conflict(new { message = "A reindex is already running.", status = _reindexJob.GetStatus() });
 
-        foreach (var id in ticketIds)
-            await _indexer.IndexTicketAsync(id);
-
-        return Ok(new { indexed = ticketIds.Count, skipped = allTicketIds.Count - ticketIds.Count });
+        return Accepted(_reindexJob.GetStatus());
     }
+
+    [HttpGet("reindex-status")]
+    [Authorize(Roles = nameof(UserRole.Admin))]
+    public ActionResult<ReindexStatus> ReindexStatusEndpoint() => Ok(_reindexJob.GetStatus());
 
     /// <summary>
     /// Semantic search over the auto-built knowledge base (ticket descriptions + internal notes + resolutions,
@@ -267,6 +266,7 @@ public class KnowledgeBaseController : ControllerBase
         if (doc is null) return NotFound();
         _db.KnowledgeBaseDocuments.Remove(doc); // cascades to its chunks
         await _db.SaveChangesAsync();
+        _vectorIndex.Invalidate();
         return NoContent();
     }
 
@@ -316,18 +316,17 @@ public class KnowledgeBaseController : ControllerBase
         // Content (can be large — full ticket notes/resolution) is left out of this pass and fetched only
         // for the handful of chunks that actually rank, so per-query cost stays roughly flat as the
         // corpus grows instead of scaling with total eligible tickets.
-        var candidateEmbeddings = await EligibleChunksQuery(includeTicketSources)
-            .Where(c => c.Embedding != null)
-            .Select(c => new { c.Id, c.TicketId, c.DocumentId, c.Embedding })
-            .ToListAsync();
-
-        if (candidateEmbeddings.Count == 0) return new List<ChunkMatch>();
-
-        var top = candidateEmbeddings
-            .Select(c => new { c.Id, c.TicketId, c.DocumentId, Similarity = CosineSimilarity(queryEmbedding, c.Embedding!) })
+        // The vectors come from an in-memory index (already normalised, rebuilt after changes or a few minutes), so a
+        // question costs one dot product per eligible chunk instead of a SQL round trip that parsed ~100 MB of JSON.
+        var query = IVectorIndex.Normalize(queryEmbedding);
+        var top = (await _vectorIndex.GetAsync())
+            .Where(e => includeTicketSources || e.DocumentId != null)
+            .Select(e => new { Id = e.ChunkId, e.TicketId, e.DocumentId, Similarity = IVectorIndex.Dot(query, e.Unit) })
             .OrderByDescending(x => x.Similarity)
             .Take(Math.Clamp(take, 1, 500))
             .ToList();
+
+        if (top.Count == 0) return new List<ChunkMatch>();
 
         var topIds = top.Select(x => x.Id).ToList();
         var contentById = await _db.KnowledgeBaseChunks.AsNoTracking()
@@ -344,20 +343,6 @@ public class KnowledgeBaseController : ControllerBase
 
         return await ResolveSourcesAsync(scored.Select(s => (s.TicketId, s.DocumentId, s.Content,
             Score: (int)MathF.Round(Math.Clamp(s.Similarity, 0f, 1f) * 100))));
-    }
-
-    private static float CosineSimilarity(float[] a, float[] b)
-    {
-        if (a.Length != b.Length || a.Length == 0) return 0f;
-        float dot = 0, magA = 0, magB = 0;
-        for (var i = 0; i < a.Length; i++)
-        {
-            dot += a[i] * b[i];
-            magA += a[i] * a[i];
-            magB += b[i] * b[i];
-        }
-        if (magA == 0 || magB == 0) return 0f;
-        return dot / (MathF.Sqrt(magA) * MathF.Sqrt(magB));
     }
 
     private async Task<List<ChunkMatch>> FindMatchesByKeywordAsync(string query, int take, bool includeTicketSources)
@@ -436,13 +421,10 @@ public class KnowledgeBaseController : ControllerBase
         {
             // Embedding is needed for every candidate to score it, but Content (can be large — full
             // ticket notes/resolution) is only fetched for the ones that actually clear the cutoff.
-            var candidateEmbeddings = await EligibleChunksQuery(includeTicketSources: true)
-                .Where(c => c.TicketId != null && c.Embedding != null)
-                .Select(c => new { c.Id, c.TicketId, c.Embedding })
-                .ToListAsync();
-
-            var rawScores = candidateEmbeddings
-                .Select(c => new { c.Id, c.TicketId, Similarity = CosineSimilarity(queryEmbedding, c.Embedding!) })
+            var unitQuery = IVectorIndex.Normalize(queryEmbedding);
+            var rawScores = (await _vectorIndex.GetAsync())
+                .Where(e => e.TicketId != null)
+                .Select(e => new { Id = e.ChunkId, e.TicketId, Similarity = IVectorIndex.Dot(unitQuery, e.Unit) })
                 .ToList();
 
             if (rawScores.Count == 0)
