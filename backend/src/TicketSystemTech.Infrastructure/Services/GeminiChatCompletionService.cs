@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using TicketSystemTech.Application.Common;
 using TicketSystemTech.Application.Common.Interfaces;
 
 namespace TicketSystemTech.Infrastructure.Services;
@@ -34,6 +35,17 @@ public class GeminiChatCompletionService : IChatCompletionService
             return null;
         }
 
+        // What leaves the system: e-mail addresses and phone numbers are masked (Ai:RedactPersonalData, on by default), and the
+        // amount of text is capped whatever the caller passed in. The answer is capped too (Ai:MaxOutputTokens).
+        if (_configuration.GetValue("Ai:RedactPersonalData", true))
+        {
+            context = PiiRedactor.Redact(context);
+            question = PiiRedactor.Redact(question);
+        }
+        if (context.Length > AiPromptLimits.MaxContextChars) context = context[..AiPromptLimits.MaxContextChars];
+        if (question.Length > AiPromptLimits.MaxQuestionChars) question = question[..AiPromptLimits.MaxQuestionChars];
+        var maxOutputTokens = _configuration.GetValue("Ai:MaxOutputTokens", 2048);
+
         try
         {
             // The key travels in a header, not in the query string: HttpClient's built-in logging writes the full
@@ -59,7 +71,7 @@ public class GeminiChatCompletionService : IChatCompletionService
                 {
                     system_instruction = new { parts = new[] { new { text = systemInstruction } } },
                     contents = new[] { new { role = "user", parts = new[] { new { text = userPrompt } } } },
-                    generationConfig = new { temperature = 0.2 }
+                    generationConfig = new { temperature = 0.2, maxOutputTokens }
                 })
             };
             request.Headers.Add("x-goog-api-key", apiKey);

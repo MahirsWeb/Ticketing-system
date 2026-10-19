@@ -6,7 +6,7 @@ import { usersApi } from '../../api/users';
 import { lookupsApi } from '../../api/lookups';
 import { useAuthStore } from '../../store/authStore';
 import type { DepartmentItemFull, WorkTaskDetailDto, WorkTaskListItem, WorkTaskStatus } from '../../types';
-import { Button, Card, ErrorText, Input, Label, Select, Textarea } from '../../components/ui';
+import { Button, Card, ErrorText, Input, Label, Select, Textarea, Field } from '../../components/ui';
 import { TaskDetailPanel } from './TaskDetailPanel';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -199,11 +199,11 @@ export default function TasksPage() {
         <Card className="p-5">
           <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-500">New task</h2>
           <form onSubmit={handleCreate} className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
+            <Field>
               <Label>Title</Label>
               <Input value={title} maxLength={150} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Napravi plan za iduću sedmicu" />
-            </div>
-            <div>
+            </Field>
+            <Field>
               <Label>Assign to</Label>
               <Select value={assignedToUserId} onChange={(e) => setAssignedToUserId(e.target.value)}>
                 <option value="">Choose a colleague{isAdmin ? '' : ' (or yourself)'}…</option>
@@ -218,11 +218,11 @@ export default function TasksPage() {
                   </optgroup>
                 ))}
               </Select>
-            </div>
-            <div className="md:col-span-2">
+            </Field>
+            <Field className="md:col-span-2">
               <Label>Description</Label>
               <Textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What needs to be done?" />
-            </div>
+            </Field>
             <div className="md:col-span-2">
               <ErrorText>{error}</ErrorText>
               <Button type="submit" disabled={loading}>
@@ -319,7 +319,7 @@ export default function TasksPage() {
             ))}
             {sortedTasks.length === 0 && (
               <tr>
-                <td colSpan={colSpan} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={colSpan} className="px-4 py-8 text-center text-slate-500">
                   No tasks in this status yet.
                 </td>
               </tr>

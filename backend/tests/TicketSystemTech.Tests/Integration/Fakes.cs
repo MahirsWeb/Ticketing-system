@@ -28,14 +28,29 @@ public sealed class FakeChatCompletionService : IChatCompletionService
     }
 }
 
-/// <summary>Never sends anything; remembers what would have been.</summary>
-public sealed class RecordingEmailSender : IEmailSender
+/// <summary>Stands in for Brevo: sends nothing, remembers what it was asked to send, and answers as the test says.</summary>
+public sealed class FakeEmailTransport : IEmailTransport
 {
-    public List<(string To, string Subject)> Sent { get; } = new();
+    private readonly object _gate = new();
+    private readonly List<(string To, string Subject)> _calls = new();
 
-    public Task SendAsync(string toEmail, string subject, string htmlBody, CancellationToken ct = default)
+    /// <summary>What to answer for a given recipient. Throwing here stands for a transport that blows up.</summary>
+    public Func<string, EmailSendResult> Answer { get; set; } = _ => EmailSendResult.Sent();
+
+    public IReadOnlyList<(string To, string Subject)> Calls
     {
-        lock (Sent) Sent.Add((toEmail, subject));
-        return Task.CompletedTask;
+        get { lock (_gate) return _calls.ToList(); }
+    }
+
+    public void Reset()
+    {
+        lock (_gate) _calls.Clear();
+        Answer = _ => EmailSendResult.Sent();
+    }
+
+    public Task<EmailSendResult> SendAsync(string toEmail, string subject, string htmlBody, CancellationToken ct = default)
+    {
+        lock (_gate) _calls.Add((toEmail, subject));
+        return Task.FromResult(Answer(toEmail));
     }
 }

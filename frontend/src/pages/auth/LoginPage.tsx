@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { authApi } from '../../api/auth';
 import { useAuthStore } from '../../store/authStore';
+import { safeReturnPath } from '../../lib/returnPath';
 import { Button, ErrorText, IconInput } from '../../components/ui';
 import { AuthSplitLayout } from '../../layouts/AuthSplitLayout';
 import { useLanguage } from '../../i18n/LanguageContext';
@@ -22,11 +23,6 @@ function LockIcon() {
       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
     </svg>
   );
-}
-
-/** Only an in-app path may be returned to: never an absolute URL or a protocol-relative "//host". */
-function safeReturnPath(from: unknown): string {
-  return typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') && !from.startsWith('/login') ? from : '/';
 }
 
 export default function LoginPage() {

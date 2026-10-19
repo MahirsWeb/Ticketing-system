@@ -7,7 +7,7 @@ import { usersApi } from '../../api/users';
 import { lookupsApi } from '../../api/lookups';
 import { ticketsApi } from '../../api/tickets';
 import type { CompanyItemFull, CreatedUserResponse, DepartmentItemFull, SubBranchItemFull, TicketListItem, UserListItemDto, UserRole } from '../../types';
-import { Button, Card, ErrorText, Input, Label, PriorityBadge, Select, Spinner, StatusBadge, StatusPill } from '../../components/ui';
+import { Button, Card, ErrorText, Input, Label, PriorityBadge, Select, Spinner, StatusBadge, StatusPill, Field } from '../../components/ui';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { UserAvatar } from '../../components/UserAvatar';
 import { TempPasswordModal } from './TempPasswordModal';
@@ -235,7 +235,7 @@ export default function UserDetailPage() {
                 <div key={i} className="space-y-3">
                   {col.map((f) => (
                     <div key={f.label}>
-                      <div className="text-xs font-semibold uppercase text-slate-400">{f.label}</div>
+                      <div className="text-xs font-semibold uppercase text-slate-500">{f.label}</div>
                       <div className="text-slate-800">{f.value}</div>
                     </div>
                   ))}
@@ -257,24 +257,24 @@ export default function UserDetailPage() {
         <div className={clsx('grid transition-all duration-200 ease-out', editing ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0')}>
           <div className="overflow-hidden">
             <form onSubmit={handleSaveEdit} className="mt-5 grid grid-cols-1 gap-4 border-t border-slate-100 pt-5 sm:grid-cols-2">
-              <div>
+              <Field>
                 <Label>First name</Label>
                 <Input required maxLength={25} value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-              </div>
-              <div>
+              </Field>
+              <Field>
                 <Label>Last name</Label>
                 <Input required maxLength={30} value={lastName} onChange={(e) => setLastName(e.target.value)} />
-              </div>
-              <div>
+              </Field>
+              <Field>
                 <Label>Account type</Label>
                 <Select value={accountType} onChange={(e) => setAccountType(e.target.value as UserRole)}>
                   <option value="Client">Client</option>
                   <option value="Employee">Employee</option>
                   <option value="Admin">Admin</option>
                 </Select>
-              </div>
+              </Field>
               {accountType === 'Client' && (
-                <div>
+                <Field>
                   <Label>Company</Label>
                   <Select value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
                     <option value="">Select a company…</option>
@@ -284,10 +284,10 @@ export default function UserDetailPage() {
                       </option>
                     ))}
                   </Select>
-                </div>
+                </Field>
               )}
               {needsBranch && (
-                <div>
+                <Field>
                   <Label>Branch</Label>
                   <Select
                     value={departmentId}
@@ -303,10 +303,10 @@ export default function UserDetailPage() {
                       </option>
                     ))}
                   </Select>
-                </div>
+                </Field>
               )}
               {needsBranch && availableSubBranches.length > 0 && (
-                <div>
+                <Field>
                   <Label>Sub-branch</Label>
                   <Select value={subBranchId} onChange={(e) => setSubBranchId(e.target.value)}>
                     <option value="">Select a sub-branch…</option>
@@ -316,7 +316,7 @@ export default function UserDetailPage() {
                       </option>
                     ))}
                   </Select>
-                </div>
+                </Field>
               )}
               <div className="sm:col-span-2">
                 <ErrorText>{editError}</ErrorText>
@@ -394,7 +394,7 @@ export default function UserDetailPage() {
                 ))}
                 {tickets.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-3 py-8 text-center text-slate-400">
+                    <td colSpan={6} className="px-3 py-8 text-center text-slate-500">
                       No tickets found.
                     </td>
                   </tr>

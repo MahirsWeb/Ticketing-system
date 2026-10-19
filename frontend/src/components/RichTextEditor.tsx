@@ -14,6 +14,8 @@ interface Props {
   placeholder?: string;
   /** Called with any files pasted (e.g. a screenshot) or picked via the toolbar's attach button. */
   onFilesSelected?: (files: File[]) => void;
+  /** The editor is a contenteditable region, not a form control, so a <label for> cannot name it: it carries its own name. */
+  ariaLabel?: string;
 }
 
 function ToolbarButton({
@@ -97,7 +99,7 @@ function Toolbar({ editor, onAttachClick }: { editor: Editor; onAttachClick?: ()
   );
 }
 
-export function RichTextEditor({ value, onChange, placeholder, onFilesSelected }: Props) {
+export function RichTextEditor({ value, onChange, placeholder, onFilesSelected, ariaLabel }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const editor = useEditor({
@@ -115,6 +117,9 @@ export function RichTextEditor({ value, onChange, placeholder, onFilesSelected }
       attributes: {
         class: 'tiptap prose prose-sm max-w-none px-3 py-2',
         'data-placeholder': placeholder ?? '',
+        role: 'textbox',
+        'aria-multiline': 'true',
+        ...(ariaLabel ? { 'aria-label': ariaLabel } : {}),
       },
       handlePaste: (_view, event) => {
         if (!onFilesSelected) return false;

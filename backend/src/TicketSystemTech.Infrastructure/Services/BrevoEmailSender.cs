@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
@@ -8,8 +9,12 @@ using TicketSystemTech.Infrastructure.Persistence;
 
 namespace TicketSystemTech.Infrastructure.Services;
 
-/// <summary>Sends transactional emails through the Brevo (formerly Sendinblue) HTTP API.</summary>
-public class BrevoEmailSender : IEmailSender
+/// <summary>
+/// Delivers e-mail through the Brevo (formerly Sendinblue) HTTP API. It is only called by the outbox worker, which is why it
+/// reports what happened instead of hiding failures: "try again later" and "do not bother" are different answers.
+/// The recipient's address is never written to the log (the outbox row id, logged by the worker, identifies the message).
+/// </summary>
+public class BrevoEmailSender : IEmailTransport
 {
     private readonly HttpClient _httpClient;
     private readonly IConfiguration _configuration;
@@ -26,7 +31,7 @@ public class BrevoEmailSender : IEmailSender
         _piiProtector = piiProtector;
     }
 
-    public async Task SendAsync(string toEmail, string subject, string htmlBody, CancellationToken ct = default)
+    public async Task<EmailSendResult> SendAsync(string toEmail, string subject, string htmlBody, CancellationToken ct = default)
     {
         // Centralized guard: an inactive account's mailbox no longer receives anything from the app,
         // regardless of which flow triggered the send (ticket update, task assignment, invite, ...).
@@ -34,21 +39,29 @@ public class BrevoEmailSender : IEmailSender
         var recipientIsInactive = await _db.Users.AnyAsync(u => u.NormalizedEmail == normalizedEmail && !u.IsActive, ct);
         if (recipientIsInactive)
         {
-            _logger.LogInformation("Skipped email to {Email} — recipient account is inactive.", toEmail);
-            return;
+            _logger.LogInformation("Skipped an email — the recipient's account is inactive.");
+            return EmailSendResult.Skipped("The recipient's account is inactive.");
         }
 
         var apiKey = _configuration["Brevo:ApiKey"];
-        var senderEmail = _configuration["Brevo:SenderEmail"] ?? "no-reply@ticketsystemtech.app";
+        var senderEmail = _configuration["Brevo:SenderEmail"];
         var senderName = _configuration["Brevo:SenderName"] ?? "Ticket System Tech";
 
         if (string.IsNullOrWhiteSpace(apiKey))
         {
-            _logger.LogWarning("Brevo:ApiKey is not configured — email to {Email} with subject '{Subject}' was NOT sent.", toEmail, subject);
-            return;
+            _logger.LogWarning("Brevo:ApiKey is not configured — an email with subject '{Subject}' was NOT sent.", subject);
+            return EmailSendResult.Skipped("Brevo:ApiKey is not configured.");
         }
 
-        var request = new HttpRequestMessage(HttpMethod.Post, "https://api.brevo.com/v3/smtp/email");
+        // There is no default sender address: Brevo only sends from an address that has been verified in the account, so any
+        // address picked here would be refused, and a real one in the source code would be somebody's private address.
+        if (string.IsNullOrWhiteSpace(senderEmail))
+        {
+            _logger.LogWarning("Brevo:SenderEmail is not configured — an email with subject '{Subject}' was NOT sent.", subject);
+            return EmailSendResult.Skipped("Brevo:SenderEmail is not configured.");
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.brevo.com/v3/smtp/email");
         request.Headers.TryAddWithoutValidation("api-key", apiKey);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         request.Content = JsonContent.Create(new
@@ -59,31 +72,31 @@ public class BrevoEmailSender : IEmailSender
             htmlContent = htmlBody
         });
 
-        // Email is a side effect of an action that has ALREADY been committed. If this threw, the caller's request
-        // would fail with a 500 for a write that succeeded, and the user would naturally repeat it (a second ticket).
-        // So transport failures are logged and swallowed, exactly like an HTTP error status from Brevo is.
         try
         {
-            var response = await _httpClient.SendAsync(request, ct);
-            if (!response.IsSuccessStatusCode)
-            {
-                var body = await response.Content.ReadAsStringAsync(ct);
-                _logger.LogError("Brevo email send failed ({Status}) to {Email}: {Body}", response.StatusCode, toEmail, body);
-            }
+            using var response = await _httpClient.SendAsync(request, ct);
+            if (response.IsSuccessStatusCode) return EmailSendResult.Sent();
+
+            var body = await response.Content.ReadAsStringAsync(ct);
+            _logger.LogError("Brevo email send failed ({Status}): {Body}", response.StatusCode, body);
+
+            // The provider is busy or broken: another try later may work. A refusal of the message itself (bad address,
+            // unverified sender, invalid key) will be refused again, so it is final.
+            var detail = $"Brevo answered {(int)response.StatusCode}";
+            return response.StatusCode == HttpStatusCode.TooManyRequests || (int)response.StatusCode >= 500
+                ? EmailSendResult.Retry(detail)
+                : EmailSendResult.Failed(detail);
         }
-        catch (HttpRequestException ex)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            _logger.LogError(ex, "Brevo email send failed (network) to {Email}", toEmail);
+            throw; // shutting down: the message stays in the outbox and is picked up after the restart
         }
-        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
+        catch (Exception ex)
         {
-            _logger.LogError(ex, "Brevo email send timed out to {Email}", toEmail);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            // The HTTP resilience pipeline reports its own timeouts and an open circuit breaker as exceptions of its
-            // own (neither is an HttpRequestException). The email is a best-effort side effect: log it, do not fail.
-            _logger.LogError(ex, "Brevo email send to {Email} was not attempted or did not finish ({Reason})", toEmail, ex.GetType().Name);
+            // Network errors, timeouts, and the resilience pipeline's own exceptions (an open circuit breaker is one): the
+            // message did not go out, nothing says it never will.
+            _logger.LogError(ex, "Brevo email send did not finish ({Reason})", ex.GetType().Name);
+            return EmailSendResult.Retry(ex.GetType().Name);
         }
     }
 }

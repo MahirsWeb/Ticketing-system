@@ -33,9 +33,9 @@ const GROUP_BY_OPTIONS: { value: 'week' | 'month' | 'quarter' | 'year'; label: s
 function KpiCard({ label, value, hint, accent }: { label: string; value: string | number; hint: string; accent?: string }) {
   return (
     <Card className="p-4" title={hint}>
-      <div className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+      <div className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
         {label}
-        <span className="flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full border border-slate-300 text-[9px] font-bold text-slate-400">
+        <span className="flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full border border-slate-300 text-[9px] font-bold text-slate-500">
           ?
         </span>
       </div>
@@ -258,9 +258,9 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-xl font-bold text-slate-900">Dashboard</h1>
           {!isAdmin && user?.departmentName && (
-            <p className="text-xs text-slate-400">Showing data for your branch: {user.departmentName}</p>
+            <p className="text-xs text-slate-500">Showing data for your branch: {user.departmentName}</p>
           )}
-          {isAdmin && <p className="text-xs text-slate-400">Global statistics across all branches</p>}
+          {isAdmin && <p className="text-xs text-slate-500">Global statistics across all branches</p>}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {isAdmin && (
@@ -331,7 +331,7 @@ export default function DashboardPage() {
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Daily timeline</h2>
-            <p className="text-xs text-slate-400">Tickets and tasks for one person, on the same hour axis — see what was squeezed in alongside a ticket.</p>
+            <p className="text-xs text-slate-500">Tickets and tasks for one person, on the same hour axis — see what was squeezed in alongside a ticket.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {isAdmin && (
@@ -390,13 +390,13 @@ export default function DashboardPage() {
         </div>
         {ganttMode === 'branch' ? (
           !ganttDepartmentId ? (
-            <p className="py-10 text-center text-sm text-slate-400">Choose a branch above to see everyone's timeline.</p>
+            <p className="py-10 text-center text-sm text-slate-500">Choose a branch above to see everyone's timeline.</p>
           ) : ganttLoading ? (
-            <p className="py-10 text-center text-sm text-slate-400">Loading…</p>
+            <p className="py-10 text-center text-sm text-slate-500">Loading…</p>
           ) : ganttError ? (
             <ErrorText>{ganttError}</ErrorText>
           ) : !ganttBranchData || ganttBranchData.users.length === 0 ? (
-            <p className="py-10 text-center text-sm text-slate-400">No active employees in this branch.</p>
+            <p className="py-10 text-center text-sm text-slate-500">No active employees in this branch.</p>
           ) : (
             <div className="space-y-5">
               {ganttBranchData.users.map((u) => (
@@ -408,9 +408,9 @@ export default function DashboardPage() {
             </div>
           )
         ) : !ganttUserId ? (
-          <p className="py-10 text-center text-sm text-slate-400">Choose a person above to see their timeline.</p>
+          <p className="py-10 text-center text-sm text-slate-500">Choose a person above to see their timeline.</p>
         ) : ganttLoading ? (
-          <p className="py-10 text-center text-sm text-slate-400">Loading…</p>
+          <p className="py-10 text-center text-sm text-slate-500">Loading…</p>
         ) : ganttError ? (
           <ErrorText>{ganttError}</ErrorText>
         ) : (
@@ -431,7 +431,7 @@ export default function DashboardPage() {
                   setTo(prev.to);
                   setZoomStack([]);
                 }}
-                className="text-xs text-slate-400 hover:text-slate-600 hover:underline"
+                className="text-xs text-slate-500 hover:text-slate-600 hover:underline"
               >
                 Reset zoom
               </button>
@@ -442,7 +442,7 @@ export default function DashboardPage() {
             </label>
           </div>
         </div>
-        <p className="mb-3 text-xs text-slate-400">Drag to zoom into a range · right-click to zoom back out</p>
+        <p className="mb-3 text-xs text-slate-500">Drag to zoom into a range · right-click to zoom back out</p>
         <div onContextMenu={handleChartContextMenu} className="select-none">
           <ResponsiveContainer width="100%" height={280}>
             <LineChart
@@ -521,9 +521,9 @@ export default function DashboardPage() {
 
       <Card className="p-5">
         <h2 className="mb-1 text-sm font-bold uppercase tracking-wide text-slate-500">Top issues (by help topic)</h2>
-        <p className="mb-4 text-xs text-slate-400">What's causing the most tickets in this period.</p>
+        <p className="mb-4 text-xs text-slate-500">What's causing the most tickets in this period.</p>
         {topIssues.length === 0 ? (
-          <p className="text-sm text-slate-400">No routed tickets in this period yet.</p>
+          <p className="text-sm text-slate-500">No routed tickets in this period yet.</p>
         ) : (
           <ResponsiveContainer width="100%" height={Math.max(120, topIssues.length * 34)}>
             <BarChart data={topIssues} layout="vertical" margin={{ left: 24 }}>
@@ -540,7 +540,7 @@ export default function DashboardPage() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h3 className="text-sm font-semibold text-slate-700">AI insights</h3>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500">
                 {canRunAiInsights
                   ? 'Ask AI to summarize what went wrong most in the selected period and what to do about it.'
                   : `Select a period of at least ${MIN_AI_INSIGHTS_DAYS} days to run AI analysis.`}
@@ -560,7 +560,7 @@ export default function DashboardPage() {
           <Card className="p-5">
             <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-500">By branch</h2>
             {branchBreakdown.length === 0 ? (
-              <p className="text-sm text-slate-400">No routed tickets in this period yet.</p>
+              <p className="text-sm text-slate-500">No routed tickets in this period yet.</p>
             ) : (
               <TopFiveList
                 items={branchBreakdown}
@@ -583,7 +583,7 @@ export default function DashboardPage() {
         <Card className="p-5">
           <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-500">Top agents (closed tickets)</h2>
           {leaderboard.length === 0 ? (
-            <p className="text-sm text-slate-400">No closed tickets in this period yet.</p>
+            <p className="text-sm text-slate-500">No closed tickets in this period yet.</p>
           ) : (
             <TopFiveList
               items={leaderboard}
@@ -591,7 +591,7 @@ export default function DashboardPage() {
               render={(entry, i) => (
                 <div className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm">
                   <span>
-                    <span className="mr-2 font-bold text-slate-400">#{i + 1}</span>
+                    <span className="mr-2 font-bold text-slate-500">#{i + 1}</span>
                     {entry.name}
                   </span>
                   <span className="font-semibold text-slate-800">{entry.closedCount} closed</span>

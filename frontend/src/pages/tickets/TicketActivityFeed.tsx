@@ -58,11 +58,11 @@ export function TicketActivityFeed({
   return (
     <div className="space-y-4">
       <div className="space-y-3">
-        {messages.length === 0 && <p className="text-sm text-slate-400">No activity yet.</p>}
+        {messages.length === 0 && <p className="text-sm text-slate-500">No activity yet.</p>}
         {messages.map((m) => {
           if (m.type === 'SystemEvent') {
             return (
-              <div key={m.id} className="flex items-center justify-center gap-2 py-1 text-center text-xs text-slate-400">
+              <div key={m.id} className="flex items-center justify-center gap-2 py-1 text-center text-xs text-slate-500">
                 <span className="h-px flex-1 bg-slate-100" />
                 <span className="whitespace-nowrap" dangerouslySetInnerHTML={{ __html: sanitizeHtml(m.bodyHtml) }} />
                 <span>· {format(new Date(m.createdAt), 'dd.MM.yyyy HH:mm')}</span>
@@ -134,7 +134,7 @@ export function TicketActivityFeed({
               {files.map((f, i) => (
                 <li key={`${f.name}-${i}`} className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">
                   📎 {f.name}
-                  <button type="button" onClick={() => removeFile(i)} className="ml-1 font-bold text-slate-400 hover:text-red-600">
+                  <button type="button" onClick={() => removeFile(i)} className="ml-1 font-bold text-slate-500 hover:text-red-600">
                     ×
                   </button>
                 </li>

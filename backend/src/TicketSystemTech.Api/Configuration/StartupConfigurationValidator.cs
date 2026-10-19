@@ -33,6 +33,15 @@ public static class StartupConfigurationValidator
                 problems.Add($"Pii:HashKey is too short: at least {MinSecretLength} characters are required.");
         }
 
+        // A typo in a proxy address would otherwise surface as a FormatException from deep inside the startup code.
+        foreach (var proxy in configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? Array.Empty<string>())
+            if (!System.Net.IPAddress.TryParse(proxy, out _))
+                problems.Add($"ForwardedHeaders:KnownProxies contains '{proxy}', which is not an IP address.");
+
+        foreach (var network in configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>() ?? Array.Empty<string>())
+            if (!System.Net.IPNetwork.TryParse(network, out _))
+                problems.Add($"ForwardedHeaders:KnownNetworks contains '{network}', which is not a network such as 10.0.0.0/8.");
+
         return problems;
     }
 

@@ -156,7 +156,7 @@ export default function EmailsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-900">Emails</h1>
-          <p className="text-xs text-slate-400">Connected: {connectedEmail}</p>
+          <p className="text-xs text-slate-500">Connected: {connectedEmail}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="secondary" onClick={refreshMessages}>
@@ -188,7 +188,7 @@ export default function EmailsPage() {
       <div className="flex gap-4">
         <Card className="w-96 shrink-0 divide-y divide-slate-100 overflow-y-auto" style={{ maxHeight: '32rem' }}>
           {visible.length === 0 && (
-            <p className="px-4 py-8 text-center text-sm text-slate-400">
+            <p className="px-4 py-8 text-center text-sm text-slate-500">
               {tab === 'inbox' ? 'No emails found.' : 'No emails marked as tickets yet.'}
             </p>
           )}
@@ -213,7 +213,7 @@ export default function EmailsPage() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate text-xs font-semibold text-slate-800">{m.fromName || m.fromEmail}</span>
-                  <span className="shrink-0 text-[11px] text-slate-400">
+                  <span className="shrink-0 text-[11px] text-slate-500">
                     {formatDistanceToNow(new Date(m.receivedAtUtc), { addSuffix: true })}
                   </span>
                 </div>
@@ -237,7 +237,7 @@ export default function EmailsPage() {
 
         <Card className="flex-1 p-5">
           {!selected ? (
-            <p className="py-16 text-center text-sm text-slate-400">Select an email to read it.</p>
+            <p className="py-16 text-center text-sm text-slate-500">Select an email to read it.</p>
           ) : detailLoading || !detail ? (
             <div className="flex justify-center py-16">
               <Spinner className="h-6 w-6 text-blue-700" />

@@ -1,6 +1,15 @@
 **/bin/
 **/obj/
 **/.vs/
+*.user
+
+# Never part of an image: local settings with real secrets, and anything people uploaded while developing.
+**/appsettings.Development.json
+**/appsettings.Local.json
+**/.env
+**/.env.*
+**/App_Data/
 **/wwwroot/uploads/*
 !**/wwwroot/uploads/.gitkeep
-*.user
+**/wwwroot/avatars/*
+!**/wwwroot/avatars/.gitkeep

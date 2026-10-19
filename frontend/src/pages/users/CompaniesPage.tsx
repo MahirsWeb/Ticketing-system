@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { lookupsApi } from '../../api/lookups';
 import type { CompanyItemFull } from '../../types';
-import { Button, Card, ErrorText, Input, Label, StatusPill } from '../../components/ui';
+import { Button, Card, ErrorText, Input, Label, StatusPill, Field } from '../../components/ui';
 
 export default function CompaniesPage() {
   const [companies, setCompanies] = useState<CompanyItemFull[]>([]);
@@ -49,18 +49,18 @@ export default function CompaniesPage() {
       <Card className="p-5">
         <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-500">Add a company</h2>
         <form onSubmit={handleCreate} className="grid grid-cols-3 gap-4">
-          <div>
+          <Field>
             <Label>Name</Label>
             <Input required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div>
+          </Field>
+          <Field>
             <Label>Address (optional)</Label>
             <Input maxLength={100} value={address} onChange={(e) => setAddress(e.target.value)} />
-          </div>
-          <div>
+          </Field>
+          <Field>
             <Label>Contact info (optional)</Label>
             <Input maxLength={120} value={contactInfo} onChange={(e) => setContactInfo(e.target.value)} />
-          </div>
+          </Field>
           <div className="col-span-3">
             <ErrorText>{error}</ErrorText>
             <Button type="submit" disabled={loading}>
@@ -80,7 +80,7 @@ export default function CompaniesPage() {
             <div>
               <div className="font-medium text-slate-800">{c.name}</div>
               {(c.address || c.contactInfo) && (
-                <div className="mt-0.5 text-xs text-slate-400">{[c.address, c.contactInfo].filter(Boolean).join(' · ')}</div>
+                <div className="mt-0.5 text-xs text-slate-500">{[c.address, c.contactInfo].filter(Boolean).join(' · ')}</div>
               )}
             </div>
             <div className="flex items-center gap-3">
@@ -89,7 +89,7 @@ export default function CompaniesPage() {
             </div>
           </Link>
         ))}
-        {companies.length === 0 && <div className="px-4 py-6 text-center text-sm text-slate-400">No companies yet.</div>}
+        {companies.length === 0 && <div className="px-4 py-6 text-center text-sm text-slate-500">No companies yet.</div>}
       </Card>
     </div>
   );

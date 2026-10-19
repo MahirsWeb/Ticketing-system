@@ -36,7 +36,7 @@ function durationOf(session: TicketWorkSessionDto, now: number) {
 }
 
 /// Always-24h time input (native <input type="time"> renders AM/PM per OS locale, so we build our own).
-function TimeInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function TimeInput({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
   const [draft, setDraft] = useState(value);
 
   // The form is cleared from outside after a save or a cancel; what is typed here has to follow.
@@ -63,6 +63,7 @@ function TimeInput({ value, onChange }: { value: string; onChange: (v: string) =
   return (
     <input
       type="text"
+      aria-label={label}
       inputMode="numeric"
       placeholder="00:00"
       value={draft}
@@ -159,12 +160,12 @@ export function WorkTimeEditor({ ticket, onChanged }: { ticket: TicketDetailDto;
   return (
     <div className="rounded-lg border border-slate-100 bg-slate-50/60 p-3">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Work time</div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Work time</div>
         {ticket.workSessions.length > 0 && <div className="text-xs font-medium text-slate-500">Total: {formatDuration(total)}</div>}
       </div>
 
       {ticket.workSessions.length === 0 ? (
-        <p className="mb-3 text-sm text-slate-400">No work logged yet.</p>
+        <p className="mb-3 text-sm text-slate-500">No work logged yet.</p>
       ) : (
         <ul className="mb-3 divide-y divide-slate-100 rounded-md border border-slate-100 bg-white text-sm">
           {ticket.workSessions.map((s) => (
@@ -175,7 +176,7 @@ export function WorkTimeEditor({ ticket, onChanged }: { ticket: TicketDetailDto;
                   {format(new Date(s.startedAtUtc), 'dd.MM.yyyy HH:mm')} –{' '}
                   {s.endedAtUtc ? format(new Date(s.endedAtUtc), 'dd.MM.yyyy HH:mm') : <span className="font-semibold text-green-700">running</span>}
                 </span>
-                <span className="ml-2 text-xs text-slate-400">{formatDuration(durationOf(s, now))}</span>
+                <span className="ml-2 text-xs text-slate-500">{formatDuration(durationOf(s, now))}</span>
               </div>
               <div className="flex items-center gap-1">
                 {!s.endedAtUtc && (
@@ -201,18 +202,18 @@ export function WorkTimeEditor({ ticket, onChanged }: { ticket: TicketDetailDto;
             {editingId ? 'Change this session' : `Log work by ${ticket.assignedToName}`}
           </div>
           <div className="flex flex-wrap items-end gap-4">
-            <div>
+            <div role="group" aria-label="Started">
               <Label>Started</Label>
               <div className="flex items-center gap-1.5">
-                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={dateInputClass} />
-                <TimeInput value={startTime} onChange={setStartTime} />
+                <input type="date" aria-label="Started date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={dateInputClass} />
+                <TimeInput label="Started time" value={startTime} onChange={setStartTime} />
               </div>
             </div>
-            <div>
+            <div role="group" aria-label="Ended">
               <Label>Ended (empty = still working)</Label>
               <div className="flex items-center gap-1.5">
-                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={dateInputClass} />
-                <TimeInput value={endTime} onChange={setEndTime} />
+                <input type="date" aria-label="Ended date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={dateInputClass} />
+                <TimeInput label="Ended time" value={endTime} onChange={setEndTime} />
               </div>
             </div>
             <Button type="button" variant="secondary" className="text-xs" disabled={saving} onClick={handleSave}>
@@ -225,12 +226,12 @@ export function WorkTimeEditor({ ticket, onChanged }: { ticket: TicketDetailDto;
             )}
             {draftDuration && <span className="text-xs font-medium text-slate-500">Duration: {draftDuration}</span>}
           </div>
-          <p className="mt-2 text-xs text-slate-400">
+          <p className="mt-2 text-xs text-slate-500">
             Time is logged for the main assignee only. People added as extra help are listed on the ticket but log no time of their own.
           </p>
         </div>
       ) : (
-        <p className="text-xs text-slate-400">Assign the ticket to somebody to log work time on it.</p>
+        <p className="text-xs text-slate-500">Assign the ticket to somebody to log work time on it.</p>
       )}
 
       <ErrorText>{error}</ErrorText>

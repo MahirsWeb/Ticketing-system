@@ -5,7 +5,7 @@ import { useAuthStore } from '../../store/authStore';
 import { usersApi } from '../../api/users';
 import { lookupsApi } from '../../api/lookups';
 import type { CompanyItemFull, CreatedUserResponse, DepartmentItemFull, SubBranchItemFull, UserPageDto, UserRole } from '../../types';
-import { Button, Card, ErrorText, Input, Label, Select, StatusPill } from '../../components/ui';
+import { Button, Card, ErrorText, Input, Label, Select, StatusPill, Field } from '../../components/ui';
 import { TempPasswordModal } from './TempPasswordModal';
 import CompaniesPage from './CompaniesPage';
 
@@ -170,19 +170,19 @@ export default function UsersPage() {
       <Card className="p-5">
         <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-500">Create account</h2>
         <form onSubmit={handleCreate} className="grid grid-cols-2 gap-4">
-          <div>
+          <Field>
             <Label>First name</Label>
             <Input required maxLength={25} value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-          </div>
-          <div>
+          </Field>
+          <Field>
             <Label>Last name</Label>
             <Input required maxLength={30} value={lastName} onChange={(e) => setLastName(e.target.value)} />
-          </div>
-          <div>
+          </Field>
+          <Field>
             <Label>Email</Label>
             <Input type="email" required maxLength={100} value={email} onChange={(e) => setEmail(e.target.value)} />
-          </div>
-          <div>
+          </Field>
+          <Field>
             <Label>Account type</Label>
             <Select value={accountType} onChange={(e) => setAccountType(e.target.value as any)}>
               <option value="Client">Client</option>
@@ -193,9 +193,9 @@ export default function UsersPage() {
                 </>
               )}
             </Select>
-          </div>
+          </Field>
           {accountType === 'Client' && (
-            <div>
+            <Field>
               <Label>Company</Label>
               <Select value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
                 <option value="">Select a company…</option>
@@ -205,10 +205,10 @@ export default function UsersPage() {
                   </option>
                 ))}
               </Select>
-            </div>
+            </Field>
           )}
           {needsBranch && (
-            <div>
+            <Field>
               <Label>Branch</Label>
               <Select
                 value={departmentId}
@@ -224,10 +224,10 @@ export default function UsersPage() {
                   </option>
                 ))}
               </Select>
-            </div>
+            </Field>
           )}
           {needsBranch && availableSubBranches.length > 0 && (
-            <div>
+            <Field>
               <Label>Sub-branch</Label>
               <Select value={subBranchId} onChange={(e) => setSubBranchId(e.target.value)}>
                 <option value="">Select a sub-branch…</option>
@@ -237,7 +237,7 @@ export default function UsersPage() {
                   </option>
                 ))}
               </Select>
-            </div>
+            </Field>
           )}
           <div className="col-span-2">
             <ErrorText>{error}</ErrorText>
@@ -272,13 +272,13 @@ export default function UsersPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <span className="text-xs text-slate-400">
+        <span className="text-xs text-slate-500">
           {pageData ? `${pageData.totalCount} ${pageData.totalCount === 1 ? 'account' : 'accounts'}${debouncedSearch ? ' match' : ''}` : ''}
         </span>
       </div>
       <ErrorText>{listError}</ErrorText>
       {!isAdmin && (
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-slate-500">
           You see the clients who have tickets in your branch. To open a ticket for any other client, use "New ticket on behalf" and
           type their full email address.
         </p>
@@ -314,7 +314,7 @@ export default function UsersPage() {
             ))}
             {visibleUsers.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
                   {debouncedSearch ? 'No accounts match your search.' : 'No accounts here yet.'}
                 </td>
               </tr>

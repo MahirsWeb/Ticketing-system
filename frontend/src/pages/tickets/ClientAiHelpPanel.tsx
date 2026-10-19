@@ -66,11 +66,11 @@ export function ClientAiHelpPanel({ initialQuery = '' }: { initialQuery?: string
       )}
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">{t('aiHelp_panelTitle')}</h2>
-        <button className="text-xs text-slate-400 hover:underline" onClick={() => setOpen(false)}>
+        <button className="text-xs text-slate-500 hover:underline" onClick={() => setOpen(false)}>
           {t('aiHelp_hide')}
         </button>
       </div>
-      <p className="mb-3 text-xs text-slate-400">{t('aiHelp_disclaimer')}</p>
+      <p className="mb-3 text-xs text-slate-500">{t('aiHelp_disclaimer')}</p>
       <form onSubmit={handleAsk} className="mb-3 flex gap-2">
         <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('aiHelp_placeholder')} />
         {loading ? (
@@ -96,7 +96,7 @@ export function ClientAiHelpPanel({ initialQuery = '' }: { initialQuery?: string
 
       {!loading && sources.length > 0 && (
         <>
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{t('aiHelp_sourcesUsed')}</div>
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t('aiHelp_sourcesUsed')}</div>
           <ul className="space-y-2">
             {sources.map((r) => (
               <li key={r.documentId} className="rounded-md border border-slate-200 p-3 text-sm">

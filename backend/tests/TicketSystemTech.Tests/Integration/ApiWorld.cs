@@ -91,6 +91,9 @@ public sealed class ApiWorld : IAsyncLifetime
         SetEnvironment("Pii__HashKey", new string('h', 48));
         SetEnvironment("Storage__UploadsPath", Path.Combine(Path.GetTempPath(), _database));
         SetEnvironment("SeedAdmin__Email", "");
+        // The tests run the e-mail worker themselves, at moments they choose; a worker on a timer would send messages
+        // while a test is still looking at them.
+        SetEnvironment("Email__Outbox__Enabled", "false");
 
         Factory = new ApiFactory();
         _client = Factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });

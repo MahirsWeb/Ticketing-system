@@ -5,7 +5,7 @@ import { lookupsApi } from '../../api/lookups';
 import { ticketsApi } from '../../api/tickets';
 import { emailIntegrationApi } from '../../api/emailIntegration';
 import type { ClientLookupResult, DepartmentItemFull, LookupItem, SlaPlanItem, SubBranchItemFull, TicketPriority, TicketSource, UserListItemDto } from '../../types';
-import { Button, Card, ErrorText, Input, Label, Select } from '../../components/ui';
+import { Button, Card, ErrorText, Input, Label, Select, Field } from '../../components/ui';
 import { RichTextEditor } from '../../components/RichTextEditor';
 import { useAuthStore } from '../../store/authStore';
 import { newIdempotencyKey } from '../../lib/idempotency';
@@ -257,13 +257,14 @@ export default function NewTicketOnBehalfPage() {
         <Card className="p-5">
           <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-500">2. Describe the issue &amp; open the ticket</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
+            <Field>
               <Label>Title *</Label>
               <Input required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Short summary of the issue" />
-            </div>
+            </Field>
             <div>
               <Label>Description *</Label>
               <RichTextEditor
+                ariaLabel="Description"
                 value={description}
                 onChange={setDescription}
                 onFilesSelected={addFiles}
@@ -274,7 +275,7 @@ export default function NewTicketOnBehalfPage() {
                   {files.map((f, i) => (
                     <li key={`${f.name}-${i}`} className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">
                       📎 {f.name}
-                      <button type="button" onClick={() => removeFile(i)} className="ml-1 font-bold text-slate-400 hover:text-red-600">
+                      <button type="button" onClick={() => removeFile(i)} className="ml-1 font-bold text-slate-500 hover:text-red-600">
                         ×
                       </button>
                     </li>
@@ -284,7 +285,7 @@ export default function NewTicketOnBehalfPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div>
+              <Field>
                 <Label>Ticket source</Label>
                 <Select value={source} onChange={(e) => setSource(e.target.value as TicketSource)}>
                   {SOURCES.map((s) => (
@@ -293,8 +294,8 @@ export default function NewTicketOnBehalfPage() {
                     </option>
                   ))}
                 </Select>
-              </div>
-              <div>
+              </Field>
+              <Field>
                 <Label>Help topic</Label>
                 <Select value={helpTopicId} onChange={(e) => setHelpTopicId(e.target.value)}>
                   {helpTopics.map((t) => (
@@ -303,8 +304,8 @@ export default function NewTicketOnBehalfPage() {
                     </option>
                   ))}
                 </Select>
-              </div>
-              <div>
+              </Field>
+              <Field>
                 <Label>Branch</Label>
                 {isAdmin ? (
                   <Select value={departmentId} onChange={(e) => handleDepartmentChange(e.target.value)}>
@@ -320,9 +321,9 @@ export default function NewTicketOnBehalfPage() {
                     {user?.departmentName ?? 'No branch assigned'}
                   </div>
                 )}
-              </div>
+              </Field>
               {subBranches.length > 0 && (
-                <div>
+                <Field>
                   <Label>Sub-branch</Label>
                   <Select value={subBranchId} onChange={(e) => setSubBranchId(e.target.value)}>
                     <option value="">Select a sub-branch…</option>
@@ -332,9 +333,9 @@ export default function NewTicketOnBehalfPage() {
                       </option>
                     ))}
                   </Select>
-                </div>
+                </Field>
               )}
-              <div>
+              <Field>
                 <Label>SLA plan</Label>
                 <Select value={slaPlanId} onChange={(e) => setSlaPlanId(e.target.value)}>
                   {slaPlans.map((s) => (
@@ -343,8 +344,8 @@ export default function NewTicketOnBehalfPage() {
                     </option>
                   ))}
                 </Select>
-              </div>
-              <div>
+              </Field>
+              <Field>
                 <Label>Priority</Label>
                 <Select value={priority} onChange={(e) => setPriority(e.target.value as TicketPriority)}>
                   {PRIORITIES.map((p) => (
@@ -353,18 +354,17 @@ export default function NewTicketOnBehalfPage() {
                     </option>
                   ))}
                 </Select>
-              </div>
-              <div>
+              </Field>
+              <Field>
                 <Label>Due date (optional)</Label>
-                <input
+                <Input
                   type="date"
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
                 />
-                <p className="mt-1 text-xs text-slate-400">Leave empty to use the SLA plan&apos;s resolution time.</p>
-              </div>
-              <div>
+                <p className="mt-1 text-xs text-slate-500">Leave empty to use the SLA plan&apos;s resolution time.</p>
+              </Field>
+              <Field>
                 <Label>Assign to</Label>
                 <Select value={assignedToUserId} onChange={(e) => handleAssigneeChange(e.target.value)}>
                   <option value="">Select an agent…</option>
@@ -382,8 +382,8 @@ export default function NewTicketOnBehalfPage() {
                     );
                   })}
                 </Select>
-              </div>
-              <div>
+              </Field>
+              <Field>
                 <Label>Category (internal, staff only)</Label>
                 <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
                   <option value="">No category</option>
@@ -393,7 +393,7 @@ export default function NewTicketOnBehalfPage() {
                     </option>
                   ))}
                 </Select>
-              </div>
+              </Field>
             </div>
 
             <ErrorText>{error}</ErrorText>

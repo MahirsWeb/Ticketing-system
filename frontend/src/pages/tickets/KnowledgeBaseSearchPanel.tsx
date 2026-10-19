@@ -21,7 +21,7 @@ function SourceRow({ r }: { r: KnowledgeBaseSearchResultDto }) {
         )}
       </div>
       {r.resolutionSummary && <p className="mt-1 line-clamp-2 text-xs text-slate-500">{r.resolutionSummary}</p>}
-      {r.sourceType === 'Document' && <p className="mt-1 text-xs text-slate-400">Uploaded documentation</p>}
+      {r.sourceType === 'Document' && <p className="mt-1 text-xs text-slate-500">Uploaded documentation</p>}
     </>
   );
 
@@ -108,12 +108,12 @@ export function KnowledgeBaseSearchPanel({ initialQuery = '', alwaysOpen = false
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">AI Assistant — Knowledge Base</h2>
         {!alwaysOpen && (
-          <button className="text-xs text-slate-400 hover:underline" onClick={() => setOpen(false)}>
+          <button className="text-xs text-slate-500 hover:underline" onClick={() => setOpen(false)}>
             Hide
           </button>
         )}
       </div>
-      <p className="mb-3 text-xs text-slate-400">
+      <p className="mb-3 text-xs text-slate-500">
         Answers are generated only from your organization's own closed tickets and uploaded documentation — never
         from general internet knowledge.
       </p>
@@ -148,7 +148,7 @@ export function KnowledgeBaseSearchPanel({ initialQuery = '', alwaysOpen = false
 
       {!loading && sources.length > 0 && (
         <>
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Sources used as context</div>
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Sources used as context</div>
           <ul className="space-y-2">
             {(showAllSources ? sources : sources.slice(0, SOURCES_PREVIEW_COUNT)).map((r) => (
               <li key={`${r.sourceType}-${r.ticketId ?? r.documentId}`}>
@@ -187,7 +187,7 @@ export function KnowledgeBaseSearchPanel({ initialQuery = '', alwaysOpen = false
       )}
 
       {!loading && asked && sources.length === 0 && !answer && (
-        <p className="text-sm text-slate-400">No similar tickets or documentation found yet.</p>
+        <p className="text-sm text-slate-500">No similar tickets or documentation found yet.</p>
       )}
     </Card>
   );

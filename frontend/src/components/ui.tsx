@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { createContext, useContext, useId } from 'react';
 import clsx from 'clsx';
 
 export function Button({
@@ -17,9 +17,26 @@ export function Button({
   return <button className={clsx(base, variants[variant], className)} {...props} />;
 }
 
+/// The id a <Field> hands to its single form control and to its <Label>, so that the label really is the control's name
+/// (a screen reader reads it, and clicking the label focuses the field). Outside a <Field> nothing changes.
+const FieldIdContext = createContext<string | undefined>(undefined);
+
+/// One labelled form control: <Field><Label>Name</Label><Input /></Field>. Use it only when there is exactly one control inside;
+/// a label for several controls (a date and a time) should name a group instead.
+export function Field({ className, children }: { className?: string; children: React.ReactNode }) {
+  const id = useId();
+  return (
+    <FieldIdContext.Provider value={id}>
+      <div className={className}>{children}</div>
+    </FieldIdContext.Provider>
+  );
+}
+
 export function Input({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
+  const fieldId = useContext(FieldIdContext);
   return (
     <input
+      id={fieldId}
       className={clsx(
         'w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600',
         className
@@ -34,10 +51,12 @@ export function IconInput({
   className,
   ...props
 }: React.InputHTMLAttributes<HTMLInputElement> & { icon: React.ReactNode }) {
+  const fieldId = useContext(FieldIdContext);
   return (
     <div className="relative">
-      <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">{icon}</span>
+      <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500">{icon}</span>
       <input
+        id={fieldId}
         className={clsx(
           'w-full rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-3.5 text-sm shadow-sm transition',
           'focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-600/20',
@@ -50,8 +69,10 @@ export function IconInput({
 }
 
 export function Select({ className, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  const fieldId = useContext(FieldIdContext);
   return (
     <select
+      id={fieldId}
       className={clsx(
         'w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600',
         className
@@ -62,8 +83,10 @@ export function Select({ className, ...props }: React.SelectHTMLAttributes<HTMLS
 }
 
 export function Textarea({ className, ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const fieldId = useContext(FieldIdContext);
   return (
     <textarea
+      id={fieldId}
       className={clsx(
         'w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600',
         className
@@ -74,7 +97,12 @@ export function Textarea({ className, ...props }: React.TextareaHTMLAttributes<H
 }
 
 export function Label({ children }: { children: React.ReactNode }) {
-  return <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">{children}</label>;
+  const fieldId = useContext(FieldIdContext);
+  return (
+    <label htmlFor={fieldId} className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+      {children}
+    </label>
+  );
 }
 
 export function Card({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {

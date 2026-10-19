@@ -4,7 +4,7 @@ import { lookupsApi } from '../../api/lookups';
 import { settingsApi } from '../../api/settings';
 import { knowledgeBaseApi, type ReindexStatus } from '../../api/knowledgeBase';
 import type { DepartmentItemFull, KnowledgeBaseDocumentDto, LookupItemFull, SlaPlanItemFull, SubBranchItemFull } from '../../types';
-import { Button, Card, ErrorText, Input, Label, StatusPill, SuccessText } from '../../components/ui';
+import { Button, Card, ErrorText, Input, Label, StatusPill, SuccessText, Field } from '../../components/ui';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 
 const NAME_MAX = 25;
@@ -27,7 +27,7 @@ function Panel({ children, className }: { children: React.ReactNode; className?:
 }
 
 function ListRow({ children }: { children: React.ReactNode }) {
-  return <div className="-mx-2 flex items-center justify-between gap-3 rounded-lg px-2 py-2.5 transition hover:bg-slate-50">{children}</div>;
+  return <div className="-mx-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg px-2 py-2.5 transition hover:bg-slate-50">{children}</div>;
 }
 
 function SubBranchesInline({ departmentId }: { departmentId: string }) {
@@ -75,7 +75,7 @@ function SubBranchesInline({ departmentId }: { departmentId: string }) {
     refresh();
   }
 
-  if (loading) return <p className="py-2 text-xs text-slate-400">Loading sub-branches…</p>;
+  if (loading) return <p className="py-2 text-xs text-slate-500">Loading sub-branches…</p>;
 
   return (
     <div className="mt-1 mb-2 rounded-lg border border-slate-100 bg-slate-50/60 p-3">
@@ -111,7 +111,7 @@ function SubBranchesInline({ departmentId }: { departmentId: string }) {
             </div>
           </ListRow>
         ))}
-        {items.length === 0 && <p className="py-2 text-xs text-slate-400">No sub-branches — this branch is used as a single unit.</p>}
+        {items.length === 0 && <p className="py-2 text-xs text-slate-500">No sub-branches — this branch is used as a single unit.</p>}
       </div>
 
       {confirmDeactivate && (
@@ -209,9 +209,9 @@ function BranchesTab({ items, onRefresh }: { items: DepartmentItemFull[]; onRefr
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[300px_1fr]">
       <Panel className="h-fit">
         <h2 className="text-sm font-bold text-slate-800">Add new branch</h2>
-        <p className="mt-0.5 mb-4 text-xs text-slate-400">Every branch needs a dedicated email address.</p>
+        <p className="mt-0.5 mb-4 text-xs text-slate-500">Every branch needs a dedicated email address.</p>
         <form onSubmit={handleCreate} className="space-y-3">
-          <div>
+          <Field>
             <Label>Branch name</Label>
             <Input
               placeholder="e.g. Servis"
@@ -222,8 +222,8 @@ function BranchesTab({ items, onRefresh }: { items: DepartmentItemFull[]; onRefr
                 setError(null);
               }}
             />
-          </div>
-          <div>
+          </Field>
+          <Field>
             <Label>Branch email</Label>
             <Input
               type="email"
@@ -235,7 +235,7 @@ function BranchesTab({ items, onRefresh }: { items: DepartmentItemFull[]; onRefr
                 setError(null);
               }}
             />
-          </div>
+          </Field>
           <ErrorText>{error}</ErrorText>
           <Button type="submit" className="w-full" disabled={!canAdd}>
             + Add Branch
@@ -259,7 +259,7 @@ function BranchesTab({ items, onRefresh }: { items: DepartmentItemFull[]; onRefr
                   </div>
                 ) : (
                   <span className="text-sm text-slate-800">
-                    {item.name} <span className="text-xs text-slate-400">— {item.email}</span>
+                    {item.name} <span className="text-xs text-slate-500">— {item.email}</span>
                   </span>
                 )}
                 <div className="flex shrink-0 items-center gap-3 text-xs">
@@ -301,7 +301,7 @@ function BranchesTab({ items, onRefresh }: { items: DepartmentItemFull[]; onRefr
               {expandedId === item.id && <SubBranchesInline departmentId={item.id} />}
             </div>
           ))}
-          {filtered.length === 0 && <p className="py-8 text-center text-sm text-slate-400">No branches found.</p>}
+          {filtered.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No branches found.</p>}
         </div>
       </Panel>
 
@@ -424,7 +424,7 @@ function SimpleLookupTab({
       <Panel className="h-fit">
         <h2 className="text-sm font-bold text-slate-800">Add new {itemNoun}</h2>
         <form onSubmit={handleCreate} className="mt-4 space-y-3">
-          <div>
+          <Field>
             <Label>Name</Label>
             <Input
               placeholder={`Enter ${itemNoun} name…`}
@@ -435,7 +435,7 @@ function SimpleLookupTab({
                 setError(null);
               }}
             />
-          </div>
+          </Field>
           <ErrorText>{error}</ErrorText>
           <Button type="submit" className="w-full" disabled={!name.trim()}>
             + Add {itemNoun}
@@ -491,7 +491,7 @@ function SimpleLookupTab({
               </div>
             </ListRow>
           ))}
-          {filtered.length === 0 && <p className="py-8 text-center text-sm text-slate-400">No {plural} found.</p>}
+          {filtered.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No {plural} found.</p>}
         </div>
       </Panel>
 
@@ -588,7 +588,7 @@ function SlaPlansTab({ items, onRefresh }: { items: SlaPlanItemFull[]; onRefresh
       <Panel className="h-fit">
         <h2 className="text-sm font-bold text-slate-800">Add new SLA plan</h2>
         <form onSubmit={handleCreate} className="mt-4 space-y-3">
-          <div>
+          <Field>
             <Label>Name</Label>
             <Input
               placeholder="e.g. Standard"
@@ -599,8 +599,8 @@ function SlaPlansTab({ items, onRefresh }: { items: SlaPlanItemFull[]; onRefresh
                 setError(null);
               }}
             />
-          </div>
-          <div>
+          </Field>
+          <Field>
             <Label>Resolution time (hours)</Label>
             <Input
               type="number"
@@ -611,7 +611,7 @@ function SlaPlansTab({ items, onRefresh }: { items: SlaPlanItemFull[]; onRefresh
                 setError(null);
               }}
             />
-          </div>
+          </Field>
           <ErrorText>{error}</ErrorText>
           <Button type="submit" className="w-full" disabled={!name.trim()}>
             + Add SLA Plan
@@ -628,7 +628,7 @@ function SlaPlansTab({ items, onRefresh }: { items: SlaPlanItemFull[]; onRefresh
           {filtered.map((item) => (
             <ListRow key={item.id}>
               <span className="text-sm text-slate-800">
-                {item.name} <span className="text-xs text-slate-400">— {item.resolutionTimeHours}h resolution</span>
+                {item.name} <span className="text-xs text-slate-500">— {item.resolutionTimeHours}h resolution</span>
               </span>
               <div className="flex items-center gap-3 text-xs">
                 <StatusPill active={item.isActive} />
@@ -641,14 +641,14 @@ function SlaPlansTab({ items, onRefresh }: { items: SlaPlanItemFull[]; onRefresh
               </div>
             </ListRow>
           ))}
-          {filtered.length === 0 && <p className="py-8 text-center text-sm text-slate-400">No SLA plans found.</p>}
+          {filtered.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No SLA plans found.</p>}
         </div>
       </Panel>
 
       {confirmDelete && (
         <ConfirmDialog
           title={`Delete "${confirmDelete.name}"?`}
-          message={`This SLA plan will be permanently deleted. Any tickets currently using it simply lose their SLA plan reference — nothing else is affected.${deleteError ? `\n\n${deleteError}` : ''}`}
+          message={`This SLA plan will be permanently deleted. An SLA plan that tickets already use cannot be deleted (deactivate it instead), so nothing in the history of any ticket is lost.${deleteError ? `\n\n${deleteError}` : ''}`}
           confirmLabel="Delete"
           danger
           onConfirm={handleConfirmDelete}
@@ -696,7 +696,7 @@ function CategoriesAndSlaTab({
           onCreate={lookupsApi.createTicketCategory}
           onUpdate={lookupsApi.updateTicketCategory}
           onDelete={lookupsApi.deleteTicketCategory}
-          deleteWarning="This category will be permanently deleted. Any tickets currently using it simply lose their category reference — nothing else is affected."
+          deleteWarning="This category will be permanently deleted. A category that tickets already use cannot be deleted (deactivate it instead), so nothing in the history of any ticket is lost."
           deactivateWarning="Tickets currently using this category keep it and are completely unaffected — nothing changes for existing tickets or statistics. This only removes it from the picker when opening a new ticket."
         />
       </div>
@@ -747,7 +747,7 @@ function NotificationsTab() {
     <div className="space-y-6">
       <Panel className="max-w-lg">
         <h2 className="text-sm font-bold text-slate-800">Overdue ticket notifications</h2>
-        <p className="mt-0.5 mb-4 text-xs text-slate-400">
+        <p className="mt-0.5 mb-4 text-xs text-slate-500">
           Emails every assignee once a ticket first becomes overdue. Each ticket is only notified once.
         </p>
         <label className="mb-3 flex items-center gap-2 text-sm text-slate-700">
@@ -847,7 +847,7 @@ function KnowledgeBaseDocumentsPanel() {
   return (
     <Panel className="max-w-lg">
       <h2 className="text-sm font-bold text-slate-800">Knowledge base documentation</h2>
-      <p className="mt-0.5 mb-4 text-xs text-slate-400">
+      <p className="mt-0.5 mb-4 text-xs text-slate-500">
         Upload manuals or instructions (Word .docx, Excel .xls/.xlsx, PDF) so the AI assistant can answer
         questions using official documentation, not just past tickets. Legacy binary .doc isn't supported —
         re-save as .docx first.
@@ -864,7 +864,7 @@ function KnowledgeBaseDocumentsPanel() {
           className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-blue-700 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-blue-800"
         />
       </label>
-      {uploading && <p className="mt-2 text-xs text-slate-400">Uploading and indexing — this can take a moment per file…</p>}
+      {uploading && <p className="mt-2 text-xs text-slate-500">Uploading and indexing — this can take a moment per file…</p>}
 
       {!loading && documents.length > 0 && (
         <ul className="mt-4 space-y-1">
@@ -872,7 +872,7 @@ function KnowledgeBaseDocumentsPanel() {
             <ListRow key={d.id}>
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium text-slate-800">{d.title}</div>
-                <div className="text-xs text-slate-400">
+                <div className="text-xs text-slate-500">
                   {d.sourceFileName} · {formatBytesAsChunks(d.chunkCount)}
                 </div>
               </div>
@@ -893,7 +893,7 @@ function KnowledgeBaseDocumentsPanel() {
           ))}
         </ul>
       )}
-      {!loading && documents.length === 0 && <p className="mt-4 text-sm text-slate-400">No documentation uploaded yet.</p>}
+      {!loading && documents.length === 0 && <p className="mt-4 text-sm text-slate-500">No documentation uploaded yet.</p>}
       {reindex && reindex.state !== 'Idle' && (
         <p className={`mt-3 text-xs ${reindex.state === 'Failed' ? 'text-red-700' : reindex.state === 'Completed' ? 'text-green-700' : 'text-slate-600'}`}>
           {reindex.state === 'Running' && reindex.total > 0 ? `${reindex.processed} / ${reindex.total} · ` : ''}
@@ -952,7 +952,7 @@ function KnowledgeBaseMaintenancePanel() {
   return (
     <Panel className="max-w-lg">
       <h2 className="text-sm font-bold text-slate-800">Knowledge base</h2>
-      <p className="mt-0.5 mb-4 text-xs text-slate-400">
+      <p className="mt-0.5 mb-4 text-xs text-slate-500">
         AI search only picks up a ticket once it's been indexed — normally that happens automatically the moment a
         ticket is closed through the app. Tickets inserted directly (e.g. bulk-imported demo data) skip that step, so
         they won't show up in AI search or chat until you reindex. This embeds the tickets that still lack an entry —
@@ -1011,13 +1011,15 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      <div className="flex gap-1 border-b border-slate-200">
+      <div className="flex gap-1 overflow-x-auto border-b border-slate-200" role="tablist" aria-label="Settings sections">
         {TABS.map((t) => (
           <button
             key={t.key}
+            role="tab"
+            aria-selected={tab === t.key}
             onClick={() => setTab(t.key)}
             className={clsx(
-              'flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition',
+              'flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-semibold transition',
               tab === t.key ? 'border-blue-700 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-700'
             )}
           >
@@ -1037,7 +1039,7 @@ export default function SettingsPage() {
           onCreate={lookupsApi.createHelpTopic}
           onUpdate={lookupsApi.updateHelpTopic}
           onDelete={lookupsApi.deleteHelpTopic}
-          deleteWarning="This help topic will be permanently deleted. Any tickets currently using it simply lose their help topic reference — nothing else is affected."
+          deleteWarning="This help topic will be permanently deleted. A help topic that tickets already use cannot be deleted (deactivate it instead), so nothing in the history of any ticket is lost."
           deactivateWarning="Tickets currently using this help topic keep it and are completely unaffected — nothing changes for existing tickets or statistics. This only removes it from the picker when opening a new ticket."
         />
       )}

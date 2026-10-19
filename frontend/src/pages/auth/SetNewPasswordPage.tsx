@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { authApi } from '../../api/auth';
-import { Button, Card, ErrorText, Input, Label, SuccessText } from '../../components/ui';
+import { Button, Card, ErrorText, Input, Label, SuccessText, Field } from '../../components/ui';
 import { AuthSplitLayout } from '../../layouts/AuthSplitLayout';
 
 export default function SetNewPasswordPage() {
@@ -45,22 +45,22 @@ export default function SetNewPasswordPage() {
           This is your first sign-in. Please choose a permanent password to replace the temporary one.
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
+          <Field>
             <Label>Email</Label>
             <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-          </div>
-          <div>
+          </Field>
+          <Field>
             <Label>Temporary password</Label>
             <Input type="password" required value={temporaryPassword} onChange={(e) => setTemporaryPassword(e.target.value)} />
-          </div>
-          <div>
+          </Field>
+          <Field>
             <Label>New password</Label>
             <Input type="password" required minLength={10} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
-          </div>
-          <div>
+          </Field>
+          <Field>
             <Label>Confirm new password</Label>
             <Input type="password" required minLength={10} value={confirmNewPassword} onChange={(e) => setConfirmNewPassword(e.target.value)} />
-          </div>
+          </Field>
           <ErrorText>{error}</ErrorText>
           <SuccessText>{success}</SuccessText>
           <Button type="submit" variant="pill" className="w-full" disabled={loading}>

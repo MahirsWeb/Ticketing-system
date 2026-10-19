@@ -43,7 +43,7 @@ public class OutboundHttpTests
 
     [Fact]
     public async Task Email_is_never_sent_twice_even_when_the_provider_answers_with_a_server_error() =>
-        Assert.Equal(1, await CallsMadeAsync("IEmailSender", HttpMethod.Post, HttpStatusCode.ServiceUnavailable));
+        Assert.Equal(1, await CallsMadeAsync("IEmailTransport", HttpMethod.Post, HttpStatusCode.ServiceUnavailable));
 
     [Fact]
     public async Task Embedding_requests_are_not_repeated_by_the_pipeline_because_the_service_retries_rate_limits_itself() =>

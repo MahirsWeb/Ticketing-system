@@ -244,6 +244,7 @@ public class ReportsController : ControllerBase
     /// in the help-topic breakdown for that period — no general knowledge, no invented details.
     /// </summary>
     [HttpPost("ai-insights")]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("ai-staff")]
     public async Task<ActionResult<AiInsightsResponseDto>> AiInsights(AiInsightsRequest request)
     {
         if ((request.To - request.From).TotalDays < 28)

@@ -6,7 +6,7 @@ import { lookupsApi } from '../../api/lookups';
 import { usersApi } from '../../api/users';
 import { ticketsApi } from '../../api/tickets';
 import type { CompanyItemFull, TicketListItem, UserListItemDto } from '../../types';
-import { Button, Card, ErrorText, Input, Label, PriorityBadge, Select, Spinner, StatusBadge, StatusPill } from '../../components/ui';
+import { Button, Card, ErrorText, Input, Label, PriorityBadge, Select, Spinner, StatusBadge, StatusPill, Field } from '../../components/ui';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 
 const NAME_MAX = 120;
@@ -141,18 +141,18 @@ export default function CompanyDetailPage() {
         <div className="overflow-hidden">
           <Card className="p-5">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <div>
+              <Field>
                 <Label>Name</Label>
                 <Input value={editName} maxLength={NAME_MAX} onChange={(e) => setEditName(e.target.value)} />
-              </div>
-              <div>
+              </Field>
+              <Field>
                 <Label>Address</Label>
                 <Input value={editAddress} maxLength={ADDRESS_MAX} onChange={(e) => setEditAddress(e.target.value)} />
-              </div>
-              <div>
+              </Field>
+              <Field>
                 <Label>Contact info</Label>
                 <Input value={editContact} maxLength={CONTACT_MAX} onChange={(e) => setEditContact(e.target.value)} />
-              </div>
+              </Field>
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" checked={editActive} onChange={(e) => setEditActive(e.target.checked)} />
                 Active
@@ -227,7 +227,7 @@ export default function CompanyDetailPage() {
               ))}
               {filteredClients.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
                     No matching users.
                   </td>
                 </tr>
@@ -293,7 +293,7 @@ export default function CompanyDetailPage() {
                 ))}
                 {tickets.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-3 py-8 text-center text-slate-400">
+                    <td colSpan={7} className="px-3 py-8 text-center text-slate-500">
                       No tickets found.
                     </td>
                   </tr>

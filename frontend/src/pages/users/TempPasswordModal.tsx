@@ -1,13 +1,12 @@
 import type { CreatedUserResponse } from '../../types';
-import { Button, Card } from '../../components/ui';
+import { Button } from '../../components/ui';
+import { Modal } from '../../components/Modal';
 import { format, formatDistanceToNow } from 'date-fns';
 
 export function TempPasswordModal({ result, onClose }: { result: CreatedUserResponse; onClose: () => void }) {
   const expiresAt = new Date(result.temporaryPasswordExpiresAtUtc);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <Card className="w-full max-w-md p-6">
-        <h2 className="mb-2 text-lg font-bold text-slate-900">Account created</h2>
+    <Modal title="Account created" onClose={onClose} maxWidth="max-w-md">
         <p className="mb-4 text-sm text-slate-600">
           An invite with a temporary password has been emailed to <span className="font-semibold">{result.email}</span>.
           {result.temporaryPassword !== null && " It's shown here too in case you need it."} It expires at{' '}
@@ -26,7 +25,6 @@ export function TempPasswordModal({ result, onClose }: { result: CreatedUserResp
         <Button className="w-full" onClick={onClose}>
           Done
         </Button>
-      </Card>
-    </div>
+    </Modal>
   );
 }

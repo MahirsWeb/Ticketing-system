@@ -16,9 +16,10 @@ public static class OutboundHttp
 {
     public static IServiceCollection AddOutboundHttpClients(this IServiceCollection services)
     {
-        // Email: a POST that timed out may still have been delivered, so it is never repeated (a second attempt could
-        // mail the same person twice). Short limits: nobody is waiting on this, and callers treat it as best-effort.
-        services.AddHttpClient<IEmailSender, BrevoEmailSender>()
+        // Email: a POST that timed out may still have been delivered, so the pipeline never repeats it on its own (a second
+        // attempt could mail the same person twice). Whether to try again later is the outbox worker's decision, made
+        // from the outcome BrevoEmailSender reports. Short limits: nothing is waiting on the answer.
+        services.AddHttpClient<IEmailTransport, BrevoEmailSender>()
             .AddStandardResilienceHandler(o =>
             {
                 Limits(o, attempt: TimeSpan.FromSeconds(10), total: TimeSpan.FromSeconds(15));

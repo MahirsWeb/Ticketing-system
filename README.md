@@ -18,10 +18,12 @@ starih tiketa i dokumentacije, email integraciju (Outlook), izvještaje/dashboar
 4. [Prijava u aplikaciju](#prijava-u-aplikaciju)
 5. [Ko šta vidi (izolacija po poslovnicama)](#ko-šta-vidi-izolacija-po-poslovnicama)
 6. [Objašnjenje svake konfiguracijske postavke](#objašnjenje-svake-konfiguracijske-postavke)
-7. [Rad sa bazom podataka](#rad-sa-bazom-podataka)
-8. [Rješavanje čestih problema](#rješavanje-čestih-problema)
-9. [Provjera koda (testovi i CI)](#provjera-koda-testovi-i-ci)
-10. [Poznata ograničenja](#poznata-ograničenja)
+7. [Slanje email-ova](#slanje-email-ova)
+8. [Ograničenja AI upotrebe](#ograničenja-ai-upotrebe)
+9. [Rad sa bazom podataka](#rad-sa-bazom-podataka)
+10. [Rješavanje čestih problema](#rješavanje-čestih-problema)
+11. [Provjera koda (testovi i CI)](#provjera-koda-testovi-i-ci)
+12. [Poznata ograničenja](#poznata-ograničenja)
 
 ---
 
@@ -112,8 +114,10 @@ Otvori novi `appsettings.Development.json` i popuni:
 - **`SeedAdmin:Email`** — tvoj email; ovaj nalog će automatski biti napravljen kao Admin prvi put kad app
   krene.
 - **`GoogleAi:ApiKey`** — *opciono, ali potrebno za AI asistenta.* Besplatan ključ: [aistudio.google.com](https://aistudio.google.com/app/apikey).
-- **`Brevo:ApiKey`** — *opciono.* Potrebno samo ako želiš da "zaboravljena lozinka" i pozivnice stvarno šalju
-  email. Besplatan nalog: [brevo.com](https://www.brevo.com).
+- **`Brevo:ApiKey`** i **`Brevo:SenderEmail`** — *opciono.* Potrebni samo ako želiš da "zaboravljena lozinka",
+  pozivnice i obavijesti o tiketima stvarno šalju email. `SenderEmail` je adresa koju si u Brevo nalogu **potvrdio kao
+  pošiljaoca** (Brevo šalje samo s takve adrese); nema zadane vrijednosti, pa bez nje ništa ne ide. Besplatan nalog:
+  [brevo.com](https://www.brevo.com). Kako se email šalje opisuje [Slanje email-ova](#slanje-email-ova).
 - **`MicrosoftGraph`** — *opciono.* Potrebno samo za Outlook email integraciju (pretvaranje email-ova u
   tikete). Slobodno ostavi prazno ako ti ne treba.
 
@@ -240,9 +244,45 @@ Posljedice koje treba znati:
 | `Sla:TimeZoneId`, `Sla:WorkdayStart`, `Sla:WorkdayEnd` | Ne | Samo za `BusinessHours`: vremenska zona (default `Europe/Sarajevo`) i radno vrijeme (default `08:00`–`16:00`). |
 | `Sla:WorkDays`, `Sla:Holidays` | Ne | Samo za `BusinessHours`: radni dani (default ponedjeljak–petak) i neradni datumi (`yyyy-MM-dd`). Ako ih postaviš, **zamjenjuju** default; ne dodaju se na njega. |
 | `GoogleAi:ApiKey` | Za AI funkcije | Bez ovoga, AI asistent i pretraga tiketa ne rade (ostatak aplikacije radi normalno). |
-| `Brevo:ApiKey` | Za slanje email-ova | Bez ovoga, "zaboravljena lozinka" i pozivnice se ne šalju (upozorenje u logu, aplikacija ne puca). |
+| `Brevo:ApiKey` | Za slanje email-ova | Bez ovoga se email-ovi ne šalju (poruka se u outboxu označi kao *Skipped*, upozorenje u logu, aplikacija ne puca). |
+| `Brevo:SenderEmail` / `SenderName` | Za slanje email-ova | Adresa (i ime) pošiljaoca; adresa mora biti potvrđena u Brevo nalogu. Nema zadane vrijednosti. |
+| `Email:Outbox:Enabled` | Ne (default `true`) | Uključuje radnika koji šalje email-ove iz outboxa. Ako ga isključiš, poruke se samo gomilaju u tabeli `EmailOutbox`. |
+| `Email:Outbox:PollSeconds`, `BatchSize`, `LeaseSeconds` | Ne (5 / 20 / 120) | Koliko često radnik gleda ima li šta za slanje, koliko poruka uzme odjednom i koliko dugo se poruka koju šalje drži "zauzetom" (ako radnik pukne usred slanja, poruka se nakon toga ponovo nudi). |
+| `Email:Outbox:KeepSentDays`, `KeepFailedDays` | Ne (7 / 30) | Poslane i preskočene poruke se brišu nakon 7 dana, one koje se nisu mogle isporučiti nakon 30 (do tada se u `LastError` vidi zašto). |
+| `RateLimits:AiStaffPerTenMinutes` | Ne (default 60) | Koliko AI upita (pretraga, pitanja, slični tiketi, AI sažetak) jedna osoba iz osoblja smije u 10 minuta. Klijentski AI chat je zasebno ograničen na 8 upita u 5 minuta. |
+| `ForwardedHeaders:KnownProxies` / `KnownNetworks` | Samo iza reverse proxyja | Adrese (npr. `10.0.0.5`) ili mreže (`10.0.0.0/8`) proxyja kojem se vjeruje da kaže pravu adresu posjetioca. Bez ovoga se `X-Forwarded-*` zaglavlja ignorišu. Ograničenja zahtjeva po osobi rade i bez ovoga; po adresi (npr. prijava) tek kad je ovo ispravno podešeno. |
 | `MicrosoftGraph:ClientId` / `ClientSecret` | Za Outlook integraciju | Bez ovoga, samo Settings → Email Integracija ostaje neaktivna; ostatak aplikacije radi normalno. |
 | `TemporaryPassword:ValidityMinutes` | Ne | Koliko dugo privremene lozinke (za nove naloge) važe prije isteka. |
+
+---
+
+## Slanje email-ova
+
+Aplikacija email **ne šalje dok korisnik čeka**. Svaki email (pozivnica, obavijest o tiketu, privremena lozinka...) se prvo
+upiše kao red u tabelu `EmailOutbox`, a zaseban radnik u pozadini ga šalje preko Brevoa:
+
+- Ako je Brevo preopterećen ili nedostupan (odgovori `429`, `5xx`, mrežna greška, istek vremena), poruka se **pokuša ponovo**
+  nakon 1, 2, 4, 8, 16 pa svakih 30 minuta, ukupno **8 pokušaja** (oko dva sata). Ako Brevo odbije samu poruku (npr.
+  nepostojeća adresa, nepotvrđen pošiljalac, loš ključ), ponovni pokušaj ne bi pomogao pa se poruka odmah označi kao *Failed*.
+- Poruka preživi **restart aplikacije**: ostaje u tabeli i šalje se kad aplikacija ponovo krene. Ako je pokrenuto više
+  instanci, svaka poruka se zaključa prije slanja pa je ne šalju dvije odjednom.
+- Isporuka je **"najmanje jednom"**: ako aplikacija pukne baš između Brevoovog prihvatanja i zapisa u bazu da je poslano,
+  poruka se nakon isteka zaključavanja pošalje još jednom. Takav duplikat je cijena toga da se poruka ne izgubi.
+- Račun koji je deaktiviran više ne prima email (poruka se označi *Skipped*), a bez `Brevo:ApiKey`/`Brevo:SenderEmail`
+  se ništa ne šalje, ali se zna šta je preskočeno.
+- Adresa primaoca je u tabeli **šifrovana** kao i sve druge email adrese.
+- Link za "zaboravljenu lozinku" najprije prođe kroz mali memorijski red (da odgovor na zahtjev ne otkrije vremenom postoji
+  li nalog), pa se odatle upiše u outbox kao i ostalo. Ako aplikacija padne u tih nekoliko trenutaka prije upisa, korisnik
+  link jednostavno ponovo traži.
+
+Pregled stanja: `SELECT Status, COUNT(*) FROM EmailOutbox GROUP BY Status` (0 = čeka, 1 = poslano, 2 = preskočeno, 3 = nije
+isporučeno; razlog je u koloni `LastError`).
+
+## Ograničenja AI upotrebe
+
+AI poziva plaćeni servis, pa je upotreba ograničena: pitanje može imati najviše 2.000 znakova, jedan izvor koji se šalje
+modelu najviše 6.000, a cijeli kontekst najviše 60.000. Prije slanja se iz teksta uklanjaju email adrese i brojevi telefona.
+Ograničenje broja upita je **po osobi** (vidi `RateLimits:AiStaffPerTenMinutes` u tabeli iznad).
 
 ---
 
@@ -341,10 +381,12 @@ cd backend && dotnet test
 ```
 
 ```bash
-cd frontend && npm run lint && npm run build
+cd frontend && npm run lint && npm test && npm run build
 ```
 
-`npm run build` uključuje provjeru TypeScript tipova. Isto rade i GitHub Actions
+`npm test` pokreće frontend testove (Vitest + Testing Library: sanitizacija HTML-a, povratak na traženu stranicu poslije
+prijave, zaštićene rute po ulozi, dijalozi, povezanost labela s poljima, Gantt). `npm run build` uključuje provjeru
+TypeScript tipova. Isto rade i GitHub Actions
 (`.github/workflows/ci.yml`) na svaki push na `main` i svaki pull request:
 
 - **Backend (Windows)** mora proći: build, testovi, provjera da **migracije odgovaraju modelu** (promjena entiteta bez
@@ -353,7 +395,7 @@ cd frontend && npm run lint && npm run build
   kontejneru ponekad ne uspije da se podigne, pa ne blokira.
 - **Docker image** se gradi kao pri pravom puštanju u rad i provjerava se da u njemu radi .NET 10 (informativno dok
   prvi put ne prođe).
-- **Frontend** prolazi lint, build i `npm audit`.
+- **Frontend** prolazi lint, testove, build i `npm audit`.
 
 ### Testovi autorizacije (integracijski)
 
@@ -364,7 +406,11 @@ memoriji, sa pravim migracijama) nad privremenom bazom i provjerava ko šta smij
   endpoint bez `[Authorize]` obara test dok se svjesno ne doda na listu javnih endpointa;
 - izolaciju poslovnica: ko vidi koje tikete, klijente, osoblje, zadatke, notifikacije i koje izvore AI asistent koristi
   (uključujući pokušaje da se filterima proširi vidljivost);
-- da token prestaje važiti kad se nalog deaktivira, premjesti ili promijeni lozinku.
+- da token prestaje važiti kad se nalog deaktivira, premjesti ili promijeni lozinku;
+- ograničenja AI upotrebe (dužina pitanja, broj upita po osobi) i zaštitu šifarnika koji se koriste;
+- slanje email-ova kroz outbox: upis poruke, šifrovana adresa, uspjeh, ponovni pokušaji s rastućim razmakom, odustajanje,
+  trajno odbijanje, preskakanje, dva radnika istovremeno (poruka se pošalje jednom) i radnik koji pukne usred slanja. Brevo
+  je u tim testovima zamijenjen lažnim, pa se ništa ne šalje.
 
 Testovi trebaju SQL Server na kojem smiju praviti i brisati **svoje** baze (`TicketSystemTech_AuthzTest_*`; vaša
 baza se ne dira). Na razvojnom računaru ništa ne treba podešavati: koriste server iz vašeg
@@ -378,6 +424,11 @@ se ignoriše). Bez ikakvog SQL Servera ovi testovi se **preskaču** (prikažu se
 - **Prilozi (attachments)** se čuvaju na lokalnom disku (`Storage:UploadsPath`, podrazumijevano `App_Data/uploads`),
   van web roota, i otvaraju se samo preko potpisanih linkova koji ističu. To je normalno za lokalno pokretanje, ali
   za pravi produkcijski hosting treba ili disk koji se ne briše pri redeployu ili druga `IFileStorage` implementacija.
+- **Docker image** (`backend/Dockerfile`) se ne pokreće kao root. U njemu su dva foldera na koja treba postaviti volume, inače
+  se sadržaj gubi s kontejnerom: `/data` (prilozi i dokumenti, privatno; `Storage__UploadsPath` već pokazuje tamo) i
+  `/app/wwwroot/avatars` (profilne slike). Konfiguracija se zadaje varijablama okruženja u obliku `Jwt__Secret`,
+  `Pii__HashKey`, `ConnectionStrings__DefaultConnection`, `Brevo__SenderEmail`... Iza reverse proxyja treba postaviti i
+  `ForwardedHeaders__KnownProxies__0`. Health check za load balancer: `/health/ready`.
 - Aplikacija je dizajnirana da radi **potpuno lokalno** (SQL Server + backend + frontend na istom računaru).
   Ne postoji trenutno cloud deployment (Render/Vercel/Supabase konfiguracija koja se ranije koristila je
   uklonjena kad je projekat prebačen na lokalni SQL Server).

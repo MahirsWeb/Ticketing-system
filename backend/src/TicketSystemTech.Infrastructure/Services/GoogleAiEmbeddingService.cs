@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using TicketSystemTech.Application.Common;
 using TicketSystemTech.Application.Common.Interfaces;
 
 namespace TicketSystemTech.Infrastructure.Services;
@@ -45,6 +46,11 @@ public class GoogleAiEmbeddingService : IEmbeddingService
         }
         if (string.IsNullOrWhiteSpace(text))
             return null;
+
+        // Tickets and questions go to Google as text: e-mail addresses and phone numbers are masked first (Ai:RedactPersonalData,
+        // on by default). The same masking applies to what is indexed and to what is searched, so they still match each other.
+        if (_configuration.GetValue("Ai:RedactPersonalData", true))
+            text = PiiRedactor.Redact(text);
 
         // Key goes in a header, not the query string, so it never appears in HttpClient's request-URI logging.
         const string url = "https://generativelanguage.googleapis.com/v1beta/models/" + Model + ":embedContent";

@@ -3,7 +3,7 @@ import { lookupsApi } from '../../api/lookups';
 import { usersApi } from '../../api/users';
 import { ticketsApi } from '../../api/tickets';
 import type { DepartmentItemFull, LookupItem, SlaPlanItem, SubBranchItemFull, TicketDetailDto, TicketPriority, TicketSource } from '../../types';
-import { Button, Card, ErrorText, Label, Select } from '../../components/ui';
+import { Button, Card, ErrorText, Label, Select, Field, Input } from '../../components/ui';
 import { useAuthStore } from '../../store/authStore';
 
 const SOURCES: TicketSource[] = ['Phone', 'Email', 'TicketSystem', 'Other'];
@@ -106,7 +106,7 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
     <Card className="p-5">
       <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-500">Open ticket</h2>
       <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
-        <div>
+        <Field>
           <Label>Ticket source</Label>
           <Select value={source} onChange={(e) => setSource(e.target.value as TicketSource)}>
             {SOURCES.map((s) => (
@@ -115,8 +115,8 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
               </option>
             ))}
           </Select>
-        </div>
-        <div>
+        </Field>
+        <Field>
           <Label>Help topic</Label>
           <Select value={helpTopicId} onChange={(e) => setHelpTopicId(e.target.value)}>
             {helpTopics.map((t) => (
@@ -125,8 +125,8 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
               </option>
             ))}
           </Select>
-        </div>
-        <div>
+        </Field>
+        <Field>
           <Label>Branch</Label>
           <Select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
             <option value="">Select a branch…</option>
@@ -136,9 +136,9 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
               </option>
             ))}
           </Select>
-        </div>
+        </Field>
         {subBranches.length > 0 && (
-          <div>
+          <Field>
             <Label>Sub-branch</Label>
             <Select value={subBranchId} onChange={(e) => setSubBranchId(e.target.value)}>
               <option value="">Select a sub-branch…</option>
@@ -148,9 +148,9 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
                 </option>
               ))}
             </Select>
-          </div>
+          </Field>
         )}
-        <div>
+        <Field>
           <Label>SLA plan</Label>
           <Select value={slaPlanId} onChange={(e) => setSlaPlanId(e.target.value)}>
             {slaPlans.map((s) => (
@@ -159,8 +159,8 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
               </option>
             ))}
           </Select>
-        </div>
-        <div>
+        </Field>
+        <Field>
           <Label>Priority</Label>
           <Select value={priority} onChange={(e) => setPriority(e.target.value as TicketPriority)}>
             {PRIORITIES.map((p) => (
@@ -169,18 +169,17 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
               </option>
             ))}
           </Select>
-        </div>
-        <div>
+        </Field>
+        <Field>
           <Label>Due date (optional)</Label>
-          <input
+          <Input
             type="date"
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
           />
-          <p className="mt-1 text-xs text-slate-400">Leave empty to use the SLA plan&apos;s resolution time.</p>
-        </div>
-        <div>
+          <p className="mt-1 text-xs text-slate-500">Leave empty to use the SLA plan&apos;s resolution time.</p>
+        </Field>
+        <Field>
           <Label>Assign to</Label>
           <Select value={assignedToUserId} onChange={(e) => setAssignedToUserId(e.target.value)}>
             <option value="">Select an agent…</option>
@@ -190,8 +189,8 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
               </option>
             ))}
           </Select>
-        </div>
-        <div>
+        </Field>
+        <Field>
           <Label>Category (internal, staff only)</Label>
           <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
             <option value="">No category</option>
@@ -201,7 +200,7 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
               </option>
             ))}
           </Select>
-        </div>
+        </Field>
         <div className="col-span-2">
           <ErrorText>{error}</ErrorText>
           <Button type="submit" disabled={loading}>

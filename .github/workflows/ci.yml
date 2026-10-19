@@ -138,6 +138,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Tests
+        run: npm test
+
       - name: Type-check and build
         run: npm run build
         env:
@@ -149,7 +152,8 @@ jobs:
   docker-image:
     name: Docker image
     # Builds the backend image exactly as a deployment would (restore, publish, runtime image) and checks that the runtime in
-    # it is .NET 10. Not run anywhere else, so it does not block a merge until it has been green once.
+    # it is .NET 10, that it does not run as root, and that no local settings got in. It has been green since its first run, but
+    # it still does not block a merge.
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -160,3 +164,10 @@ jobs:
 
       - name: The image runs on .NET 10
         run: docker run --rm --entrypoint dotnet ticketsystemtech-api:ci --list-runtimes | grep "Microsoft.AspNetCore.App 10\."
+
+      - name: The image does not run as root, and can write where it has to
+        run: |
+          user_id=$(docker run --rm --entrypoint id ticketsystemtech-api:ci -u)
+          echo "runs as user id: $user_id"
+          test "$user_id" != "0"
+          docker run --rm --entrypoint sh ticketsystemtech-api:ci -c "touch /data/uploads/.probe /app/wwwroot/avatars/.probe"

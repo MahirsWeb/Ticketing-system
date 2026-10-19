@@ -50,21 +50,21 @@ export function TicketAssigneesPanel({ ticket, onChanged }: { ticket: TicketDeta
 
   return (
     <div>
-      <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Assignees</div>
+      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Assignees</div>
       <div className="mt-1 flex flex-wrap items-center gap-2">
-        {ticket.assignees.length === 0 && <span className="text-sm text-slate-400">Unassigned</span>}
+        {ticket.assignees.length === 0 && <span className="text-sm text-slate-500">Unassigned</span>}
         {ticket.assignees.map((a) => (
           <span key={a.userId} className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
             {a.name}
-            <span className="text-[10px] font-semibold uppercase text-slate-400">{a.userId === ticket.assignedToUserId ? 'works on it' : 'helps'}</span>
-            <button type="button" disabled={busy} onClick={() => handleRemove(a.userId)} className="font-bold text-slate-400 hover:text-red-600">
+            <span className="text-[10px] font-semibold uppercase text-slate-500">{a.userId === ticket.assignedToUserId ? 'works on it' : 'helps'}</span>
+            <button type="button" disabled={busy} onClick={() => handleRemove(a.userId)} className="font-bold text-slate-500 hover:text-red-600">
               ×
             </button>
           </span>
         ))}
       </div>
       {ticket.assignees.length > 1 && (
-        <p className="mt-1 text-xs text-slate-400">Only the person who works on the ticket logs time on it. The others help, without time of their own.</p>
+        <p className="mt-1 text-xs text-slate-500">Only the person who works on the ticket logs time on it. The others help, without time of their own.</p>
       )}
       {available.length > 0 && (
         <div className="mt-2 flex items-center gap-2">

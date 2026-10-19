@@ -147,15 +147,36 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0
             }));
 
-    // Client-facing AI chat calls a metered LLM API — cap per-IP usage so it can't be hammered into a
-    // large bill. Staff's own /ask isn't limited here; they're a trusted, small, authenticated user base.
+    // The AI endpoints call a metered LLM API, so each person gets a ceiling that keeps one of them from running up the bill.
+    // The ceiling is per PERSON (their user id), not per network address: behind a reverse proxy every request may arrive
+    // from the proxy's address, and one shared bucket would let one person use up everybody's allowance (see ForwardedHeaders
+    // in the README). The limiter runs after authentication for this reason; a request without a user falls back to its address.
+    static string PersonOrAddress(HttpContext context) =>
+        context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+        ?? context.Connection.RemoteIpAddress?.ToString()
+        ?? "unknown";
+
+    // Client-facing AI chat.
     options.AddPolicy("ai", context =>
         RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            partitionKey: PersonOrAddress(context),
             factory: _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 8,
                 Window = TimeSpan.FromMinutes(5),
+                QueueLimit = 0
+            }));
+
+    // Staff: AI search, questions, "similar tickets" and the AI summary of a period. Generous for real work (a question a
+    // few seconds apart for ten minutes), tight for a script. Configurable: RateLimits:AiStaffPerTenMinutes.
+    var aiStaffLimit = builder.Configuration.GetValue("RateLimits:AiStaffPerTenMinutes", 60);
+    options.AddPolicy("ai-staff", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: PersonOrAddress(context),
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = aiStaffLimit,
+                Window = TimeSpan.FromMinutes(10),
                 QueueLimit = 0
             }));
 });
@@ -176,6 +197,12 @@ builder.Services.AddScoped<ITicketAssignmentService, TicketAssignmentService>();
 builder.Services.AddSingleton<TicketSystemTech.Api.BackgroundJobs.BackgroundEmailSender>();
 builder.Services.AddSingleton<IBackgroundEmailQueue>(sp => sp.GetRequiredService<TicketSystemTech.Api.BackgroundJobs.BackgroundEmailSender>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<TicketSystemTech.Api.BackgroundJobs.BackgroundEmailSender>());
+// E-mail goes through a durable outbox: callers file a message (IEmailSender), the dispatcher delivers it through Brevo
+// (IEmailTransport, registered with the other outbound clients) and tries again when the provider is down.
+builder.Services.AddSingleton<IEmailSender, OutboxEmailSender>();
+builder.Services.Configure<EmailOutboxOptions>(builder.Configuration.GetSection("Email:Outbox"));
+builder.Services.AddSingleton<TicketSystemTech.Api.BackgroundJobs.EmailOutboxDispatcher>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<TicketSystemTech.Api.BackgroundJobs.EmailOutboxDispatcher>());
 builder.Services.AddScoped<IKnowledgeBaseIndexer, KnowledgeBaseIndexer>();
 builder.Services.AddSingleton<IVectorIndex, VectorIndex>();
 builder.Services.AddSingleton<TicketSystemTech.Api.BackgroundJobs.KnowledgeBaseReindexService>();
@@ -284,10 +311,20 @@ if (args.Contains("--migrate-only"))
 // First, so that everything after it (forwarded headers, CORS, authentication, the endpoints) logs under the request's reference.
 app.UseMiddleware<TicketSystemTech.Api.Middleware.CorrelationIdMiddleware>();
 
-app.UseForwardedHeaders(new ForwardedHeadersOptions
+// X-Forwarded-For / X-Forwarded-Proto are believed ONLY when they come from a proxy that is listed. By default that is just
+// the machine itself, so a request that claims "I was forwarded" from anywhere else cannot lie about its address. Behind a
+// reverse proxy, list it: ForwardedHeaders:KnownProxies (addresses) and/or ForwardedHeaders:KnownNetworks (e.g. "10.0.0.0/8").
+// Without that every request appears to come from the proxy.
+var forwardedHeaders = new ForwardedHeadersOptions
 {
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-});
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+    ForwardLimit = 1
+};
+foreach (var proxy in builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? Array.Empty<string>())
+    forwardedHeaders.KnownProxies.Add(System.Net.IPAddress.Parse(proxy));
+foreach (var network in builder.Configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>() ?? Array.Empty<string>())
+    forwardedHeaders.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(network));
+app.UseForwardedHeaders(forwardedHeaders);
 
 if (app.Environment.IsDevelopment())
 {
@@ -322,10 +359,12 @@ app.Use(async (context, next) =>
 app.UseStaticFiles();
 app.UseCors("Frontend");
 app.UseMiddleware<TicketSystemTech.Api.Middleware.ApiExceptionMiddleware>();
-app.UseRateLimiter();
 app.UseAuthentication();
 app.UseMiddleware<TicketSystemTech.Api.Middleware.UserStatusValidationMiddleware>();
 app.UseAuthorization();
+// After authentication, so that the AI limits can count per person (see the policies above). A request that is refused as
+// unauthenticated or forbidden never reaches an endpoint, so there is nothing for the limiter to protect there.
+app.UseRateLimiter();
 
 // Render's health check hits the service root by default — without this it 404s and Render kills the
 // instance in an endless restart loop, even though the app itself started up fine.

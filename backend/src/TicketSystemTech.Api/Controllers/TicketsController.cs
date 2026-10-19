@@ -328,7 +328,10 @@ public class TicketsController : ControllerBase
         var desc = string.Equals(sortDir, "desc", StringComparison.OrdinalIgnoreCase);
         query = (sortBy?.ToLowerInvariant()) switch
         {
-            "ticketnumber" => desc ? query.OrderByDescending(t => t.TicketNumber) : query.OrderBy(t => t.TicketNumber),
+            // Numbers have different lengths ("99999", "100002"), so sorting the text puts 100002 before 99999: shorter first, then text.
+            "ticketnumber" => desc
+                ? query.OrderByDescending(t => t.TicketNumber.Length).ThenByDescending(t => t.TicketNumber)
+                : query.OrderBy(t => t.TicketNumber.Length).ThenBy(t => t.TicketNumber),
             "title" => desc ? query.OrderByDescending(t => t.Title) : query.OrderBy(t => t.Title),
             "status" => desc ? query.OrderByDescending(t => t.Status) : query.OrderBy(t => t.Status),
             "priority" => desc ? query.OrderByDescending(t => t.Priority) : query.OrderBy(t => t.Priority),

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { authApi } from '../../api/auth';
-import { Button, Card, Input, Label, SuccessText } from '../../components/ui';
+import { Button, Card, Input, Label, SuccessText, Field } from '../../components/ui';
 import { AuthSplitLayout } from '../../layouts/AuthSplitLayout';
 
 export default function ForgotPasswordPage() {
@@ -27,10 +27,10 @@ export default function ForgotPasswordPage() {
         <p className="mb-6 text-sm text-slate-500">Enter your email and we'll send you a reset link.</p>
         {!sent ? (
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
+            <Field>
               <Label>Email</Label>
               <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
-            </div>
+            </Field>
             <Button type="submit" variant="pill" className="w-full" disabled={loading}>
               {loading ? 'Sending…' : 'Send reset link'}
             </Button>

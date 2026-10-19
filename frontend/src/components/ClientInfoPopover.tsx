@@ -53,11 +53,11 @@ export function ClientInfoPopover({
             </div>
             <dl className="mt-3 space-y-1.5 text-xs">
               <div className="flex justify-between gap-2">
-                <dt className="text-slate-400">Email</dt>
+                <dt className="text-slate-500">Email</dt>
                 <dd className="truncate text-slate-700">{email ?? '—'}</dd>
               </div>
               <div className="flex justify-between gap-2">
-                <dt className="text-slate-400">Phone</dt>
+                <dt className="text-slate-500">Phone</dt>
                 <dd className="truncate text-slate-700">{phoneNumber ?? '—'}</dd>
               </div>
             </dl>

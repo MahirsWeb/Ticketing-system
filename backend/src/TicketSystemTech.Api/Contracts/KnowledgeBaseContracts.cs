@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 namespace TicketSystemTech.Api.Contracts;
 
 public record KnowledgeBaseAskRequest(
-    [Required] string Question
+    [Required, MaxLength(TicketSystemTech.Application.Common.AiPromptLimits.MaxQuestionChars)] string Question
 );
 
 public record KnowledgeBaseAskResponseDto(

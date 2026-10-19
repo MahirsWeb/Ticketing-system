@@ -2,6 +2,12 @@ import { useMemo, useState } from 'react';
 import clsx from 'clsx';
 import type { GanttEntryDto } from '../types';
 
+function describe(e: GanttEntryDto) {
+  const from = e.startedAtUtc ? fmtTime(e.startedAtUtc) : '?';
+  const to = e.endedAtUtc ? fmtTime(e.endedAtUtc) : 'ongoing';
+  return `${e.title}, ${e.status}, ${from} to ${to}`;
+}
+
 function fmtTime(iso: string) {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -81,7 +87,7 @@ export function GanttChart({ entries, date }: { entries: GanttEntryDto[]; date: 
 
   const ROW_HEIGHT = 28; // 24px block + 4px gap
 
-  function Lane({ items, colors, emptyLabel }: { items: GanttEntryDto[]; colors: Record<string, string>; emptyLabel: string }) {
+  function Lane({ label, items, colors, emptyLabel }: { label: string; items: GanttEntryDto[]; colors: Record<string, string>; emptyLabel: string }) {
     // Greedily pack time-overlapping items into separate sub-rows (earliest start first) so
     // simultaneous work is stacked, never rendered on top of itself.
     const withTimes = items
@@ -107,31 +113,36 @@ export function GanttChart({ entries, date }: { entries: GanttEntryDto[]; date: 
     const laneHeight = rowCount * ROW_HEIGHT + 4;
 
     return (
-      <div className="relative rounded-md bg-slate-50" style={{ height: laneHeight }}>
+      <div role="group" aria-label={label} className="relative rounded-md bg-slate-50" style={{ height: laneHeight }}>
         {hourMarks.map((h) => (
           <div key={h.toISOString()} className="absolute top-0 h-full w-px bg-slate-200" style={{ left: `${pct(h)}%` }} />
         ))}
         {nowPct !== null && <div className="absolute top-0 z-10 h-full w-0.5 bg-red-500" style={{ left: `${nowPct}%` }} />}
         {items.length === 0 && (
-          <div className="flex h-full items-center px-3 text-xs text-slate-300">{emptyLabel}</div>
+          <div className="flex h-full items-center px-3 text-xs text-slate-500">{emptyLabel}</div>
         )}
         {placed.map(({ entry: e, start, end, row }) => {
           const left = pct(start);
           const width = Math.max(0.6, pct(end) - left);
           const ongoing = !e.endedAtUtc;
           return (
-            <div
+            <button
+              type="button"
               key={e.id}
+              aria-label={describe(e)}
+              title={describe(e)}
               onMouseEnter={() => setHovered(e)}
               onMouseLeave={() => setHovered(null)}
+              onFocus={() => setHovered(e)}
+              onBlur={() => setHovered(null)}
               className={clsx(
-                'absolute flex h-6 items-center overflow-hidden rounded-md px-2 shadow-sm transition-transform hover:z-20 hover:scale-[1.03]',
+                'absolute flex h-6 items-center overflow-hidden rounded-md px-2 shadow-sm transition-transform hover:z-20 hover:scale-[1.03] focus:z-20 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1',
                 ongoing && 'ring-2 ring-white ring-offset-1 ring-offset-red-400'
               )}
               style={{ left: `${left}%`, width: `${width}%`, top: 2 + row * ROW_HEIGHT, background: colors[e.status] ?? '#64748b' }}
             >
               <span className="truncate text-[10px] font-semibold text-white">{e.title}</span>
-            </div>
+            </button>
           );
         })}
       </div>
@@ -142,7 +153,7 @@ export function GanttChart({ entries, date }: { entries: GanttEntryDto[]; date: 
     <div>
       <div className="flex items-center gap-3">
         <div className="w-20 shrink-0" />
-        <div className="relative h-5 flex-1 border-b border-slate-200 text-[10px] text-slate-400">
+        <div className="relative h-5 flex-1 border-b border-slate-200 text-[10px] text-slate-500">
           {hourMarks.map((h) => (
             <span key={h.toISOString()} className="absolute -translate-x-1/2" style={{ left: `${pct(h)}%` }}>
               {String(h.getHours()).padStart(2, '0')}:00
@@ -154,25 +165,40 @@ export function GanttChart({ entries, date }: { entries: GanttEntryDto[]; date: 
       <div className="mt-2 flex items-center gap-3">
         <div className="w-20 shrink-0 text-xs font-semibold text-slate-500">🎫 Tickets</div>
         <div className="flex-1">
-          <Lane items={tickets} colors={TICKET_COLORS} emptyLabel="No ticket work logged this day" />
+          <Lane label="Ticket work" items={tickets} colors={TICKET_COLORS} emptyLabel="No ticket work logged this day" />
         </div>
       </div>
       <div className="mt-2 flex items-center gap-3">
         <div className="w-20 shrink-0 text-xs font-semibold text-slate-500">📋 Tasks</div>
         <div className="flex-1">
-          <Lane items={tasks} colors={TASK_COLORS} emptyLabel="No tasks logged this day" />
+          <Lane label="Task work" items={tasks} colors={TASK_COLORS} emptyLabel="No tasks logged this day" />
         </div>
       </div>
 
-      <div className="mt-3 h-8">
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-600" aria-label="Colour legend">
+        {Object.entries(TICKET_COLORS).map(([status, color]) => (
+          <span key={'t' + status} className="inline-flex items-center gap-1">
+            <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: color }} />
+            Ticket: {status}
+          </span>
+        ))}
+        {Object.entries(TASK_COLORS).map(([status, color]) => (
+          <span key={'k' + status} className="inline-flex items-center gap-1">
+            <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: color }} />
+            Task: {status}
+          </span>
+        ))}
+      </div>
+
+      <div className="mt-3 h-8" aria-live="polite">
         {hovered ? (
           <div className="rounded-md bg-slate-50 px-3 py-1.5 text-xs text-slate-700">
             <span className="font-semibold">{hovered.title}</span>{' '}
             {hovered.startedAtUtc ? fmtTime(hovered.startedAtUtc) : '?'}
-            {hovered.endedAtUtc ? `–${fmtTime(hovered.endedAtUtc)}` : ' (u toku)'} · {hovered.status}
+            {hovered.endedAtUtc ? `–${fmtTime(hovered.endedAtUtc)}` : ' (ongoing)'} · {hovered.status}
           </div>
         ) : (
-          <p className="px-3 text-xs text-slate-300">Hover a block for details.</p>
+          <p className="px-3 text-xs text-slate-500">Hover or focus a block for details.</p>
         )}
       </div>
     </div>

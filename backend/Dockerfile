@@ -18,8 +18,19 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 COPY --from=build /app .
 
-ENV ASPNETCORE_ENVIRONMENT=Production
-# Render injects $PORT at container start; Program.cs reads it and binds Kestrel accordingly.
+# The application does not run as root. The base image already has an unprivileged user ("app", id in $APP_UID); the two places
+# the application writes to are made its own, and are the two directories to mount a volume on, or the files are lost with
+# the container: /data/uploads (ticket attachments and knowledge-base documents, kept private) and /app/wwwroot/avatars
+# (profile pictures, served publicly).
+RUN mkdir -p /data/uploads /app/wwwroot/avatars \
+    && chown -R $APP_UID:$APP_UID /data /app/wwwroot/avatars
+VOLUME ["/data", "/app/wwwroot/avatars"]
 
+ENV ASPNETCORE_ENVIRONMENT=Production \
+    Storage__UploadsPath=/data/uploads
+
+USER $APP_UID
+
+# The image listens on 8080 (the .NET 8+ images default to it). Point a load balancer's health check at /health/ready.
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "TicketSystemTech.Api.dll"]

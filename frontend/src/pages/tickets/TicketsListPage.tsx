@@ -37,6 +37,36 @@ function tabToParams(tab: TicketTab): { status?: string; answered?: string } {
   }
 }
 
+/// A sortable column heading. A real button, so it can be reached and used with the keyboard, and `aria-sort` tells a screen
+/// reader which column the list is sorted by.
+function SortableHeader({
+  colKey,
+  label,
+  sortBy,
+  sortDir,
+  onSort,
+}: {
+  colKey: string;
+  label: string;
+  sortBy: string | null;
+  sortDir: 'asc' | 'desc';
+  onSort: (key: string) => void;
+}) {
+  const active = sortBy === colKey;
+  return (
+    <th scope="col" className="whitespace-nowrap px-3 py-1.5" aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+      <button type="button" onClick={() => onSort(colKey)} className="select-none font-semibold uppercase hover:text-slate-700">
+        {label}
+        {active && (
+          <span aria-hidden className="ml-1">
+            {sortDir === 'asc' ? '▲' : '▼'}
+          </span>
+        )}
+      </button>
+    </th>
+  );
+}
+
 export default function TicketsListPage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
@@ -45,11 +75,27 @@ export default function TicketsListPage() {
   const isStaff = isAdmin || isEmployee;
   const [items, setItems] = useState<TicketListItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
-  const [page, setPage] = useState(1);
+  const [departments, setDepartments] = useState<DepartmentItemFull[]>([]);
+  const [employees, setEmployees] = useState<UserListItemDto[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Everything the list is filtered, sorted and paged by lives in the address, so a refresh, the back button, a bookmark or a
+  // link sent to a colleague shows the same list.
   const [searchParams, setSearchParams] = useSearchParams();
   const statusParam = searchParams.get('status') ?? '';
   const answeredParam = searchParams.get('answered') === '1';
   const mineOnly = searchParams.get('mine') === '1';
+  const page = Math.max(1, Number(searchParams.get('page')) || 1);
+  const departmentId = searchParams.get('dept') ?? '';
+  const assignedToUserId = searchParams.get('assignee') ?? '';
+  const search = searchParams.get('q') ?? '';
+  const createdFromIso = searchParams.get('from');
+  const createdToIso = searchParams.get('to');
+  const sortBy = searchParams.get('sort');
+  const sortDir: 'asc' | 'desc' = searchParams.get('dir') === 'desc' ? 'desc' : 'asc';
+  const createdFrom = useMemo(() => (createdFromIso ? new Date(createdFromIso) : null), [createdFromIso]);
+  const createdTo = useMemo(() => (createdToIso ? new Date(createdToIso) : null), [createdToIso]);
+
   const activeTab: TicketTab = answeredParam
     ? 'answered'
     : statusParam === 'New'
@@ -59,50 +105,39 @@ export default function TicketsListPage() {
         : statusParam === 'Open,InProgress,Resolved'
           ? 'opened'
           : 'all';
-  const [departmentId, setDepartmentId] = useState('');
-  const [assignedToUserId, setAssignedToUserId] = useState('');
-  const [departments, setDepartments] = useState<DepartmentItemFull[]>([]);
-  const [employees, setEmployees] = useState<UserListItemDto[]>([]);
-  const [search, setSearch] = useState('');
-  const [createdFrom, setCreatedFrom] = useState<Date | null>(null);
-  const [createdTo, setCreatedTo] = useState<Date | null>(null);
-  const [sortBy, setSortBy] = useState<string | null>(null);
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
-  const [loading, setLoading] = useState(true);
+
+  /// Changes some of the filters. A change goes back to the first page unless it is itself a change of page.
+  function update(changes: Record<string, string | null>, options?: { replace?: boolean }) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        for (const [key, value] of Object.entries(changes)) {
+          if (value === null || value === '') next.delete(key);
+          else next.set(key, value);
+        }
+        if (!('page' in changes)) next.delete('page');
+        return next;
+      },
+      { replace: options?.replace }
+    );
+  }
 
   useEffect(() => {
     if (!isStaff) return;
     if (isAdmin) lookupsApi.departments().then(setDepartments);
     usersApi.list({ role: 'Employee' }).then(setEmployees);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isStaff, isAdmin]);
 
   function selectTab(tab: TicketTab) {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      const p = tabToParams(tab);
-      if (p.status) next.set('status', p.status);
-      else next.delete('status');
-      if (p.answered) next.set('answered', p.answered);
-      else next.delete('answered');
-      return next;
-    });
-    setPage(1);
-  }
-
-  function toggleMine() {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      if (mineOnly) next.delete('mine');
-      else next.set('mine', '1');
-      return next;
-    });
-    setPage(1);
+    const p = tabToParams(tab);
+    update({ status: p.status ?? null, answered: p.answered ?? null });
   }
 
   const effectiveAssignedToUserId = mineOnly && activeTab !== 'new' ? user?.id : assignedToUserId || undefined;
 
   useEffect(() => {
+    // A slower answer to an earlier filter must not overwrite the answer to the current one.
+    let current = true;
     setLoading(true);
     ticketsApi
       .list({
@@ -113,18 +148,21 @@ export default function TicketsListPage() {
         departmentId: departmentId || undefined,
         assignedToUserId: effectiveAssignedToUserId,
         search: search || undefined,
-        createdFrom: createdFrom ? createdFrom.toISOString() : undefined,
-        createdTo: createdTo ? createdTo.toISOString() : undefined,
+        createdFrom: createdFromIso ?? undefined,
+        createdTo: createdToIso ?? undefined,
         sortBy: sortBy ?? undefined,
         sortDir,
       })
       .then((res) => {
+        if (!current) return;
         setItems(res.items);
         setTotalCount(res.totalCount);
       })
-      .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, statusParam, activeTab, departmentId, effectiveAssignedToUserId, search, createdFrom, createdTo, sortBy, sortDir]);
+      .finally(() => current && setLoading(false));
+    return () => {
+      current = false;
+    };
+  }, [page, statusParam, activeTab, departmentId, effectiveAssignedToUserId, search, createdFromIso, createdToIso, sortBy, sortDir]);
 
   const employeesByBranch = useMemo(() => {
     const scoped = departmentId ? employees.filter((e) => e.departmentId === departmentId) : employees;
@@ -138,25 +176,8 @@ export default function TicketsListPage() {
   }, [employees, departmentId]);
 
   function handleSort(key: string) {
-    if (sortBy === key) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortBy(key);
-      setSortDir('asc');
-    }
-    setPage(1);
-  }
-
-  function SortTh({ colKey, label }: { colKey: string; label: string }) {
-    return (
-      <th
-        className="cursor-pointer select-none whitespace-nowrap px-3 py-1.5 hover:text-slate-700"
-        onClick={() => handleSort(colKey)}
-      >
-        {label}
-        {sortBy === colKey && <span className="ml-1">{sortDir === 'asc' ? '▲' : '▼'}</span>}
-      </th>
-    );
+    if (sortBy === key) update({ dir: sortDir === 'asc' ? 'desc' : 'asc' });
+    else update({ sort: key, dir: 'asc' });
   }
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
@@ -180,12 +201,14 @@ export default function TicketsListPage() {
         )}
       </div>
 
-      <div className="mb-4 flex gap-2 border-b border-slate-200">
+      <div className="mb-4 flex gap-2 overflow-x-auto border-b border-slate-200" role="tablist" aria-label="Ticket groups">
         {TABS.map((t) => (
           <button
             key={t.key}
+            role="tab"
+            aria-selected={activeTab === t.key}
             onClick={() => selectTab(t.key)}
-            className={`px-3 py-2 text-sm font-medium ${activeTab === t.key ? 'border-b-2 border-blue-700 text-blue-700' : 'text-slate-500'}`}
+            className={`whitespace-nowrap px-3 py-2 text-sm font-medium ${activeTab === t.key ? 'border-b-2 border-blue-700 text-blue-700' : 'text-slate-500'}`}
           >
             {t.label}
           </button>
@@ -193,25 +216,20 @@ export default function TicketsListPage() {
       </div>
 
       <Card className="mb-4 flex flex-wrap items-end gap-3 p-4">
-        <div className="w-56">
+        <div className="w-full sm:w-56">
           <Input
+            aria-label="Search tickets by number or title"
             placeholder="Search by number or title…"
             value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
+            onChange={(e) => update({ q: e.target.value }, { replace: true })}
           />
         </div>
         {isAdmin && (
-          <div className="w-44">
+          <div className="w-full sm:w-44">
             <Select
+              aria-label="Branch"
               value={departmentId}
-              onChange={(e) => {
-                setDepartmentId(e.target.value);
-                setAssignedToUserId('');
-                setPage(1);
-              }}
+              onChange={(e) => update({ dept: e.target.value, assignee: null })}
             >
               <option value="">All branches</option>
               {departments.map((d) => (
@@ -223,14 +241,8 @@ export default function TicketsListPage() {
           </div>
         )}
         {isStaff && !mineOnly && activeTab !== 'new' && (
-          <div className="w-52">
-            <Select
-              value={assignedToUserId}
-              onChange={(e) => {
-                setAssignedToUserId(e.target.value);
-                setPage(1);
-              }}
-            >
+          <div className="w-full sm:w-52">
+            <Select aria-label="Assigned employee" value={assignedToUserId} onChange={(e) => update({ assignee: e.target.value })}>
               <option value="">All employees</option>
               {employeesByBranch.map(([branchName, group]) => (
                 <optgroup key={branchName} label={branchName}>
@@ -247,7 +259,8 @@ export default function TicketsListPage() {
         {isEmployee && activeTab !== 'new' && (
           <button
             type="button"
-            onClick={toggleMine}
+            aria-pressed={mineOnly}
+            onClick={() => update({ mine: mineOnly ? null : '1' })}
             className={clsx(
               'rounded-full border px-3 py-2 text-xs font-medium',
               mineOnly ? 'border-blue-700 bg-blue-50 text-blue-700' : 'border-slate-300 text-slate-500 hover:border-slate-400'
@@ -256,10 +269,15 @@ export default function TicketsListPage() {
             Assigned to me
           </button>
         )}
-        <DateRangePicker from={createdFrom} to={createdTo} onChange={(f, t) => { setCreatedFrom(f); setCreatedTo(t); setPage(1); }} clearable />
+        <DateRangePicker
+          from={createdFrom}
+          to={createdTo}
+          onChange={(f, t) => update({ from: f ? f.toISOString() : null, to: t ? t.toISOString() : null })}
+          clearable
+        />
       </Card>
 
-      <p className="mb-2 px-1 text-xs text-slate-400">
+      <p className="mb-2 px-1 text-xs text-slate-500" role="status">
         {totalCount} ticket{totalCount === 1 ? '' : 's'} · {rangeLabel}
       </p>
 
@@ -271,14 +289,21 @@ export default function TicketsListPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
+              <caption className="sr-only">Tickets</caption>
               <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
                 <tr>
-                  <SortTh colKey="ticketNumber" label="#" />
-                  <SortTh colKey="title" label="Title" />
-                  <SortTh colKey="createdAt" label="Created" />
-                  {isStaff && <th className="whitespace-nowrap px-3 py-1.5">Client</th>}
-                  {isStaff && <SortTh colKey="priority" label="Priority" />}
-                  <th className="whitespace-nowrap px-3 py-1.5">Assigned to</th>
+                  <SortableHeader colKey="ticketNumber" label="#" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                  <SortableHeader colKey="title" label="Title" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                  <SortableHeader colKey="createdAt" label="Created" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                  {isStaff && (
+                    <th scope="col" className="whitespace-nowrap px-3 py-1.5">
+                      Client
+                    </th>
+                  )}
+                  {isStaff && <SortableHeader colKey="priority" label="Priority" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />}
+                  <th scope="col" className="whitespace-nowrap px-3 py-1.5">
+                    Assigned to
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -291,7 +316,12 @@ export default function TicketsListPage() {
                       i % 2 === 1 && 'bg-slate-100'
                     )}
                   >
-                    <td className="whitespace-nowrap px-3 py-1.5 font-medium text-blue-700">#{t.ticketNumber}</td>
+                    <td className="whitespace-nowrap px-3 py-1.5 font-medium">
+                      {/* The whole row can be clicked with a mouse; this link is what the keyboard and a screen reader use. */}
+                      <Link to={`/tickets/${t.id}`} onClick={(e) => e.stopPropagation()} className="text-blue-700 hover:underline">
+                        #{t.ticketNumber}
+                      </Link>
+                    </td>
                     <td className="max-w-[220px] truncate px-3 py-1.5">{t.title}</td>
                     <td className="whitespace-nowrap px-3 py-1.5 text-slate-500">{format(new Date(t.createdAt), 'dd.MM.yyyy HH:mm')}</td>
                     {isStaff && (
@@ -315,7 +345,7 @@ export default function TicketsListPage() {
                 ))}
                 {items.length === 0 && (
                   <tr>
-                    <td colSpan={isStaff ? 6 : 4} className="px-3 py-8 text-center text-slate-400">
+                    <td colSpan={isStaff ? 6 : 4} className="px-3 py-8 text-center text-slate-500">
                       No tickets found.
                     </td>
                   </tr>
@@ -327,17 +357,17 @@ export default function TicketsListPage() {
       </Card>
 
       {totalPages > 1 && (
-        <div className="mt-4 flex items-center justify-center gap-2">
-          <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+        <nav aria-label="Pages" className="mt-4 flex items-center justify-center gap-2">
+          <Button variant="secondary" disabled={page <= 1} onClick={() => update({ page: String(page - 1) })}>
             Previous
           </Button>
           <span className="text-sm text-slate-600">
             Page {page} of {totalPages}
           </span>
-          <Button variant="secondary" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+          <Button variant="secondary" disabled={page >= totalPages} onClick={() => update({ page: String(page + 1) })}>
             Next
           </Button>
-        </div>
+        </nav>
       )}
     </div>
   );

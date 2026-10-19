@@ -46,6 +46,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<SubBranch> SubBranches => Set<SubBranch>();
     public DbSet<WorkTask> WorkTasks => Set<WorkTask>();
     public DbSet<WorkTaskAssignmentLog> WorkTaskAssignmentLogs => Set<WorkTaskAssignmentLog>();
+    public DbSet<EmailOutboxItem> EmailOutbox => Set<EmailOutboxItem>();
     public DbSet<Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey> DataProtectionKeys => Set<Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
@@ -140,11 +141,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
                 .IncludeProperties(t => new { t.DueDateUtc, t.OpenedAtUtc });
 
             e.HasOne(t => t.Company).WithMany().HasForeignKey(t => t.CompanyId).OnDelete(DeleteBehavior.Restrict);
-            e.HasOne(t => t.HelpTopic).WithMany().HasForeignKey(t => t.HelpTopicId).OnDelete(DeleteBehavior.SetNull);
-            e.HasOne(t => t.Category).WithMany().HasForeignKey(t => t.CategoryId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(t => t.HelpTopic).WithMany().HasForeignKey(t => t.HelpTopicId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(t => t.Category).WithMany().HasForeignKey(t => t.CategoryId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(t => t.Department).WithMany().HasForeignKey(t => t.DepartmentId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(t => t.SubBranch).WithMany().HasForeignKey(t => t.SubBranchId).OnDelete(DeleteBehavior.SetNull);
-            e.HasOne(t => t.SlaPlan).WithMany().HasForeignKey(t => t.SlaPlanId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(t => t.SlaPlan).WithMany().HasForeignKey(t => t.SlaPlanId).OnDelete(DeleteBehavior.Restrict);
 
             e.HasMany(t => t.Messages).WithOne(m => m.Ticket).HasForeignKey(m => m.TicketId).OnDelete(DeleteBehavior.Cascade);
             e.HasMany(t => t.Attachments).WithOne(a => a.Ticket).HasForeignKey(a => a.TicketId).OnDelete(DeleteBehavior.Cascade);
@@ -255,6 +256,21 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
         builder.Entity<WorkTaskAssignmentLog>(e =>
         {
             e.HasIndex(h => h.WorkTaskId);
+        });
+
+        builder.Entity<EmailOutboxItem>(e =>
+        {
+            e.ToTable("EmailOutbox");
+            // The recipient is an e-mail address like any other, so it is encrypted at rest; the subject and body are not,
+            // because they say no more than the ticket message they were generated from.
+            e.Property(m => m.ToEmail)
+                .HasConversion(new ValueConverter<string, string>(v => _piiProtector.Encrypt(v)!, v => _piiProtector.Decrypt(v)!))
+                .HasMaxLength(1000).IsRequired();
+            e.Property(m => m.Subject).HasMaxLength(500).IsRequired();
+            e.Property(m => m.Status).HasConversion<int>();
+            e.Property(m => m.LastError).HasMaxLength(500);
+            // The worker asks for "pending and due"; the clean-up asks for "finished before X".
+            e.HasIndex(m => new { m.Status, m.NextAttemptAtUtc });
         });
 
         builder.Entity<AuditLog>(e =>

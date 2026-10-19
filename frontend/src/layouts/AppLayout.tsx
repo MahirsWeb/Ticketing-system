@@ -37,7 +37,7 @@ function useNavByRole(): Record<string, { to: string; label: string; ticketsDrop
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   clsx(
-    'border-b-2 px-4 py-2.5 text-sm font-semibold transition',
+    'shrink-0 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-semibold transition',
     isActive ? 'border-blue-400 bg-slate-200 text-[#1a2b4c]' : 'border-transparent text-slate-200 hover:bg-white/10 hover:text-white'
   );
 
@@ -157,7 +157,7 @@ export default function AppLayout() {
           </div>
         </div>
 
-        <nav className="mx-auto flex max-w-5xl gap-1 px-4">
+        <nav aria-label="Main" className="mx-auto flex max-w-5xl gap-1 px-4 max-sm:overflow-x-auto">
           {nav.map((item) =>
             item.ticketsDropdown ? (
               <TicketsNavItem key={item.to} to={item.to} label={item.label} />

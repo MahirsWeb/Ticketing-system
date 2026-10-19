@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using TicketSystemTech.Api.Contracts;
+using TicketSystemTech.Application.Common;
 using TicketSystemTech.Application.Common.Interfaces;
 using TicketSystemTech.Application.KnowledgeBase;
 using TicketSystemTech.Domain.Entities;
@@ -141,8 +142,12 @@ public class KnowledgeBaseController : ControllerBase
     /// </summary>
     [HttpGet("search")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
+    [EnableRateLimiting("ai-staff")]
     public async Task<ActionResult<List<KnowledgeBaseSearchResultDto>>> Search([FromQuery] string query, [FromQuery] int take = 10)
     {
+        if (query is { Length: > AiPromptLimits.MaxQuestionChars })
+            return BadRequest(new { message = $"The search text is too long (at most {AiPromptLimits.MaxQuestionChars} characters)." });
+
         var matches = await FindMatchesAsync(query, take, includeTicketSources: true);
         return Ok(matches.Select(ToDto).ToList());
     }
@@ -154,6 +159,7 @@ public class KnowledgeBaseController : ControllerBase
     /// </summary>
     [HttpPost("ask")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
+    [EnableRateLimiting("ai-staff")]
     public async Task<ActionResult<KnowledgeBaseAskResponseDto>> Ask(KnowledgeBaseAskRequest request)
     {
         // Computed once and reused below — this question previously got embedded twice per request (once
@@ -173,7 +179,7 @@ public class KnowledgeBaseController : ControllerBase
                 stats.SimilarCount, stats.TotalEligible, stats.Percentage));
         }
 
-        var context = string.Join("\n---\n", matches.Select(BuildContextEntry));
+        var context = AiPromptLimits.BuildContext(matches.Select(BuildContextEntry));
 
         var answer = await _chatCompletionService.AskAsync(StaffSystemInstruction, context, request.Question, Ct);
         var finalAnswer = answer ?? "AI answering isn't configured yet — showing the closest matching sources instead.";
@@ -203,7 +209,7 @@ public class KnowledgeBaseController : ControllerBase
         if (matches.Count == 0)
             return Ok(new KnowledgeBaseAskResponseDto(ClientNoInfoMessage, new List<KnowledgeBaseSearchResultDto>(), 0, 0, 0));
 
-        var context = string.Join("\n---\n", matches.Select(BuildContextEntry));
+        var context = AiPromptLimits.BuildContext(matches.Select(BuildContextEntry));
         var answer = await _chatCompletionService.AskAsync(ClientSystemInstruction, context, request.Question, Ct);
         var finalAnswer = string.IsNullOrWhiteSpace(answer) ? ClientNoInfoMessage : answer;
 
@@ -219,8 +225,12 @@ public class KnowledgeBaseController : ControllerBase
     /// </summary>
     [HttpGet("similar-tickets")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
+    [EnableRateLimiting("ai-staff")]
     public async Task<ActionResult<SimilarTicketsResponseDto>> SimilarTickets([FromQuery] string query)
     {
+        if (query is { Length: > AiPromptLimits.MaxQuestionChars })
+            return BadRequest(new { message = $"The text is too long (at most {AiPromptLimits.MaxQuestionChars} characters)." });
+
         var stats = await ComputeSimilarTicketStatsAsync(query, includeAllMatches: true);
         return Ok(new SimilarTicketsResponseDto(
             stats.SimilarCount, stats.TotalEligible, stats.Percentage, stats.Matches.Select(ToDto).ToList()));

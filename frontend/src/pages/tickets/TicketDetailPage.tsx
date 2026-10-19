@@ -21,7 +21,7 @@ import { ClientAiHelpPanel } from './ClientAiHelpPanel';
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</div>
+      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</div>
       <div className="text-sm text-slate-800">{value ?? '—'}</div>
     </div>
   );
@@ -49,12 +49,20 @@ export default function TicketDetailPage() {
 
   useEffect(() => {
     if (!id) return;
+    // Another ticket was opened: forget the previous one at once (its drafts and its data must not be shown under the new
+    // address) and ignore a slow answer for a ticket that is no longer the one on screen.
+    let current = true;
+    setTicket(null);
     setLoadError(null);
+    setLoading(true);
     ticketsApi
       .getById(id)
-      .then(setTicket)
-      .catch((err: any) => setLoadError(err?.response?.data?.message ?? 'Could not load this ticket.'))
-      .finally(() => setLoading(false));
+      .then((loaded) => current && setTicket(loaded))
+      .catch((err: any) => current && setLoadError(err?.response?.data?.message ?? 'Could not load this ticket.'))
+      .finally(() => current && setLoading(false));
+    return () => {
+      current = false;
+    };
   }, [id]);
 
   if (loading) {
@@ -98,7 +106,7 @@ export default function TicketDetailPage() {
         </p>
         {isStaff && (
           <div className="mt-3">
-            <TicketStatusActions ticket={ticket} onChanged={setTicket} />
+            <TicketStatusActions key={ticket.id} ticket={ticket} onChanged={setTicket} />
           </div>
         )}
       </div>
@@ -118,13 +126,13 @@ export default function TicketDetailPage() {
           </div>
           {isStaff && (
             <div className="mt-4 space-y-4 border-t border-slate-100 pt-4">
-              <TicketAssigneesPanel ticket={ticket} onChanged={setTicket} />
-              <WorkTimeEditor ticket={ticket} onChanged={setTicket} />
+              <TicketAssigneesPanel key={ticket.id} ticket={ticket} onChanged={setTicket} />
+              <WorkTimeEditor key={ticket.id} ticket={ticket} onChanged={setTicket} />
             </div>
           )}
           {canTransfer && (
             <div className="mt-4 border-t border-slate-100 pt-3">
-              <TransferBranchForm ticket={ticket} onTransferred={setTicket} />
+              <TransferBranchForm key={ticket.id} ticket={ticket} onTransferred={setTicket} />
             </div>
           )}
         </Card>
@@ -155,7 +163,7 @@ export default function TicketDetailPage() {
               type="button"
               disabled={reopening}
               onClick={() => setConfirmReopen(true)}
-              className="mt-3 text-xs text-slate-400 hover:text-slate-600 hover:underline disabled:opacity-50"
+              className="mt-3 text-xs text-slate-500 hover:text-slate-600 hover:underline disabled:opacity-50"
             >
               {reopening ? 'Reopening…' : 'Reopen ticket…'}
             </button>
@@ -163,14 +171,14 @@ export default function TicketDetailPage() {
         </Card>
       )}
 
-      {canSeeInternalNotes && <KnowledgeBaseSearchPanel initialQuery={ticket.title} />}
-      {!canSeeInternalNotes && <ClientAiHelpPanel initialQuery={ticket.title} />}
+      {canSeeInternalNotes && <KnowledgeBaseSearchPanel key={ticket.id} initialQuery={ticket.title} />}
+      {!canSeeInternalNotes && <ClientAiHelpPanel key={ticket.id} initialQuery={ticket.title} />}
 
-      {canOpen && <OpenTicketForm ticket={ticket} onOpened={setTicket} />}
+      {canOpen && <OpenTicketForm key={ticket.id} ticket={ticket} onOpened={setTicket} />}
 
       <Card className="p-5">
         <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-500">Activity</h2>
-        <TicketActivityFeed
+        <TicketActivityFeed key={ticket.id}
           ticket={ticket}
           messages={ticket.messages}
           canReplyResponse={canReplyResponse}
@@ -179,7 +187,7 @@ export default function TicketDetailPage() {
         />
       </Card>
 
-      {canClose && <CloseTicketForm ticket={ticket} onClosed={setTicket} />}
+      {canClose && <CloseTicketForm key={ticket.id} ticket={ticket} onClosed={setTicket} />}
 
       {confirmReopen && (
         <ConfirmDialog

@@ -17,7 +17,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 {
     public FakeEmbeddingService Embeddings { get; } = new();
     public FakeChatCompletionService Chat { get; } = new();
-    public RecordingEmailSender Emails { get; } = new();
+    /// <summary>The wire to Brevo. Everything above it is real: the application files e-mail in the outbox table as it does in
+    /// production, and the tests run the worker by hand against this fake.</summary>
+    public FakeEmailTransport Transport { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -28,8 +30,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             services.AddSingleton<IEmbeddingService>(Embeddings);
             services.RemoveAll<IChatCompletionService>();
             services.AddSingleton<IChatCompletionService>(Chat);
-            services.RemoveAll<IEmailSender>();
-            services.AddSingleton<IEmailSender>(Emails);
+            services.RemoveAll<IEmailTransport>();
+            services.AddSingleton<IEmailTransport>(Transport);
         });
     }
 }

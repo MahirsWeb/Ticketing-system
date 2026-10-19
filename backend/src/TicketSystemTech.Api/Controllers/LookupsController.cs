@@ -248,13 +248,16 @@ public class LookupsController : ControllerBase
         return Ok(new LookupItemFull(entity.Id, entity.Name, entity.IsActive));
     }
 
-    /// <summary>Tickets referencing this help topic have it cleared to NULL by the database, not deleted.</summary>
+    /// <summary>Refused while any ticket uses the help topic: deleting it would erase it from those tickets' history. Deactivate it instead.</summary>
     [HttpDelete("help-topics/{id:guid}")]
     [Authorize(Roles = nameof(UserRole.Admin))]
     public async Task<IActionResult> DeleteHelpTopic(Guid id)
     {
         var entity = await _db.HelpTopics.FindAsync(id);
         if (entity is null) return NotFound();
+
+        var inUse = await _db.Tickets.CountAsync(t => t.HelpTopicId == id);
+        if (inUse > 0) return BadRequest(new { message = InUseMessage("help topic", inUse) });
         _db.HelpTopics.Remove(entity);
         await _db.SaveChangesAsync();
         return NoContent();
@@ -302,13 +305,16 @@ public class LookupsController : ControllerBase
         return Ok(new LookupItemFull(entity.Id, entity.Name, entity.IsActive));
     }
 
-    /// <summary>Tickets referencing this category have it cleared to NULL by the database, not deleted.</summary>
+    /// <summary>Refused while any ticket uses the category: deleting it would erase it from those tickets' history. Deactivate it instead.</summary>
     [HttpDelete("ticket-categories/{id:guid}")]
     [Authorize(Roles = nameof(UserRole.Admin))]
     public async Task<IActionResult> DeleteTicketCategory(Guid id)
     {
         var entity = await _db.TicketCategories.FindAsync(id);
         if (entity is null) return NotFound();
+
+        var inUse = await _db.Tickets.CountAsync(t => t.CategoryId == id);
+        if (inUse > 0) return BadRequest(new { message = InUseMessage("category", inUse) });
         _db.TicketCategories.Remove(entity);
         await _db.SaveChangesAsync();
         return NoContent();
@@ -358,15 +364,23 @@ public class LookupsController : ControllerBase
         return Ok(new SlaPlanItemFull(entity.Id, entity.Name, entity.ResolutionTimeHours, entity.IsActive));
     }
 
-    /// <summary>Tickets referencing this SLA plan have it cleared to NULL by the database, not deleted.</summary>
+    /// <summary>Refused while any ticket uses the SLA plan: deleting it would erase it from those tickets' history. Deactivate it instead.</summary>
     [HttpDelete("sla-plans/{id:guid}")]
     [Authorize(Roles = nameof(UserRole.Admin))]
     public async Task<IActionResult> DeleteSlaPlan(Guid id)
     {
         var entity = await _db.SlaPlans.FindAsync(id);
         if (entity is null) return NotFound();
+
+        var inUse = await _db.Tickets.CountAsync(t => t.SlaPlanId == id);
+        if (inUse > 0) return BadRequest(new { message = InUseMessage("SLA plan", inUse) });
+
         _db.SlaPlans.Remove(entity);
         await _db.SaveChangesAsync();
         return NoContent();
     }
+
+    private static string InUseMessage(string what, int tickets) =>
+        $"This {what} is used by {tickets} ticket(s) and cannot be deleted, because those tickets would lose it from their history. " +
+        "Deactivate it instead: it then disappears from the pickers, and everything that already uses it stays as it is.";
 }

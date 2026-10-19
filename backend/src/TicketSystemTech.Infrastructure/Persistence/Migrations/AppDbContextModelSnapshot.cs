@@ -17,7 +17,7 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.32")
+                .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -320,6 +320,55 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("EmailConnections");
+                });
+
+            modelBuilder.Entity("TicketSystemTech.Domain.Entities.EmailOutboxItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("HtmlBody")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("LeasedUntilUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("NextAttemptAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ToEmail")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status", "NextAttemptAtUtc");
+
+                    b.ToTable("EmailOutbox", (string)null);
                 });
 
             modelBuilder.Entity("TicketSystemTech.Domain.Entities.EmailTicketMark", b =>
@@ -1227,7 +1276,7 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                     b.HasOne("TicketSystemTech.Domain.Entities.TicketCategory", "Category")
                         .WithMany()
                         .HasForeignKey("CategoryId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("TicketSystemTech.Infrastructure.Identity.ApplicationUser", null)
                         .WithMany()
@@ -1254,7 +1303,7 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                     b.HasOne("TicketSystemTech.Domain.Entities.HelpTopic", "HelpTopic")
                         .WithMany()
                         .HasForeignKey("HelpTopicId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("TicketSystemTech.Infrastructure.Identity.ApplicationUser", null)
                         .WithMany()
@@ -1264,7 +1313,7 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                     b.HasOne("TicketSystemTech.Domain.Entities.SlaPlan", "SlaPlan")
                         .WithMany()
                         .HasForeignKey("SlaPlanId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("TicketSystemTech.Domain.Entities.SubBranch", "SubBranch")
                         .WithMany()

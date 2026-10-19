@@ -46,15 +46,15 @@ export default function SimilarTicketsPage() {
           <div className="grid grid-cols-3 gap-4">
             <Card className="p-5 text-center">
               <div className="text-3xl font-bold text-slate-900">{data.similarTicketCount}</div>
-              <div className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Similar tickets</div>
+              <div className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Similar tickets</div>
             </Card>
             <Card className="p-5 text-center">
               <div className="text-3xl font-bold text-slate-900">{data.totalEligibleTicketCount}</div>
-              <div className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Total documented tickets</div>
+              <div className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Total documented tickets</div>
             </Card>
             <Card className="p-5 text-center">
               <div className="text-3xl font-bold text-blue-700">{data.similarPercentage}%</div>
-              <div className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Share of the whole base</div>
+              <div className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Share of the whole base</div>
             </Card>
           </div>
 
@@ -63,7 +63,7 @@ export default function SimilarTicketsPage() {
               Matching tickets
             </div>
             {data.tickets.length === 0 ? (
-              <p className="p-5 text-sm text-slate-400">No similar tickets found.</p>
+              <p className="p-5 text-sm text-slate-500">No similar tickets found.</p>
             ) : (
               <table className="w-full text-sm">
                 <thead>
