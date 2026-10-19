@@ -16,4 +16,9 @@ public class EmailConnection : BaseEntity
     public string RefreshToken { get; set; } = string.Empty;
     public DateTime AccessTokenExpiresAtUtc { get; set; }
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Two requests refreshing the same expiring OAuth token at once would otherwise overwrite each other's
+    /// freshly issued tokens (a refresh token can be single-use). The loser now fails instead of clobbering.</summary>
+    [System.ComponentModel.DataAnnotations.Timestamp]
+    public byte[] RowVersion { get; set; } = Array.Empty<byte>();
 }

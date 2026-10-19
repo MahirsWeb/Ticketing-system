@@ -59,6 +59,12 @@ public class Ticket : BaseEntity
     /// <summary>Set once an overdue notification has been sent, so the background job doesn't re-notify every run.</summary>
     public DateTime? OverdueNotifiedAtUtc { get; set; }
 
+    /// <summary>SQL Server rowversion. A save that touches a ticket someone else changed in the meantime fails (and the
+    /// API answers 409) instead of silently overwriting their change: two staff opening or closing the same ticket at
+    /// once used to both "win", with the later write erasing the earlier one.</summary>
+    [System.ComponentModel.DataAnnotations.Timestamp]
+    public byte[] RowVersion { get; set; } = Array.Empty<byte>();
+
     public ICollection<TicketMessage> Messages { get; set; } = new List<TicketMessage>();
     public ICollection<TicketAttachment> Attachments { get; set; } = new List<TicketAttachment>();
     public ICollection<TicketAssignee> Assignees { get; set; } = new List<TicketAssignee>();

@@ -70,9 +70,35 @@ public class KnowledgeBaseIndexer : IKnowledgeBaseIndexer
             chunk.EmbeddingModel = _embeddingService.ModelName;
         }
 
-        await _db.SaveChangesAsync(ct);
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // Another run (the ticket was closed while a reindex was working on it) inserted the chunk first and the
+            // unique index rejected this one. Apply our content and vector to the row that won instead of failing.
+            // Anything else that made the save fail is a real error.
+            if (!await ChunkAlreadyExistsAsync(ticketId, ct)) throw;
+
+            var existing = await _db.KnowledgeBaseChunks.FirstAsync(c => c.TicketId == ticketId, ct);
+            existing.Content = content;
+            if (embedding is not null)
+            {
+                existing.Embedding = embedding;
+                existing.EmbeddingModel = _embeddingService.ModelName;
+            }
+            await _db.SaveChangesAsync(ct);
+        }
+
         _vectorIndex.Invalidate();
         return embedding is not null;
+    }
+
+    private async Task<bool> ChunkAlreadyExistsAsync(Guid ticketId, CancellationToken ct)
+    {
+        _db.ChangeTracker.Clear();
+        return await _db.KnowledgeBaseChunks.AnyAsync(c => c.TicketId == ticketId, ct);
     }
 
     private static string StripHtml(string html)

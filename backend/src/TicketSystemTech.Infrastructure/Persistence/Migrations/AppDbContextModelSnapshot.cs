@@ -196,12 +196,17 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("EntityType")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<Guid?>("UserId")
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.HasIndex("EntityType", "EntityId", "CreatedAt");
 
                     b.ToTable("AuditLogs");
                 });
@@ -298,10 +303,18 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ConnectedByUserId");
 
                     b.HasIndex("DepartmentId")
                         .IsUnique();
@@ -335,6 +348,10 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                         .HasColumnType("nvarchar(450)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ConvertedTicketId");
+
+                    b.HasIndex("MarkedByUserId");
 
                     b.HasIndex("DepartmentId", "MessageId")
                         .IsUnique();
@@ -428,7 +445,9 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("DocumentId");
 
-                    b.HasIndex("TicketId");
+                    b.HasIndex("TicketId")
+                        .IsUnique()
+                        .HasFilter("[TicketId] IS NOT NULL");
 
                     b.ToTable("KnowledgeBaseChunks");
                 });
@@ -457,6 +476,8 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("UploadedByUserId");
 
                     b.ToTable("KnowledgeBaseDocuments");
                 });
@@ -488,7 +509,10 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId", "IsRead");
+                    b.HasIndex("UserId", "CreatedAt")
+                        .IsDescending(false, true);
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("UserId", "CreatedAt"), new[] { "IsRead", "Type", "TicketId" });
 
                     b.ToTable("Notifications");
                 });
@@ -621,6 +645,12 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                     b.Property<string>("ResolutionSummary")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
                     b.Property<Guid?>("SlaPlanId")
                         .HasColumnType("uniqueidentifier");
 
@@ -657,13 +687,15 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ClientId");
 
+                    b.HasIndex("ClosedByUserId");
+
                     b.HasIndex("CompanyId");
 
                     b.HasIndex("CreatedAt");
 
-                    b.HasIndex("DepartmentId");
-
                     b.HasIndex("HelpTopicId");
+
+                    b.HasIndex("OpenedByUserId");
 
                     b.HasIndex("SlaPlanId");
 
@@ -674,7 +706,17 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                     b.HasIndex("TicketNumber")
                         .IsUnique();
 
-                    b.HasIndex("Priority", "DueDateUtc");
+                    b.HasIndex("DepartmentId", "CreatedAt");
+
+                    b.HasIndex("DepartmentId", "Status");
+
+                    b.HasIndex("Priority", "CreatedAt")
+                        .IsDescending(false, true);
+
+                    b.HasIndex(new[] { "Status" }, "IX_Tickets_Status_NotYetNotified")
+                        .HasFilter("[OverdueNotifiedAtUtc] IS NULL");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex(new[] { "Status" }, "IX_Tickets_Status_NotYetNotified"), new[] { "DueDateUtc", "OpenedAtUtc" });
 
                     b.ToTable("Tickets");
                 });
@@ -701,6 +743,8 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TicketId", "UserId")
                         .IsUnique();
+
+                    b.HasIndex("UserId", "TicketId");
 
                     b.ToTable("TicketAssignees");
                 });
@@ -743,6 +787,8 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                     b.HasIndex("MessageId");
 
                     b.HasIndex("TicketId");
+
+                    b.HasIndex("UploadedByUserId");
 
                     b.ToTable("TicketAttachments");
                 });
@@ -793,7 +839,11 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TicketId");
+                    b.HasIndex("AuthorId");
+
+                    b.HasIndex("TicketId", "Type");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("TicketId", "Type"), new[] { "AuthorId", "CreatedAt" });
 
                     b.ToTable("TicketMessages");
                 });
@@ -839,9 +889,15 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AssignedToUserId");
+                    b.HasIndex("AssignedByUserId");
+
+                    b.HasIndex("CreatedByUserId");
 
                     b.HasIndex("DepartmentId");
+
+                    b.HasIndex("AssignedToUserId", "StartedAtUtc");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("AssignedToUserId", "StartedAtUtc"), new[] { "EndedAtUtc", "Status" });
 
                     b.ToTable("WorkTasks");
                 });
@@ -868,6 +924,10 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AssignedByUserId");
+
+                    b.HasIndex("AssignedToUserId");
 
                     b.HasIndex("WorkTaskId");
 
@@ -974,8 +1034,6 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CompanyId");
 
-                    b.HasIndex("DepartmentId");
-
                     b.HasIndex("NormalizedEmail")
                         .HasDatabaseName("EmailIndex");
 
@@ -987,6 +1045,8 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                     b.HasIndex("Role");
 
                     b.HasIndex("SubBranchId");
+
+                    b.HasIndex("DepartmentId", "Role", "IsActive");
 
                     b.ToTable("AspNetUsers", (string)null);
                 });
@@ -1042,6 +1102,49 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("TicketSystemTech.Domain.Entities.AuditLog", b =>
+                {
+                    b.HasOne("TicketSystemTech.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("TicketSystemTech.Domain.Entities.EmailConnection", b =>
+                {
+                    b.HasOne("TicketSystemTech.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ConnectedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TicketSystemTech.Domain.Entities.Department", null)
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TicketSystemTech.Domain.Entities.EmailTicketMark", b =>
+                {
+                    b.HasOne("TicketSystemTech.Domain.Entities.Ticket", null)
+                        .WithMany()
+                        .HasForeignKey("ConvertedTicketId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TicketSystemTech.Domain.Entities.Department", null)
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TicketSystemTech.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("MarkedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("TicketSystemTech.Domain.Entities.KnowledgeBaseChunk", b =>
                 {
                     b.HasOne("TicketSystemTech.Domain.Entities.KnowledgeBaseDocument", "Document")
@@ -1059,6 +1162,24 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                     b.Navigation("Ticket");
                 });
 
+            modelBuilder.Entity("TicketSystemTech.Domain.Entities.KnowledgeBaseDocument", b =>
+                {
+                    b.HasOne("TicketSystemTech.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UploadedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TicketSystemTech.Domain.Entities.Notification", b =>
+                {
+                    b.HasOne("TicketSystemTech.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("TicketSystemTech.Domain.Entities.SubBranch", b =>
                 {
                     b.HasOne("TicketSystemTech.Domain.Entities.Department", "Department")
@@ -1072,10 +1193,26 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("TicketSystemTech.Domain.Entities.Ticket", b =>
                 {
+                    b.HasOne("TicketSystemTech.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("AssignedToUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("TicketSystemTech.Domain.Entities.TicketCategory", "Category")
                         .WithMany()
                         .HasForeignKey("CategoryId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("TicketSystemTech.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TicketSystemTech.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ClosedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("TicketSystemTech.Domain.Entities.Company", "Company")
                         .WithMany()
@@ -1092,6 +1229,11 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("HelpTopicId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("TicketSystemTech.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("OpenedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("TicketSystemTech.Domain.Entities.SlaPlan", "SlaPlan")
                         .WithMany()
@@ -1124,6 +1266,12 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("TicketSystemTech.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("Ticket");
                 });
 
@@ -1140,6 +1288,12 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("TicketSystemTech.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UploadedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("Message");
 
                     b.Navigation("Ticket");
@@ -1147,6 +1301,12 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("TicketSystemTech.Domain.Entities.TicketMessage", b =>
                 {
+                    b.HasOne("TicketSystemTech.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("AuthorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("TicketSystemTech.Domain.Entities.Ticket", "Ticket")
                         .WithMany("Messages")
                         .HasForeignKey("TicketId")
@@ -1158,6 +1318,24 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("TicketSystemTech.Domain.Entities.WorkTask", b =>
                 {
+                    b.HasOne("TicketSystemTech.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("AssignedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TicketSystemTech.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("AssignedToUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TicketSystemTech.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("TicketSystemTech.Domain.Entities.Department", "Department")
                         .WithMany()
                         .HasForeignKey("DepartmentId")
@@ -1169,6 +1347,18 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("TicketSystemTech.Domain.Entities.WorkTaskAssignmentLog", b =>
                 {
+                    b.HasOne("TicketSystemTech.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("AssignedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TicketSystemTech.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("AssignedToUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("TicketSystemTech.Domain.Entities.WorkTask", "WorkTask")
                         .WithMany("AssignmentHistory")
                         .HasForeignKey("WorkTaskId")
@@ -1180,6 +1370,11 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("TicketSystemTech.Infrastructure.Identity.ApplicationUser", b =>
                 {
+                    b.HasOne("TicketSystemTech.Domain.Entities.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("TicketSystemTech.Domain.Entities.Department", null)
                         .WithMany()
                         .HasForeignKey("DepartmentId")

@@ -144,6 +144,11 @@ public class LookupsController : ControllerBase
         if (subBranchCount > 0)
             return BadRequest(new { message = $"This branch still has {subBranchCount} sub-branch(es). Remove them first." });
 
+        // A connected mailbox holds OAuth tokens for the branch; deleting the branch would strand them (and the database
+        // now refuses it with a foreign key), so ask for the mailbox to be disconnected first.
+        if (await _db.EmailConnections.AnyAsync(c => c.DepartmentId == id))
+            return BadRequest(new { message = "This branch still has a connected mailbox. Disconnect it first." });
+
         // Tickets.DepartmentId is ON DELETE SET NULL, and a ticket without a branch is treated as "unrouted" and is
         // visible to every employee. Deleting a branch that still owns tickets would therefore silently expose
         // all of them across branches, so it is refused: transfer the tickets elsewhere first.

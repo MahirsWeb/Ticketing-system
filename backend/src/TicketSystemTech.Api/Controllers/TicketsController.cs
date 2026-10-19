@@ -698,7 +698,17 @@ public class TicketsController : ControllerBase
         });
 
         _db.Notifications.Add(new Notification { UserId = user.Id, Type = NotificationType.TicketAssigned, Message = $"Ticket #{ticket.TicketNumber} assigned to you", TicketId = ticket.Id });
-        await _db.SaveChangesAsync();
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // Two identical requests (a double click) raced past the check above; the unique index stopped the second.
+            // Anything else that made the save fail is a real error.
+            if (!await AssigneeExistsAsync(id, user.Id)) throw;
+            return BadRequest(new { message = "This person is already assigned to the ticket." });
+        }
 
         await _emailSender.SendAsync(user.Email!, $"Ticket #{ticket.TicketNumber} assigned to you", EmailTemplates.TicketAssigned(user.FirstName, ticket.TicketNumber, ticket.Title));
         await _notificationPublisher.PushToUserAsync(user.Id, "ticketAssigned", new { ticket.Id, ticket.TicketNumber, ticket.Title });
@@ -809,6 +819,12 @@ public class TicketsController : ControllerBase
         var author = await _db.Users.FirstAsync(u => u.Id == message.AuthorId);
         return Ok(new TicketMessageDto(message.Id, message.Type.ToString(), message.BodyHtml, message.AuthorId,
             $"{author.FirstName} {author.LastName}", message.CreatedAt, new List<TicketAttachmentDto>()));
+    }
+
+    private async Task<bool> AssigneeExistsAsync(Guid ticketId, Guid userId)
+    {
+        _db.ChangeTracker.Clear();
+        return await _db.TicketAssignees.AnyAsync(a => a.TicketId == ticketId && a.UserId == userId);
     }
 
     /// <summary>Who should hear about a client's reply: every assignee, plus the primary assignee if the list lacks them.

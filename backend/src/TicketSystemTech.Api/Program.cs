@@ -197,7 +197,21 @@ builder.Services.AddCors(options =>
 builder.Services.AddSignalR();
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
-        options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
+        options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()))
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        // Model-validation failures used to come back as ProblemDetails (title/errors, no "message"), while every
+        // other error in the API is { message }. The frontend reads `message`, so those failures showed a generic text.
+        // Same shape everywhere now, with the per-field detail kept under "errors".
+        options.InvalidModelStateResponseFactory = actionContext =>
+        {
+            var errors = actionContext.ModelState
+                .Where(e => e.Value?.Errors.Count > 0)
+                .ToDictionary(e => e.Key, e => e.Value!.Errors.Select(x => string.IsNullOrWhiteSpace(x.ErrorMessage) ? "Invalid value." : x.ErrorMessage).ToArray());
+            var first = errors.Values.SelectMany(v => v).FirstOrDefault() ?? "The request is not valid.";
+            return new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(new { message = first, errors });
+        };
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -272,6 +286,7 @@ app.Use(async (context, next) =>
 
 app.UseStaticFiles();
 app.UseCors("Frontend");
+app.UseMiddleware<TicketSystemTech.Api.Middleware.ApiExceptionMiddleware>();
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseMiddleware<TicketSystemTech.Api.Middleware.UserStatusValidationMiddleware>();
