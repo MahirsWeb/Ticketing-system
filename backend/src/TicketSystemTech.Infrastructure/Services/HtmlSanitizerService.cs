@@ -17,11 +17,28 @@ public class HtmlSanitizerService : IHtmlSanitizerService
         "data:image/png", "data:image/jpeg", "data:image/jpg", "data:image/gif", "data:image/webp"
     };
 
+    // A ticket is text. The library's defaults still allow form controls, which turn a ticket into a ready-made
+    // phishing page (a fake login form posting to another site).
+    private static readonly string[] BlockedTags =
+    {
+        "form", "input", "button", "textarea", "select", "option", "optgroup", "fieldset", "datalist", "output"
+    };
+
+    // CSS properties whose value can be a url(): the browser would fetch the address as soon as the message is
+    // opened, which tells the sender when and from where it was read. background-color etc. stay allowed.
+    private static readonly string[] BlockedCssProperties =
+    {
+        "background", "background-image", "border-image", "border-image-source", "list-style", "list-style-image",
+        "cursor", "content", "mask", "mask-image", "filter", "behavior"
+    };
+
     private readonly HtmlSanitizer _sanitizer;
 
     public HtmlSanitizerService()
     {
         _sanitizer = new HtmlSanitizer();
+        foreach (var tag in BlockedTags) _sanitizer.AllowedTags.Remove(tag);
+        foreach (var property in BlockedCssProperties) _sanitizer.AllowedCssProperties.Remove(property);
         _sanitizer.AllowedSchemes.Add("data");
         _sanitizer.FilterUrl += (_, e) =>
         {

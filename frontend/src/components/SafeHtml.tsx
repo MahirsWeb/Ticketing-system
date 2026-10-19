@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import { sanitizeHtml } from '../lib/sanitizeHtml';
 
 // Self-contained placeholder (no network dependency) shown in place of any <img> that fails to
 // load — mainly osTicket-imported tickets whose inline email images (cid: references) were never
@@ -24,6 +25,7 @@ const BROKEN_IMAGE_PLACEHOLDER =
  */
 export function SafeHtml({ html, className }: { html: string; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
+  const clean = useMemo(() => sanitizeHtml(html), [html]);
 
   useEffect(() => {
     const container = ref.current;
@@ -41,7 +43,7 @@ export function SafeHtml({ html, className }: { html: string; className?: string
     });
 
     return () => cleanups.forEach((fn) => fn());
-  }, [html]);
+  }, [clean]);
 
-  return <div ref={ref} className={className} dangerouslySetInnerHTML={{ __html: html }} />;
+  return <div ref={ref} className={className} dangerouslySetInnerHTML={{ __html: clean }} />;
 }

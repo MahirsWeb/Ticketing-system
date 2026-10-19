@@ -5,6 +5,7 @@ import type { MessageType, TicketDetailDto, TicketMessageDto } from '../../types
 import { Button } from '../../components/ui';
 import { RichTextEditor } from '../../components/RichTextEditor';
 import { SafeHtml } from '../../components/SafeHtml';
+import { sanitizeHtml } from '../../lib/sanitizeHtml';
 
 /// Unified chat-like feed: Response, Internal Note, and system lifecycle events (opened/assigned/transferred/closed)
 /// all shown together in one chronological stream, distinguished by bubble color — no more switching tabs to see everything.
@@ -63,7 +64,7 @@ export function TicketActivityFeed({
             return (
               <div key={m.id} className="flex items-center justify-center gap-2 py-1 text-center text-xs text-slate-400">
                 <span className="h-px flex-1 bg-slate-100" />
-                <span className="whitespace-nowrap" dangerouslySetInnerHTML={{ __html: m.bodyHtml }} />
+                <span className="whitespace-nowrap" dangerouslySetInnerHTML={{ __html: sanitizeHtml(m.bodyHtml) }} />
                 <span>· {format(new Date(m.createdAt), 'dd.MM.yyyy HH:mm')}</span>
                 <span className="h-px flex-1 bg-slate-100" />
               </div>

