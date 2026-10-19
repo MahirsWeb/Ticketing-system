@@ -40,6 +40,13 @@ public class ReportsController : ControllerBase
     }
 
     /// <summary>The branch/company/agent scope shared by every report, with no date restriction.</summary>
+    /// <summary>
+    /// Fires when the browser gives up on the request (the user navigates away, presses "Stop", or the connection
+    /// drops). It is handed to the database and to the AI calls below so the server stops working for nobody:
+    /// without it an abandoned AI question or Excel export keeps running to the end.
+    /// </summary>
+    private CancellationToken Ct => HttpContext.RequestAborted;
+
     private IQueryable<Ticket> InScope(Guid? companyId, Guid? agentId, Guid? departmentId, Guid? subBranchId)
     {
         var query = _db.Tickets.AsNoTracking().AsQueryable();
@@ -77,14 +84,14 @@ public class ReportsController : ControllerBase
     {
         var (f, t) = NormalizeRange(from, to);
 
-        var createdStatuses = await Scoped(f, t, companyId, agentId, departmentId, subBranchId).Select(x => x.Status).ToListAsync();
+        var createdStatuses = await Scoped(f, t, companyId, agentId, departmentId, subBranchId).Select(x => x.Status).ToListAsync(Ct);
         var totalNew = createdStatuses.Count(x => x == TicketStatus.New);
         // Resolved is not closed yet, so it is still work in progress.
         var totalOpen = createdStatuses.Count(x => x is TicketStatus.Open or TicketStatus.InProgress or TicketStatus.Resolved);
 
         var closed = await ClosedIn(f, t, companyId, agentId, departmentId, subBranchId)
             .Select(x => new { x.OpenedAtUtc, x.ClosedAtUtc, x.DueDateUtc })
-            .ToListAsync();
+            .ToListAsync(Ct);
 
         var resolutionHours = closed
             .Where(x => x.OpenedAtUtc.HasValue && x.ClosedAtUtc.HasValue)
@@ -108,8 +115,8 @@ public class ReportsController : ControllerBase
 
         // Two cohorts: what was opened on a day, and what was closed on it. The closed series used to come from the
         // opened cohort, so anything closed in the range but opened before it was silently dropped.
-        var createdDates = await Scoped(f, t, companyId, agentId, departmentId, subBranchId).Select(x => x.CreatedAt).ToListAsync();
-        var closedDates = await ClosedIn(f, t, companyId, agentId, departmentId, subBranchId).Select(x => x.ClosedAtUtc!.Value).ToListAsync();
+        var createdDates = await Scoped(f, t, companyId, agentId, departmentId, subBranchId).Select(x => x.CreatedAt).ToListAsync(Ct);
+        var closedDates = await ClosedIn(f, t, companyId, agentId, departmentId, subBranchId).Select(x => x.ClosedAtUtc!.Value).ToListAsync(Ct);
 
         // Days are the business's local calendar days, not UTC days.
         var opened = createdDates.GroupBy(d => BusinessTimeZone.LocalDate(d, zone)).ToDictionary(g => g.Key, g => g.Count());
@@ -136,10 +143,10 @@ public class ReportsController : ControllerBase
             .GroupBy(x => x.ClosedByUserId!.Value)
             .Select(g => new { UserId = g.Key, Count = g.Count() })
             .OrderByDescending(x => x.Count)
-            .ToListAsync();
+            .ToListAsync(Ct);
 
         var userIds = ranked.Select(x => x.UserId).ToList();
-        var names = await _db.Users.Where(u => userIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => $"{u.FirstName} {u.LastName}");
+        var names = await _db.Users.Where(u => userIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => $"{u.FirstName} {u.LastName}", Ct);
 
         return Ok(ranked.Select(x => new LeaderboardEntryDto(x.UserId, names.GetValueOrDefault(x.UserId, "Unknown"), x.Count)).ToList());
     }
@@ -154,14 +161,14 @@ public class ReportsController : ControllerBase
         var created = await _db.Tickets.AsNoTracking()
             .Where(x => x.CreatedAt >= f && x.CreatedAt <= t && x.DepartmentId.HasValue)
             .Select(x => new { DepartmentId = x.DepartmentId!.Value, x.Status })
-            .ToListAsync();
+            .ToListAsync(Ct);
         var closedPerBranch = await _db.Tickets.AsNoTracking()
             .Where(x => x.ClosedAtUtc != null && x.ClosedAtUtc >= f && x.ClosedAtUtc <= t && x.DepartmentId.HasValue)
             .GroupBy(x => x.DepartmentId!.Value)
             .Select(g => new { DepartmentId = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(g => g.DepartmentId, g => g.Count);
+            .ToDictionaryAsync(g => g.DepartmentId, g => g.Count, Ct);
 
-        var departments = await _db.Departments.ToDictionaryAsync(d => d.Id, d => d.Name);
+        var departments = await _db.Departments.ToDictionaryAsync(d => d.Id, d => d.Name, Ct);
 
         var branchIds = created.Select(x => x.DepartmentId).Concat(closedPerBranch.Keys).Distinct();
         var result = branchIds
@@ -185,7 +192,7 @@ public class ReportsController : ControllerBase
         var (f, t) = NormalizeRange(from, to);
         var zone = _zone.Value;
         // Bucket by the business's local date, so a ticket created at 00:30 local on the 1st lands in the new month.
-        var createdDates = (await Scoped(f, t, companyId, agentId, departmentId, subBranchId).Select(x => x.CreatedAt).ToListAsync())
+        var createdDates = (await Scoped(f, t, companyId, agentId, departmentId, subBranchId).Select(x => x.CreatedAt).ToListAsync(Ct))
             .Select(d => TimeZoneInfo.ConvertTimeFromUtc(BusinessTimeZone.AsUtc(d), zone))
             .ToList();
 
@@ -224,10 +231,10 @@ public class ReportsController : ControllerBase
             .Select(g => new { HelpTopicId = g.Key, Count = g.Count() })
             .OrderByDescending(x => x.Count)
             .Take(Math.Clamp(limit, 1, 50))
-            .ToListAsync();
+            .ToListAsync(Ct);
 
         var topicIds = grouped.Select(g => g.HelpTopicId).ToList();
-        var topicNames = await _db.HelpTopics.Where(h => topicIds.Contains(h.Id)).ToDictionaryAsync(h => h.Id, h => h.Name);
+        var topicNames = await _db.HelpTopics.Where(h => topicIds.Contains(h.Id)).ToDictionaryAsync(h => h.Id, h => h.Name, Ct);
 
         return Ok(grouped.Select(g => new TopIssueDto(topicNames.GetValueOrDefault(g.HelpTopicId, "Unknown"), g.Count)).ToList());
     }
@@ -244,12 +251,12 @@ public class ReportsController : ControllerBase
 
         var raw = await Scoped(request.From, request.To, request.CompanyId, request.AgentId, request.DepartmentId, request.SubBranchId)
             .Select(x => new { x.Title, x.HelpTopicId, x.Status })
-            .ToListAsync();
+            .ToListAsync(Ct);
 
         if (raw.Count == 0)
             return Ok(new AiInsightsResponseDto("No tickets found in this period to analyze."));
 
-        var topicNames = await _db.HelpTopics.ToDictionaryAsync(h => h.Id, h => h.Name);
+        var topicNames = await _db.HelpTopics.ToDictionaryAsync(h => h.Id, h => h.Name, Ct);
 
         var byTopic = raw.Where(x => x.HelpTopicId.HasValue)
             .GroupBy(x => x.HelpTopicId!.Value)
@@ -264,7 +271,7 @@ public class ReportsController : ControllerBase
             context.AppendLine($"- {topic.Name}: {topic.Count} tickets. Example titles: {string.Join("; ", topic.Samples)}");
 
         var answer = await _chatCompletionService.AskAsync(
-            InsightsSystemInstruction, context.ToString(), "Which problems occurred most in this period and what should we do about them?");
+            InsightsSystemInstruction, context.ToString(), "Which problems occurred most in this period and what should we do about them?", Ct);
 
         return Ok(new AiInsightsResponseDto(answer ?? "AI analysis isn't configured yet (missing Google AI key)."));
     }
@@ -280,14 +287,14 @@ public class ReportsController : ControllerBase
         var (f, t) = NormalizeRange(from, to);
         var tickets = await Scoped(f, t, companyId, agentId, departmentId, subBranchId)
             .OrderBy(x => x.CreatedAt)
-            .ToListAsync();
+            .ToListAsync(Ct);
 
         var userIds = tickets.SelectMany(x => new[] { x.ClientId, x.AssignedToUserId, x.ClosedByUserId })
             .Where(id => id.HasValue).Select(id => id!.Value)
             .Concat(tickets.Select(x => x.ClientId)).Distinct().ToList();
-        var names = await _db.Users.Where(u => userIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => $"{u.FirstName} {u.LastName}");
-        var companies = await _db.Companies.ToDictionaryAsync(c => c.Id, c => c.Name);
-        var departments = await _db.Departments.ToDictionaryAsync(d => d.Id, d => d.Name);
+        var names = await _db.Users.Where(u => userIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => $"{u.FirstName} {u.LastName}", Ct);
+        var companies = await _db.Companies.ToDictionaryAsync(c => c.Id, c => c.Name, Ct);
+        var departments = await _db.Departments.ToDictionaryAsync(d => d.Id, d => d.Name, Ct);
 
         var rows = tickets.Select(x => new TicketExportRow(
             x.TicketNumber,
@@ -323,7 +330,7 @@ public class ReportsController : ControllerBase
         if (!isAdmin) employeeQuery = employeeQuery.Where(u => u.DepartmentId == _currentUser.DepartmentId);
         if (agentId.HasValue) employeeQuery = employeeQuery.Where(u => u.Id == agentId.Value);
         else if (isAdmin && departmentId.HasValue) employeeQuery = employeeQuery.Where(u => u.DepartmentId == departmentId.Value);
-        var employees = await employeeQuery.OrderBy(u => u.FirstName).ToListAsync();
+        var employees = await employeeQuery.OrderBy(u => u.FirstName).ToListAsync(Ct);
 
         var timelineRows = new List<TimelineExportRow>();
         foreach (var employee in employees)
@@ -335,7 +342,7 @@ public class ReportsController : ControllerBase
                 .Where(x => x.AssignedToUserId == employee.Id || x.Assignees.Any(a => a.UserId == employee.Id))
                 .Select(x => new { x.TicketNumber, x.Title, x.Status, Start = x.WorkStartedAtUtc ?? x.OpenedAtUtc, End = x.WorkEndedAtUtc ?? x.ClosedAtUtc })
                 .Where(x => x.Start != null && x.Start < to && (x.End == null || x.End >= from))
-                .ToListAsync();
+                .ToListAsync(Ct);
             foreach (var b in ticketBlocks)
             {
                 timelineRows.Add(new TimelineExportRow(
@@ -346,7 +353,7 @@ public class ReportsController : ControllerBase
             var taskBlocks = await _db.WorkTasks.AsNoTracking()
                 .Where(x => x.AssignedToUserId == employee.Id && x.StartedAtUtc != null && x.StartedAtUtc < to && (x.EndedAtUtc == null || x.EndedAtUtc >= from))
                 .Select(x => new { x.Title, x.Status, x.StartedAtUtc, x.EndedAtUtc })
-                .ToListAsync();
+                .ToListAsync(Ct);
             foreach (var b in taskBlocks)
             {
                 timelineRows.Add(new TimelineExportRow(

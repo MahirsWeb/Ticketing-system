@@ -33,6 +33,10 @@ public record UpdateUserRequest(
     Guid? SubBranchId // Required if the selected branch has sub-branches defined.
 );
 
+/// <summary>One page of accounts for the Users screen. The two totals ignore the search text, so the tab labels
+/// ("Clients (2898)") keep showing how many accounts exist while the table shows only the matches.</summary>
+public record UserPageDto(List<UserListItem> Items, int Page, int PageSize, int TotalCount, int ClientCount, int StaffCount);
+
 public record CreatedUserResponse(
     Guid UserId,
     string Email,

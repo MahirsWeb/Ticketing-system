@@ -281,6 +281,76 @@ public class UsersController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// The Users screen's list: one page of clients or of staff, optionally filtered by a search text. The plain
+    /// <c>GET /api/users</c> loads and decrypts every account on every call, which was fine for the 39 staff the pickers
+    /// ask for and wrong for ~2,900 clients.
+    ///
+    /// Search matches names and the company name as a substring. Email is stored encrypted, so it can only be matched
+    /// exactly: type a full address to find that account.
+    /// </summary>
+    [HttpGet("paged")]
+    [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
+    public async Task<ActionResult<UserPageDto>> ListPaged(
+        [FromQuery] string group = "clients", [FromQuery] string? search = null,
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 25, CancellationToken ct = default)
+    {
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        var wantStaff = string.Equals(group, "staff", StringComparison.OrdinalIgnoreCase);
+
+        // Same visibility as the unpaged list: branches are isolated for staff, clients are shared across branches.
+        var scope = _userManager.Users.AsNoTracking().AsQueryable();
+        if (_currentUser.Role != UserRole.Admin)
+            scope = scope.Where(u => u.Role == UserRole.Client || u.DepartmentId == _currentUser.DepartmentId);
+
+        var clientCount = await scope.CountAsync(u => u.Role == UserRole.Client, ct);
+        var staffCount = await scope.CountAsync(u => u.Role != UserRole.Client, ct);
+
+        var query = wantStaff ? scope.Where(u => u.Role != UserRole.Client) : scope.Where(u => u.Role == UserRole.Client);
+
+        var text = search?.Trim();
+        if (!string.IsNullOrEmpty(text))
+        {
+            if (text.Contains('@'))
+            {
+                var emailHash = _userManager.NormalizeEmail(text);
+                query = query.Where(u => u.NormalizedEmail == emailHash);
+            }
+            else
+            {
+                var companyIds = await _db.Companies.Where(c => c.Name.Contains(text)).Select(c => c.Id).ToListAsync(ct);
+                query = query.Where(u =>
+                    (u.FirstName + " " + u.LastName).Contains(text) ||
+                    (u.CompanyId != null && companyIds.Contains(u.CompanyId.Value)));
+            }
+        }
+
+        var total = await query.CountAsync(ct);
+        var users = await query
+            .OrderBy(u => u.FirstName).ThenBy(u => u.LastName).ThenBy(u => u.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .ToListAsync(ct);
+
+        // Names are looked up only for what is on this page.
+        var companyIdsOnPage = users.Where(u => u.CompanyId.HasValue).Select(u => u.CompanyId!.Value).Distinct().ToList();
+        var departmentIdsOnPage = users.Where(u => u.DepartmentId.HasValue).Select(u => u.DepartmentId!.Value).Distinct().ToList();
+        var subBranchIdsOnPage = users.Where(u => u.SubBranchId.HasValue).Select(u => u.SubBranchId!.Value).Distinct().ToList();
+        var companyNames = await _db.Companies.Where(c => companyIdsOnPage.Contains(c.Id)).ToDictionaryAsync(c => c.Id, c => c.Name, ct);
+        var departmentNames = await _db.Departments.Where(d => departmentIdsOnPage.Contains(d.Id)).ToDictionaryAsync(d => d.Id, d => d.Name, ct);
+        var subBranchNames = await _db.SubBranches.Where(s => subBranchIdsOnPage.Contains(s.Id)).ToDictionaryAsync(s => s.Id, s => s.Name, ct);
+
+        var items = users.Select(u => new UserListItem(
+            u.Id, u.FirstName, u.LastName, u.Email!, u.Role.ToString(),
+            u.CompanyId, u.CompanyId.HasValue && companyNames.TryGetValue(u.CompanyId.Value, out var n) ? n : null,
+            u.PhoneNumber, u.IsActive, u.EmailConfirmed, u.CreatedAtUtc,
+            u.DepartmentId, u.DepartmentId.HasValue && departmentNames.TryGetValue(u.DepartmentId.Value, out var dn) ? dn : null,
+            u.SubBranchId, u.SubBranchId.HasValue && subBranchNames.TryGetValue(u.SubBranchId.Value, out var sn) ? sn : null,
+            u.ProfilePictureUrl, u.LastLoginAtUtc)).ToList();
+
+        return Ok(new UserPageDto(items, page, pageSize, total, clientCount, staffCount));
+    }
+
     /// <summary>Fetches a single account's profile — used by the user detail page.</summary>
     [HttpGet("{id:guid}")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]

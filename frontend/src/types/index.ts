@@ -217,6 +217,16 @@ export interface CreatedUserResponse {
   temporaryPasswordExpiresAtUtc: string;
 }
 
+export interface UserPageDto {
+  items: UserListItemDto[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  /** Totals ignore the search text, so the tab labels keep showing how many accounts exist. */
+  clientCount: number;
+  staffCount: number;
+}
+
 export interface UserListItemDto {
   id: string;
   firstName: string;

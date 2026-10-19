@@ -85,6 +85,10 @@ public class GoogleAiEmbeddingService : IEmbeddingService
                     result[i++] = v.GetSingle();
                 return result;
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw; // the caller gave up (browser closed, "Stop" pressed): not an AI failure, and not worth a warning
+            }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "[AI:UNEXPECTED_ERROR] Failed to generate embedding via Google AI.");

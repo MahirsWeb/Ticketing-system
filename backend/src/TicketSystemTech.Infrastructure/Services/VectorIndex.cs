@@ -52,7 +52,10 @@ public sealed class VectorIndex : IVectorIndex
             if (IsFresh(out cached)) return cached; // another caller reloaded while this one waited
 
             var versionAtStart = Interlocked.Read(ref _version);
-            var loaded = await LoadAsync(ct);
+            // The load is shared by everyone waiting on it, so one caller giving up must not abort it for the rest:
+            // it runs to completion, and only this caller's wait is cancelled.
+            var loaded = await LoadAsync(CancellationToken.None);
+            ct.ThrowIfCancellationRequested();
             _entries = loaded;
             _loadedAtUtc = DateTime.UtcNow;
             _loadedVersion = versionAtStart; // an Invalidate() during the load leaves the copy stale, as it should

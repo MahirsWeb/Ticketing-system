@@ -62,6 +62,13 @@ public class KnowledgeBaseController : ControllerBase
     private readonly IVectorIndex _vectorIndex;
     private readonly IKnowledgeBaseReindexJob _reindexJob;
 
+    /// <summary>
+    /// Fires when the browser gives up on the request (the user navigates away, presses "Stop", or the connection
+    /// drops). It is handed to the database and to the AI calls below so the server stops working for nobody:
+    /// without it an abandoned AI question or Excel export keeps running to the end.
+    /// </summary>
+    private CancellationToken Ct => HttpContext.RequestAborted;
+
     public KnowledgeBaseController(
         AppDbContext db,
         ICurrentUserService currentUser,
@@ -128,7 +135,7 @@ public class KnowledgeBaseController : ControllerBase
         // Computed once and reused below — this question previously got embedded twice per request (once
         // here, once again inside the similar-tickets stat), doubling both the Google AI round-trip and
         // the full-corpus scoring pass on every ask.
-        var queryEmbedding = await _embeddingService.EmbedAsync(request.Question);
+        var queryEmbedding = await _embeddingService.EmbedAsync(request.Question, Ct);
         var matches = queryEmbedding is not null
             ? await FindMatchesBySimilarityAsync(queryEmbedding, 50, includeTicketSources: true)
             : await FindMatchesByKeywordAsync(request.Question, 50, includeTicketSources: true);
@@ -144,7 +151,7 @@ public class KnowledgeBaseController : ControllerBase
 
         var context = string.Join("\n---\n", matches.Select(BuildContextEntry));
 
-        var answer = await _chatCompletionService.AskAsync(StaffSystemInstruction, context, request.Question);
+        var answer = await _chatCompletionService.AskAsync(StaffSystemInstruction, context, request.Question, Ct);
         var finalAnswer = answer ?? "AI answering isn't configured yet — showing the closest matching sources instead.";
 
         // Tickets the AI explicitly called out by number (e.g. its "might help" fallback list) are the
@@ -173,7 +180,7 @@ public class KnowledgeBaseController : ControllerBase
             return Ok(new KnowledgeBaseAskResponseDto(ClientNoInfoMessage, new List<KnowledgeBaseSearchResultDto>(), 0, 0, 0));
 
         var context = string.Join("\n---\n", matches.Select(BuildContextEntry));
-        var answer = await _chatCompletionService.AskAsync(ClientSystemInstruction, context, request.Question);
+        var answer = await _chatCompletionService.AskAsync(ClientSystemInstruction, context, request.Question, Ct);
         var finalAnswer = string.IsNullOrWhiteSpace(answer) ? ClientNoInfoMessage : answer;
 
         // Clients see which help articles were used, never ticket numbers/internal detail.
@@ -253,7 +260,7 @@ public class KnowledgeBaseController : ControllerBase
         var docs = await _db.KnowledgeBaseDocuments.AsNoTracking()
             .OrderByDescending(d => d.CreatedAt)
             .Select(d => new { d.Id, d.Title, d.SourceFileName, d.FileUrl, d.CreatedAt, ChunkCount = d.Chunks.Count })
-            .ToListAsync();
+            .ToListAsync(Ct);
         return Ok(docs.Select(d => new KnowledgeBaseDocumentDto(
             d.Id, d.Title, d.SourceFileName, _links.ToDownloadUrl(d.FileUrl), d.CreatedAt, d.ChunkCount)).ToList());
     }
@@ -298,7 +305,7 @@ public class KnowledgeBaseController : ControllerBase
         if (string.IsNullOrWhiteSpace(query)) return new List<ChunkMatch>();
 
         // Prefer real semantic search — embed the query and rank chunks by cosine similarity.
-        var queryEmbedding = await _embeddingService.EmbedAsync(query);
+        var queryEmbedding = await _embeddingService.EmbedAsync(query, Ct);
         if (queryEmbedding is not null)
         {
             var semanticMatches = await FindMatchesBySimilarityAsync(queryEmbedding, take, includeTicketSources);
@@ -319,7 +326,7 @@ public class KnowledgeBaseController : ControllerBase
         // The vectors come from an in-memory index (already normalised, rebuilt after changes or a few minutes), so a
         // question costs one dot product per eligible chunk instead of a SQL round trip that parsed ~100 MB of JSON.
         var query = IVectorIndex.Normalize(queryEmbedding);
-        var top = (await _vectorIndex.GetAsync())
+        var top = (await _vectorIndex.GetAsync(Ct))
             .Where(e => includeTicketSources || e.DocumentId != null)
             .Select(e => new { Id = e.ChunkId, e.TicketId, e.DocumentId, Similarity = IVectorIndex.Dot(query, e.Unit) })
             .OrderByDescending(x => x.Similarity)
@@ -332,7 +339,7 @@ public class KnowledgeBaseController : ControllerBase
         var contentById = await _db.KnowledgeBaseChunks.AsNoTracking()
             .Where(c => topIds.Contains(c.Id))
             .Select(c => new { c.Id, c.Content })
-            .ToDictionaryAsync(c => c.Id, c => c.Content);
+            .ToDictionaryAsync(c => c.Id, c => c.Content, Ct);
 
         var scored = top
             .Select(x => new { x.TicketId, x.DocumentId, Content = contentById[x.Id], x.Similarity })
@@ -356,7 +363,7 @@ public class KnowledgeBaseController : ControllerBase
 
         var candidates = await EligibleChunksQuery(includeTicketSources)
             .Select(c => new { c.Content, c.TicketId, c.DocumentId })
-            .ToListAsync();
+            .ToListAsync(Ct);
 
         if (candidates.Count == 0) return new List<ChunkMatch>();
 
@@ -382,10 +389,10 @@ public class KnowledgeBaseController : ControllerBase
 
         var tickets = await _db.Tickets.AsNoTracking()
             .Where(t => ticketIds.Contains(t.Id) && t.Status != TicketStatus.Open)
-            .ToDictionaryAsync(t => t.Id, t => t);
+            .ToDictionaryAsync(t => t.Id, t => t, Ct);
         var documents = await _db.KnowledgeBaseDocuments.AsNoTracking()
             .Where(d => documentIds.Contains(d.Id))
-            .ToDictionaryAsync(d => d.Id, d => d);
+            .ToDictionaryAsync(d => d.Id, d => d, Ct);
 
         var results = new List<ChunkMatch>();
         foreach (var s in list)
@@ -411,10 +418,10 @@ public class KnowledgeBaseController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(query)) return new SimilarTicketStats(0, 0, 0, new List<ChunkMatch>());
 
-        var totalEligible = await EligibleChunksQuery(includeTicketSources: true).Where(c => c.TicketId != null).CountAsync();
+        var totalEligible = await EligibleChunksQuery(includeTicketSources: true).Where(c => c.TicketId != null).CountAsync(Ct);
         if (totalEligible == 0) return new SimilarTicketStats(0, 0, 0, new List<ChunkMatch>());
 
-        var queryEmbedding = precomputedQueryEmbedding ?? await _embeddingService.EmbedAsync(query);
+        var queryEmbedding = precomputedQueryEmbedding ?? await _embeddingService.EmbedAsync(query, Ct);
         List<ChunkMatch> matches;
 
         if (queryEmbedding is not null)
@@ -422,7 +429,7 @@ public class KnowledgeBaseController : ControllerBase
             // Embedding is needed for every candidate to score it, but Content (can be large — full
             // ticket notes/resolution) is only fetched for the ones that actually clear the cutoff.
             var unitQuery = IVectorIndex.Normalize(queryEmbedding);
-            var rawScores = (await _vectorIndex.GetAsync())
+            var rawScores = (await _vectorIndex.GetAsync(Ct))
                 .Where(e => e.TicketId != null)
                 .Select(e => new { Id = e.ChunkId, e.TicketId, Similarity = IVectorIndex.Dot(unitQuery, e.Unit) })
                 .ToList();
@@ -442,7 +449,7 @@ public class KnowledgeBaseController : ControllerBase
                 var contentById = await _db.KnowledgeBaseChunks.AsNoTracking()
                     .Where(c => aboveIds.Contains(c.Id))
                     .Select(c => new { c.Id, c.Content })
-                    .ToDictionaryAsync(c => c.Id, c => c.Content);
+                    .ToDictionaryAsync(c => c.Id, c => c.Content, Ct);
 
                 var scored = above
                     .Select(x => new { x.TicketId, Content = contentById[x.Id], Score = (int)MathF.Round(Math.Clamp(x.Similarity, 0f, 1f) * 100) })
@@ -462,7 +469,7 @@ public class KnowledgeBaseController : ControllerBase
             var candidates = await EligibleChunksQuery(includeTicketSources: true)
                 .Where(c => c.TicketId != null)
                 .Select(c => new { c.Content, c.TicketId })
-                .ToListAsync();
+                .ToListAsync(Ct);
 
             // Keyword fallback "similar" bar: at least half of the query's keywords show up in the ticket.
             var minMatches = Math.Max(1, keywords.Count / 2);

@@ -4,10 +4,12 @@ import clsx from 'clsx';
 import { useAuthStore } from '../../store/authStore';
 import { usersApi } from '../../api/users';
 import { lookupsApi } from '../../api/lookups';
-import type { CompanyItemFull, CreatedUserResponse, DepartmentItemFull, SubBranchItemFull, UserListItemDto, UserRole } from '../../types';
+import type { CompanyItemFull, CreatedUserResponse, DepartmentItemFull, SubBranchItemFull, UserPageDto, UserRole } from '../../types';
 import { Button, Card, ErrorText, Input, Label, Select, StatusPill } from '../../components/ui';
 import { TempPasswordModal } from './TempPasswordModal';
 import CompaniesPage from './CompaniesPage';
+
+const PAGE_SIZE = 25;
 
 export default function UsersPage() {
   const user = useAuthStore((s) => s.user);
@@ -18,7 +20,12 @@ export default function UsersPage() {
   const [section, setSection] = useState<'users' | 'companies'>(searchParams.get('tab') === 'companies' ? 'companies' : 'users');
 
   const [tab, setTab] = useState<'clients' | 'employees'>('clients');
-  const [users, setUsers] = useState<UserListItemDto[]>([]);
+  const [pageData, setPageData] = useState<UserPageDto | null>(null);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [listError, setListError] = useState<string | null>(null);
   const [companies, setCompanies] = useState<CompanyItemFull[]>([]);
   const [departments, setDepartments] = useState<DepartmentItemFull[]>([]);
   const [subBranchesByDept, setSubBranchesByDept] = useState<Record<string, SubBranchItemFull[]>>({});
@@ -37,9 +44,38 @@ export default function UsersPage() {
   const needsBranch = accountType === 'Employee';
   const availableSubBranches = departmentId ? subBranchesByDept[departmentId] ?? [] : [];
 
+  const activeTab = canSeeEmployees ? tab : 'clients';
+
   function refreshUsers() {
-    usersApi.list().then(setUsers);
+    setReloadKey((k) => k + 1);
   }
+
+  // Typing in the search box should not fire a request per keystroke.
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  // A different tab or search starts again from the first page.
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab, debouncedSearch]);
+
+  // Only the visible page is fetched; an older request that is still running is cancelled when a newer one starts,
+  // so a slow answer can never overwrite a newer one.
+  useEffect(() => {
+    if (section !== 'users') return;
+    const controller = new AbortController();
+    setListError(null);
+    usersApi
+      .listPaged({ group: activeTab === 'clients' ? 'clients' : 'staff', search: debouncedSearch || undefined, page, pageSize: PAGE_SIZE }, controller.signal)
+      .then(setPageData)
+      .catch((err) => {
+        if (controller.signal.aborted || err?.code === 'ERR_CANCELED') return;
+        setListError(err?.response?.data?.message ?? 'Could not load the accounts.');
+      });
+    return () => controller.abort();
+  }, [section, activeTab, debouncedSearch, page, reloadKey]);
 
   async function getSubBranches(deptId: string): Promise<SubBranchItemFull[]> {
     if (subBranchesByDept[deptId]) return subBranchesByDept[deptId];
@@ -49,7 +85,6 @@ export default function UsersPage() {
   }
 
   useEffect(() => {
-    refreshUsers();
     lookupsApi.companies().then(setCompanies);
     lookupsApi.departments().then(setDepartments);
   }, []);
@@ -106,10 +141,8 @@ export default function UsersPage() {
     }
   }
 
-  const clients = users.filter((u) => u.role === 'Client');
-  const employees = users.filter((u) => u.role !== 'Client');
-  const activeTab = canSeeEmployees ? tab : 'clients';
-  const visibleUsers = activeTab === 'clients' ? clients : employees;
+  const visibleUsers = pageData?.items ?? [];
+  const totalPages = Math.max(1, Math.ceil((pageData?.totalCount ?? 0) / PAGE_SIZE));
 
   return (
     <div className="space-y-6">
@@ -221,16 +254,29 @@ export default function UsersPage() {
             onClick={() => setTab('clients')}
             className={`px-3 py-2 text-sm font-medium ${activeTab === 'clients' ? 'border-b-2 border-blue-700 text-blue-700' : 'text-slate-500'}`}
           >
-            Clients ({clients.length})
+            Clients ({pageData?.clientCount ?? '…'})
           </button>
           <button
             onClick={() => setTab('employees')}
             className={`px-3 py-2 text-sm font-medium ${activeTab === 'employees' ? 'border-b-2 border-blue-700 text-blue-700' : 'text-slate-500'}`}
           >
-            Employees & Admins ({employees.length})
+            Employees & Admins ({pageData?.staffCount ?? '…'})
           </button>
         </div>
       )}
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Input
+          className="max-w-sm"
+          placeholder="Search by name or company — or type a full email"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <span className="text-xs text-slate-400">
+          {pageData ? `${pageData.totalCount} ${pageData.totalCount === 1 ? 'account' : 'accounts'}${debouncedSearch ? ' match' : ''}` : ''}
+        </span>
+      </div>
+      <ErrorText>{listError}</ErrorText>
 
       <Card className="overflow-hidden">
         <table className="w-full text-sm">
@@ -263,13 +309,27 @@ export default function UsersPage() {
             {visibleUsers.length === 0 && (
               <tr>
                 <td colSpan={4} className="px-4 py-8 text-center text-slate-400">
-                  No accounts here yet.
+                  {debouncedSearch ? 'No accounts match your search.' : 'No accounts here yet.'}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </Card>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2">
+          <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+            Previous
+          </Button>
+          <span className="text-sm text-slate-600">
+            Page {page} of {totalPages}
+          </span>
+          <Button variant="secondary" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+            Next
+          </Button>
+        </div>
+      )}
 
       {result && <TempPasswordModal result={result} onClose={() => setResult(null)} />}
         </>
