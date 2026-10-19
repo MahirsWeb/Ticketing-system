@@ -349,3 +349,6 @@ finally
 {
     await Log.CloseAndFlushAsync();
 }
+
+// Lets the integration tests (WebApplicationFactory<Program>) reach the entry point generated for the top-level statements above.
+public partial class Program { }

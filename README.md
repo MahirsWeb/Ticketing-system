@@ -303,8 +303,24 @@ cd frontend && npm run lint && npm run build
 
 `npm run build` uključuje provjeru TypeScript tipova. Isto rade i GitHub Actions
 (`.github/workflows/ci.yml`) na svaki push na `main` i svaki pull request: backend se gradi i testira na Windowsu
-(mora proći) i na Linuxu (informativno, dok se ne potvrdi da testovi rade i tamo), frontend prolazi lint, build i
-`npm audit`, a paketi sa **visokim ili kritičnim** poznatim ranjivostima obaraju build.
+(mora proći) i na Linuxu sa pravim SQL Serverom (informativno, dok se ne potvrdi da sve radi i tamo), frontend
+prolazi lint, build i `npm audit`, a paketi sa **visokim ili kritičnim** poznatim ranjivostima obaraju build.
+
+### Testovi autorizacije (integracijski)
+
+Pored običnih jediničnih testova, `backend/tests/TicketSystemTech.Tests/Integration/` pokreće **pravu aplikaciju** (u
+memoriji, sa pravim migracijama) nad privremenom bazom i provjerava ko šta smije:
+
+- za **svaki** endpoint iz stvarno registrovanih ruta: anoniman poziv daje 401, a uloga koja nije dozvoljena 403; novi
+  endpoint bez `[Authorize]` obara test dok se svjesno ne doda na listu javnih endpointa;
+- izolaciju poslovnica: ko vidi koje tikete, klijente, osoblje, zadatke, notifikacije i koje izvore AI asistent koristi
+  (uključujući pokušaje da se filterima proširi vidljivost);
+- da token prestaje važiti kad se nalog deaktivira, premjesti ili promijeni lozinku.
+
+Testovi trebaju SQL Server na kojem smiju praviti i brisati **svoje** baze (`TicketSystemTech_AuthzTest_*`; vaša
+baza se ne dira). Na razvojnom računaru ništa ne treba podešavati: koriste server iz vašeg
+`appsettings.Development.json`. Drugi server se zadaje varijablom okruženja `TST_SQL` (connection string, ime baze
+se ignoriše). Bez ikakvog SQL Servera ovi testovi se **preskaču** (prikažu se kao *skipped*), ostali rade normalno.
 
 ---
 

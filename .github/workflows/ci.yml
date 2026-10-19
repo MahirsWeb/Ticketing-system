@@ -13,21 +13,12 @@ permissions:
   contents: read
 
 jobs:
-  backend:
-    name: Backend (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # Windows is where the application is developed and where every test is known to pass: this one must be green.
-          - os: windows-latest
-            experimental: false
-          # Linux is the Docker target. The tests have only ever been run on Windows, so a failure here is information
-          # (a path or case-sensitivity assumption), not yet a reason to block a merge.
-          - os: ubuntu-latest
-            experimental: true
-    continue-on-error: ${{ matrix.experimental }}
+  backend-windows:
+    name: Backend (Windows)
+    # Windows is where the application is developed and where every test is known to pass: this job must be green.
+    # The integration tests need a SQL Server and are skipped here (GitHub's Windows runners cannot host a SQL Server
+    # container); they run in the Linux job below.
+    runs-on: windows-latest
     defaults:
       run:
         working-directory: backend
@@ -60,7 +51,57 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results-${{ matrix.os }}
+          name: test-results-windows
+          path: backend/**/test-results.trx
+          if-no-files-found: ignore
+
+  backend-linux:
+    name: Backend (Linux, with SQL Server)
+    # The Docker target, and the only job that runs the integration tests (the who-may-see-what matrix) against a real SQL
+    # Server. Nothing here has been run on Linux yet, so a failure is information for now, not a reason to block a merge:
+    # once it has been green, remove continue-on-error.
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "Ci_Passw0rd_2026"
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd="/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Ci_Passw0rd_2026 -C -Q 'SELECT 1'"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    env:
+      # A throwaway container: this password protects nothing. The tests create and drop their own databases on it.
+      TST_SQL: "Server=localhost,1433;User Id=sa;Password=Ci_Passw0rd_2026;TrustServerCertificate=True"
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore TicketSystemTech.sln
+
+      - name: Build
+        run: dotnet build TicketSystemTech.sln --no-restore -c Release
+
+      - name: Test (unit and integration)
+        run: dotnet test TicketSystemTech.sln --no-build -c Release --logger "trx;LogFileName=test-results.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-linux
           path: backend/**/test-results.trx
           if-no-files-found: ignore
 
