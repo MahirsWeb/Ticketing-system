@@ -283,6 +283,13 @@ provjeriš da AI pretraga radi, možeš osloboditi prostor:
 odgovara i ima aktuelnu shemu; vraća `503` ako ne, bez ikakvih internih detalja. Monitoring ili load balancer treba da
 gleda `/health/ready`.
 
+**Korisnik je prijavio grešku — kako naći šta se desilo**
+→ Svaki zahtjev dobija kratku oznaku (12 znakova, npr. `3f9a1c07d2b4`). Vraća se u zaglavlju odgovora
+`X-Correlation-Id`, a kod neočekivane greške i u poruci ("report this reference: …"). U logu backenda ta ista oznaka
+stoji u uglastim zagradama ispred svake poruke tog zahtjeva (`[14:16:17 WRN] [3f9a1c07d2b4] …`), pa pretraga logova po toj
+oznaci pokazuje sve što se desilo s tim jednim zahtjevom. Pozivalac može poslati i svoju oznaku u istom zaglavlju
+(8–64 znaka: slova, cifre, `.`, `_`, `-`), pa jedna oznaka prati zahtjev kroz više sistema.
+
 **Zaboravio sam admin lozinku**
 → Restartuj backend — ako nalog i dalje postoji (samo je lozinka nepoznata), obriši ga direktno u bazi
 (`AspNetUsers` tabela) i ponovo pokreni backend da se ponovo zasija sa svježom privremenom lozinkom.

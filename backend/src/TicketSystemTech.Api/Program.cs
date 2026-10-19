@@ -35,7 +35,9 @@ if (!string.IsNullOrEmpty(renderPort))
 Log.Logger = new LoggerConfiguration()
     .ReadFrom.Configuration(builder.Configuration)
     .Enrich.FromLogContext()
-    .WriteTo.Console()
+    // Added after FromLogContext so a request's own reference wins; lines written outside a request show "-".
+    .Enrich.WithProperty(TicketSystemTech.Api.Middleware.CorrelationIdMiddleware.LogProperty, "-")
+    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{CorrelationId}] {Message:lj}{NewLine}{Exception}")
     .CreateLogger();
 builder.Host.UseSerilog();
 
@@ -195,6 +197,8 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(allowedOrigins)
               .AllowAnyHeader()
               .AllowAnyMethod()
+              // Without this the browser hides the reference header from the frontend's code.
+              .WithExposedHeaders(TicketSystemTech.Api.Middleware.CorrelationIdMiddleware.HeaderName)
               .AllowCredentials();
     });
 });
@@ -265,6 +269,9 @@ if (args.Contains("--migrate-only"))
     await Log.CloseAndFlushAsync();
     return;
 }
+
+// First, so that everything after it (forwarded headers, CORS, authentication, the endpoints) logs under the request's reference.
+app.UseMiddleware<TicketSystemTech.Api.Middleware.CorrelationIdMiddleware>();
 
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {

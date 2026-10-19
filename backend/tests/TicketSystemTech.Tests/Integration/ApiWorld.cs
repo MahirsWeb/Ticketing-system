@@ -18,9 +18,12 @@ namespace TicketSystemTech.Tests.Integration;
 /// <summary>One person in the seeded world, with a token the application accepts.</summary>
 public sealed record Actor(string Key, Guid Id, string Email, UserRole Role, Guid? DepartmentId, string Token);
 
-public sealed record ApiResponse(HttpStatusCode Status, string Text)
+public sealed record ApiResponse(HttpStatusCode Status, string Text, IReadOnlyDictionary<string, string>? Headers = null)
 {
     public int Code => (int)Status;
+
+    /// <summary>The value of a response header, or null if it was not sent.</summary>
+    public string? Header(string name) => Headers is not null && Headers.TryGetValue(name, out var value) ? value : null;
 
     public JsonElement Json => JsonDocument.Parse(Text).RootElement;
 
@@ -133,20 +136,25 @@ public sealed class ApiWorld : IAsyncLifetime
 
     // ---------------- requests ----------------
 
-    public async Task<ApiResponse> Send(Actor? actor, HttpMethod method, string url, object? body = null)
+    public async Task<ApiResponse> Send(Actor? actor, HttpMethod method, string url, object? body = null, IDictionary<string, string>? headers = null)
     {
         using var request = new HttpRequestMessage(method, url);
         if (actor is not null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", actor.Token);
+        if (headers is not null)
+            foreach (var (name, value) in headers) request.Headers.TryAddWithoutValidation(name, value);
         if (body is HttpContent content)
             request.Content = content;
         else if (body is not null)
             request.Content = new StringContent(body as string ?? JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
 
         using var response = await _client.SendAsync(request);
-        return new ApiResponse(response.StatusCode, await response.Content.ReadAsStringAsync());
+        var responseHeaders = response.Headers.Concat(response.Content.Headers)
+            .ToDictionary(h => h.Key, h => string.Join(",", h.Value), StringComparer.OrdinalIgnoreCase);
+        return new ApiResponse(response.StatusCode, await response.Content.ReadAsStringAsync(), responseHeaders);
     }
 
-    public Task<ApiResponse> Get(Actor? actor, string url) => Send(actor, HttpMethod.Get, url);
+    public Task<ApiResponse> Get(Actor? actor, string url, IDictionary<string, string>? headers = null) =>
+        Send(actor, HttpMethod.Get, url, null, headers);
 
     public Task<ApiResponse> Post(Actor? actor, string url, object? body = null) => Send(actor, HttpMethod.Post, url, body ?? "{}");
 
