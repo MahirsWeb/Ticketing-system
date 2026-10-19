@@ -57,7 +57,19 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"),
         // A dropped connection, a failover or a deadlock victim is retried a few times instead of becoming a 500.
         // (Safe here: the application never opens an explicit transaction of its own.)
-        sql => sql.EnableRetryOnFailure(maxRetryCount: 3, maxRetryDelay: TimeSpan.FromSeconds(5), errorNumbersToAdd: null)));
+        sql =>
+        {
+            sql.EnableRetryOnFailure(maxRetryCount: 3, maxRetryDelay: TimeSpan.FromSeconds(5), errorNumbersToAdd: null);
+
+            // EF Core 10 assumes the newest SQL Server (compatibility level 170) unless told otherwise. The application is
+            // meant to run on SQL Server 2019 and later, so the SQL it writes is held to that level.
+            sql.UseCompatibilityLevel(150);
+
+            // A list passed to Contains(...) (e.g. "the clients of this branch", hundreds of ids) is sent as ONE parameter, as in
+            // EF Core 8 and 9. EF Core 10's default is one parameter per item, which would fail with a list of more than
+            // ~2,000 ids (SQL Server accepts at most 2,100 parameters per statement).
+            sql.UseParameterizedCollectionMode(Microsoft.EntityFrameworkCore.ParameterTranslationMode.Parameter);
+        }));
 
 // Encrypts PII columns (email, phone, address) at rest. Must be registered as a singleton — see
 // PiiProtector's doc comment — and the custom ILookupNormalizer must be registered before AddIdentity()
@@ -228,19 +240,18 @@ builder.Services.AddControllers()
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo { Title = "Ticket System Tech API", Version = "v1" });
-    var jwtScheme = new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    options.SwaggerDoc("v1", new Microsoft.OpenApi.OpenApiInfo { Title = "Ticket System Tech API", Version = "v1" });
+    options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.OpenApiSecurityScheme
     {
         Scheme = "bearer",
         BearerFormat = "JWT",
         Name = "Authorization",
-        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-        Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http
-    };
-    options.AddSecurityDefinition("Bearer", jwtScheme);
-    options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+        In = Microsoft.OpenApi.ParameterLocation.Header,
+        Type = Microsoft.OpenApi.SecuritySchemeType.Http
+    });
+    options.AddSecurityRequirement(document => new Microsoft.OpenApi.OpenApiSecurityRequirement
     {
-        { new Microsoft.OpenApi.Models.OpenApiSecurityScheme { Reference = new Microsoft.OpenApi.Models.OpenApiReference { Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme, Id = "Bearer" } }, Array.Empty<string>() }
+        [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("Bearer", document)] = new List<string>()
     });
 });
 

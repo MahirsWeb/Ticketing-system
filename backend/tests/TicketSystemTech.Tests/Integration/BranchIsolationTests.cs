@@ -243,8 +243,18 @@ public class BranchIsolationTests
         var b = await _world.Get(_world.EmpB1, "/api/users/paged?group=staff&pageSize=100");
         var admin = await _world.Get(_world.Admin, "/api/users/paged?group=staff&pageSize=100");
 
-        Assert.Equal(new HashSet<Guid> { _world.EmpA1.Id, _world.EmpA2.Id }, GuidsOf(a, "items"));
-        Assert.Equal(new HashSet<Guid> { _world.EmpB1.Id }, GuidsOf(b, "items"));
+        // Other tests add people of their own to the shared world (a leaver, a mover), so what is asserted is the rule, not an
+        // exact list: everybody an employee sees belongs to their branch, and their colleagues are among them.
+        Assert.True(GuidsOf(a, "items").IsSupersetOf(new[] { _world.EmpA1.Id, _world.EmpA2.Id }));
+        Assert.DoesNotContain(_world.EmpB1.Id, GuidsOf(a, "items"));
+        Assert.DoesNotContain(_world.Admin.Id, GuidsOf(a, "items"));
+        Assert.All(a.Values("departmentId", "items"), d => Assert.Equal(_world.BranchA.ToString(), d));
+
+        Assert.Contains(_world.EmpB1.Id, GuidsOf(b, "items"));
+        Assert.DoesNotContain(_world.EmpA1.Id, GuidsOf(b, "items"));
+        Assert.DoesNotContain(_world.EmpA2.Id, GuidsOf(b, "items"));
+        Assert.All(b.Values("departmentId", "items"), d => Assert.Equal(_world.BranchB.ToString(), d));
+
         Assert.True(GuidsOf(admin, "items").IsSupersetOf(new[] { _world.Admin.Id, _world.EmpA1.Id, _world.EmpB1.Id }));
 
         Assert.Equal(404, (await _world.Get(_world.EmpA1, $"/api/users/{_world.EmpB1.Id}")).Code);
@@ -459,11 +469,15 @@ public class BranchIsolationTests
     [SqlFact]
     public async Task Notifications_are_private_to_their_owner()
     {
-        var a = await _world.Get(_world.EmpA1, "/api/notifications");
-        var b = await _world.Get(_world.EmpB1, "/api/notifications");
+        var a = await _world.Get(_world.EmpA1, "/api/notifications?take=100");
+        var b = await _world.Get(_world.EmpB1, "/api/notifications?take=100");
 
-        Assert.Equal(new[] { "for A1" }, a.Values("message"));
-        Assert.Equal(new[] { "for B1" }, b.Values("message"));
+        // (Other tests cause real notifications too, e.g. a ticket transferred to branch B tells B's staff, so this checks
+        // that each person has their own and none of the other's, not that the list is exactly one long.)
+        Assert.Contains("for A1", a.Values("message"));
+        Assert.DoesNotContain("for B1", a.Values("message"));
+        Assert.Contains("for B1", b.Values("message"));
+        Assert.DoesNotContain("for A1", b.Values("message"));
 
         // marking someone else's notification as read looks like it does not exist
         Assert.Equal(404, (await _world.Post(_world.EmpA1, $"/api/notifications/{_world.Notifications["B1"]}/read")).Code);

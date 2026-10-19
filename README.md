@@ -1,7 +1,7 @@
 # Ticket System Tech
 
 Sistem za upravljanje korisničkom podrškom (ticketing/helpdesk aplikacija): React + TypeScript frontend,
-.NET 8 Web API backend, Microsoft SQL Server baza podataka. Aplikacija radi **potpuno lokalno** — nema
+.NET 10 Web API backend, Microsoft SQL Server baza podataka. Aplikacija radi **potpuno lokalno** — nema
 potrebe za internetom niti cloud nalozima da bi radila (osim za AI asistenta, koji koristi Google AI API).
 
 Uključuje: tikete sa punom historijom razgovora, ulogama Admin/Zaposlenik/Klijent, AI asistenta za pretragu
@@ -31,9 +31,9 @@ Instaliraj sljedeće na svoj računar (sve je besplatno):
 
 | Alat | Za šta služi | Gdje preuzeti |
 |---|---|---|
-| **.NET 8 SDK** | Pokreće backend (C#/.NET Web API) | [dotnet.microsoft.com/download/dotnet/8.0](https://dotnet.microsoft.com/download/dotnet/8.0) |
-| **Node.js 20+** | Pokreće frontend (React) | [nodejs.org](https://nodejs.org) (uzmi LTS verziju) |
-| **SQL Server** (Express edition je dovoljna, besplatna) | Baza podataka | [Preuzmi SQL Server Express](https://www.microsoft.com/sql-server/sql-server-downloads) |
+| **.NET 10 SDK** (LTS) | Pokreće backend (C#/.NET Web API) | [dotnet.microsoft.com/download/dotnet/10.0](https://dotnet.microsoft.com/download/dotnet/10.0) |
+| **Node.js 22 (LTS) ili novije** | Pokreće frontend (React) | [nodejs.org](https://nodejs.org) (uzmi LTS verziju) |
+| **SQL Server 2019 ili novije** (Express edition je dovoljna, besplatna) | Baza podataka | [Preuzmi SQL Server Express](https://www.microsoft.com/sql-server/sql-server-downloads) |
 | **SQL Server Management Studio (SSMS)** *(preporučeno, nije obavezno)* | Grafički alat da vidiš/pretražuješ bazu | [Preuzmi SSMS](https://learn.microsoft.com/sql/ssms/download-sql-server-management-studio-ssms) |
 | **Git** | Da preuzmeš/upravljaš kodom | [git-scm.com](https://git-scm.com) |
 
@@ -42,19 +42,21 @@ Provjeri da li su .NET i Node ispravno instalirani (otvori terminal/PowerShell i
 ```bash
 dotnet --version
 ```
-Treba da ispiše nešto što počinje sa `8.` (npr. `8.0.404`).
+Treba da ispiše nešto što počinje sa `10.` (npr. `10.0.402`). Projekat traži SDK 10.0.100 ili noviji
+(`backend/global.json`); sa starijim SDK-om (8 ili 9) se neće izgraditi. Starija verzija .NET-a može ostati
+instalirana pored nove, ali .NET 8 više ne dobija sigurnosne ispravke od 10. novembra 2026.
 
 ```bash
 node --version
 ```
-Treba da ispiše `v20` ili novije.
+Treba da ispiše `v22` ili novije (frontend traži najmanje Node 20.19).
 
 ---
 
 ## Struktura projekta
 
 ```
-backend/    ASP.NET Core 8 Web API
+backend/    ASP.NET Core 10 Web API
   src/
     TicketSystemTech.Api/              — kontroleri, konfiguracija, Program.cs (ovdje se app pokreće)
     TicketSystemTech.Application/      — poslovna logika, opcije
@@ -256,6 +258,23 @@ bez imena). To ime (ili skraćeno `localhost\SQLEXPRESS`) ide u connection strin
 
 Onda ti u connection string-u ne treba `\SQLEXPRESS` uopšte — samo `Server=localhost;...`.
 
+### Nova migracija (za programere)
+
+Šemu baze mijenjaju EF Core migracije. Alat `dotnet ef` je zakucan na verziju 10 u `backend/dotnet-tools.json`, pa se
+ne oslanja na ono što je instalirano na računaru:
+
+```bash
+cd backend
+dotnet tool restore
+dotnet ef migrations add NazivMigracije --project src/TicketSystemTech.Infrastructure --startup-project src/TicketSystemTech.Api
+```
+
+Prije nego što pošalješ promjenu provjeri da model i migracije ne odudaraju (CI i testovi bi to inače prijavili):
+
+```bash
+dotnet ef migrations has-pending-model-changes --project src/TicketSystemTech.Infrastructure --startup-project src/TicketSystemTech.Api
+```
+
 ### Pregled podataka kroz SSMS
 
 Poveži se na svoju instancu → proširi **Databases** → `TicketSystemTech`. Baza i sve tabele su automatski
@@ -326,9 +345,15 @@ cd frontend && npm run lint && npm run build
 ```
 
 `npm run build` uključuje provjeru TypeScript tipova. Isto rade i GitHub Actions
-(`.github/workflows/ci.yml`) na svaki push na `main` i svaki pull request: backend se gradi i testira na Windowsu
-(mora proći) i na Linuxu sa pravim SQL Serverom (informativno, dok se ne potvrdi da sve radi i tamo), frontend
-prolazi lint, build i `npm audit`, a paketi sa **visokim ili kritičnim** poznatim ranjivostima obaraju build.
+(`.github/workflows/ci.yml`) na svaki push na `main` i svaki pull request:
+
+- **Backend (Windows)** mora proći: build, testovi, provjera da **migracije odgovaraju modelu** (promjena entiteta bez
+  nove migracije obara build) i provjera paketa, gdje **visoke ili kritične** poznate ranjivosti obaraju build.
+- **Backend (Linux, sa SQL Serverom u kontejneru)** pokreće i integracijske testove. Za sada je informativan: SQL Server u
+  kontejneru ponekad ne uspije da se podigne, pa ne blokira.
+- **Docker image** se gradi kao pri pravom puštanju u rad i provjerava se da u njemu radi .NET 10 (informativno dok
+  prvi put ne prođe).
+- **Frontend** prolazi lint, build i `npm audit`.
 
 ### Testovi autorizacije (integracijski)
 

@@ -27,7 +27,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 10.0.x
 
       - name: Restore
         run: dotnet restore TicketSystemTech.sln
@@ -37,6 +37,18 @@ jobs:
 
       - name: Test
         run: dotnet test TicketSystemTech.sln --no-build -c Release --logger "trx;LogFileName=test-results.trx"
+
+      - name: Migrations match the model (a model change without a migration fails here)
+        shell: bash
+        run: |
+          dotnet tool restore
+          dotnet ef migrations has-pending-model-changes --project src/TicketSystemTech.Infrastructure --startup-project src/TicketSystemTech.Api --no-build --configuration Release
+        env:
+          # Only so the application's host can be built; nothing connects to a database and none of these values is a secret.
+          ASPNETCORE_ENVIRONMENT: Staging
+          Jwt__Secret: ci-only-secret-ci-only-secret-ci-only-1234567890
+          Pii__HashKey: ci-only-hash-key-ci-only-hash-key-1234567890
+          ConnectionStrings__DefaultConnection: Server=localhost;Database=ci_never_created;Trusted_Connection=True;TrustServerCertificate=True
 
       - name: Known-vulnerable packages (high and critical fail the build)
         shell: bash
@@ -58,8 +70,8 @@ jobs:
   backend-linux:
     name: Backend (Linux, with SQL Server)
     # The Docker target, and the only job that runs the integration tests (the who-may-see-what matrix) against a real SQL
-    # Server. Nothing here has been run on Linux yet, so a failure is information for now, not a reason to block a merge:
-    # once it has been green, remove continue-on-error.
+    # Server. It has been green since its first run, but SQL Server in a container occasionally fails to start, so it still
+    # does not block a merge. After a few more green runs, remove continue-on-error.
     runs-on: ubuntu-latest
     continue-on-error: true
     services:
@@ -86,7 +98,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 10.0.x
 
       - name: Restore
         run: dotnet restore TicketSystemTech.sln
@@ -133,3 +145,18 @@ jobs:
 
       - name: Dependency audit (high and critical fail the build)
         run: npm audit --audit-level=high
+
+  docker-image:
+    name: Docker image
+    # Builds the backend image exactly as a deployment would (restore, publish, runtime image) and checks that the runtime in
+    # it is .NET 10. Not run anywhere else, so it does not block a merge until it has been green once.
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the image
+        run: docker build --tag ticketsystemtech-api:ci backend
+
+      - name: The image runs on .NET 10
+        run: docker run --rm --entrypoint dotnet ticketsystemtech-api:ci --list-runtimes | grep "Microsoft.AspNetCore.App 10\."

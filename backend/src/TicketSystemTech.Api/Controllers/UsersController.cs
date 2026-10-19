@@ -397,9 +397,10 @@ public class UsersController : ControllerBase
     /// <summary>Uploads a profile picture. A user can set their own; Admin can set anyone's.</summary>
     [HttpPost("{id:guid}/profile-picture")]
     [RequestSizeLimit(10 * 1024 * 1024)]
-    public async Task<IActionResult> UploadProfilePicture(Guid id, [FromForm] IFormFile file)
+    public async Task<IActionResult> UploadProfilePicture(Guid id, [FromForm] ProfilePictureForm form)
     {
         if (_currentUser.UserId != id && _currentUser.Role != UserRole.Admin) return Forbid();
+        var file = form.File;
 
         var user = await _userManager.FindByIdAsync(id.ToString());
         if (user is null) return NotFound();

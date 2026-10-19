@@ -73,3 +73,13 @@ public record UserListItem(
     string? ProfilePictureUrl,
     DateTime? LastLoginAtUtc
 );
+
+/// <summary>
+/// The multipart form of a profile picture upload: one file in a field named "file". It is a class, and not a bare
+/// <c>[FromForm] IFormFile</c> parameter, because Swashbuckle 10 refuses to describe the latter, which breaks the whole Swagger
+/// document; and without <c>[FromForm]</c> a request with the wrong content type is answered 415 before it is even asked to sign in.
+/// </summary>
+public sealed class ProfilePictureForm
+{
+    public IFormFile? File { get; set; }
+}
