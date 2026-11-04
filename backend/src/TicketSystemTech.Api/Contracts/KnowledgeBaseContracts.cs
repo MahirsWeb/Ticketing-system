@@ -11,7 +11,10 @@ public record KnowledgeBaseAskResponseDto(
     List<KnowledgeBaseSearchResultDto> Sources,
     int SimilarTicketCount,
     int TotalEligibleTicketCount,
-    double SimilarPercentage
+    double SimilarPercentage,
+    // False when AI is switched off or not configured on this installation: the screen says so instead of presenting
+    // keyword matches as if a model had answered.
+    bool AiAvailable = true
 );
 
 public record SimilarTicketsResponseDto(

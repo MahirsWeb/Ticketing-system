@@ -12,7 +12,7 @@ using TicketSystemTech.Infrastructure.Identity;
 namespace TicketSystemTech.Infrastructure.Persistence;
 
 // IDataProtectionKeyContext lets the Data Protection key ring live in this same database instead of
-// the container's local disk — Render's filesystem doesn't survive a redeploy, which would otherwise
+// the container's local disk — a container's filesystem doesn't survive being replaced, which would otherwise
 // make every previously-encrypted OAuth token unreadable the next time the app starts.
 public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>, IDataProtectionKeyContext
 {
@@ -20,9 +20,41 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     // caches the model, including these converters, once for the app's lifetime, not per-request.
     private readonly IPiiProtector _piiProtector;
 
-    public AppDbContext(DbContextOptions<AppDbContext> options, IPiiProtector piiProtector) : base(options)
+    // Optional: a context built outside a request (migrations, tests, the background workers) has none, and audit rows then
+    // simply carry no address or reference.
+    private readonly Microsoft.AspNetCore.Http.IHttpContextAccessor? _httpContextAccessor;
+
+    public AppDbContext(DbContextOptions<AppDbContext> options, IPiiProtector piiProtector,
+        Microsoft.AspNetCore.Http.IHttpContextAccessor? httpContextAccessor = null) : base(options)
     {
         _piiProtector = piiProtector;
+        _httpContextAccessor = httpContextAccessor;
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        StampAuditRows();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        StampAuditRows();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    /// <summary>Every new audit row gets the address and the request reference of the request that caused it, wherever in the
+    /// application it was added, so no place that writes one can forget them.</summary>
+    private void StampAuditRows()
+    {
+        var http = _httpContextAccessor?.HttpContext;
+        if (http is null) return;
+
+        foreach (var entry in ChangeTracker.Entries<AuditLog>().Where(e => e.State == EntityState.Added))
+        {
+            entry.Entity.IpAddress ??= http.Connection.RemoteIpAddress?.ToString();
+            entry.Entity.CorrelationId ??= http.TraceIdentifier;
+        }
     }
 
     public DbSet<Company> Companies => Set<Company>();
@@ -46,6 +78,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<SubBranch> SubBranches => Set<SubBranch>();
     public DbSet<WorkTask> WorkTasks => Set<WorkTask>();
     public DbSet<WorkTaskAssignmentLog> WorkTaskAssignmentLogs => Set<WorkTaskAssignmentLog>();
+    public DbSet<WorkTaskSession> WorkTaskSessions => Set<WorkTaskSession>();
     public DbSet<EmailOutboxItem> EmailOutbox => Set<EmailOutboxItem>();
     public DbSet<Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey> DataProtectionKeys => Set<Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey>();
 
@@ -247,10 +280,18 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
         {
             e.Property(t => t.Title).HasMaxLength(300).IsRequired();
             e.HasIndex(t => t.DepartmentId);
-            // The Gantt asks for one person's tasks on one day.
-            e.HasIndex(t => new { t.AssignedToUserId, t.StartedAtUtc }).IncludeProperties(t => new { t.EndedAtUtc, t.Status });
+            e.HasIndex(t => t.AssignedToUserId);
             e.HasOne(t => t.Department).WithMany().HasForeignKey(t => t.DepartmentId).OnDelete(DeleteBehavior.Restrict);
             e.HasMany(t => t.AssignmentHistory).WithOne(h => h.WorkTask).HasForeignKey(h => h.WorkTaskId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<WorkTaskSession>(e =>
+        {
+            e.HasIndex(s => new { s.WorkTaskId, s.StartedAtUtc });
+            // The Gantt chart and the timeline export start from a person and a day.
+            e.HasIndex(s => new { s.UserId, s.StartedAtUtc }).IncludeProperties(s => new { s.EndedAtUtc, s.WorkTaskId });
+            e.HasOne(s => s.WorkTask).WithMany(t => t.Sessions).HasForeignKey(s => s.WorkTaskId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<TicketSystemTech.Infrastructure.Identity.ApplicationUser>().WithMany().HasForeignKey(s => s.UserId).OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<WorkTaskAssignmentLog>(e =>
@@ -276,6 +317,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
         builder.Entity<AuditLog>(e =>
         {
             e.Property(a => a.EntityType).HasMaxLength(100).IsRequired(); // indexed below, so it cannot stay nvarchar(max)
+            e.Property(a => a.IpAddress).HasMaxLength(45); // the longest IPv6 text form
+            e.Property(a => a.CorrelationId).HasMaxLength(64);
             e.HasIndex(a => new { a.EntityType, a.EntityId, a.CreatedAt });
             e.HasIndex(a => new { a.UserId, a.CreatedAt });
         });

@@ -176,13 +176,15 @@ public class KnowledgeBaseController : ControllerBase
         {
             return Ok(new KnowledgeBaseAskResponseDto(
                 "Nothing relevant was found in the knowledge base yet for this question.", sources,
-                stats.SimilarCount, stats.TotalEligible, stats.Percentage));
+                stats.SimilarCount, stats.TotalEligible, stats.Percentage, _chatCompletionService.IsAvailable));
         }
 
         var context = AiPromptLimits.BuildContext(matches.Select(BuildContextEntry));
 
         var answer = await _chatCompletionService.AskAsync(StaffSystemInstruction, context, request.Question, Ct);
-        var finalAnswer = answer ?? "AI answering isn't configured yet — showing the closest matching sources instead.";
+        var finalAnswer = answer ?? (_chatCompletionService.IsAvailable
+            ? "The AI did not answer this time — showing the closest matching sources instead."
+            : "AI is switched off or not configured on this installation — showing the closest matching sources instead.");
 
         // Tickets the AI explicitly called out by number (e.g. its "might help" fallback list) are the
         // ones most worth a consultant's attention — surface them first in the sources list.
@@ -190,7 +192,7 @@ public class KnowledgeBaseController : ControllerBase
         if (mentionedTicketNumbers.Count > 0)
             sources = sources.OrderByDescending(s => s.TicketNumber != null && mentionedTicketNumbers.Contains(s.TicketNumber)).ToList();
 
-        return Ok(new KnowledgeBaseAskResponseDto(finalAnswer, sources, stats.SimilarCount, stats.TotalEligible, stats.Percentage));
+        return Ok(new KnowledgeBaseAskResponseDto(finalAnswer, sources, stats.SimilarCount, stats.TotalEligible, stats.Percentage, _chatCompletionService.IsAvailable));
     }
 
     /// <summary>
@@ -207,7 +209,7 @@ public class KnowledgeBaseController : ControllerBase
         var matches = await FindMatchesAsync(request.Question, 20, includeTicketSources: false);
 
         if (matches.Count == 0)
-            return Ok(new KnowledgeBaseAskResponseDto(ClientNoInfoMessage, new List<KnowledgeBaseSearchResultDto>(), 0, 0, 0));
+            return Ok(new KnowledgeBaseAskResponseDto(ClientNoInfoMessage, new List<KnowledgeBaseSearchResultDto>(), 0, 0, 0, _chatCompletionService.IsAvailable));
 
         var context = AiPromptLimits.BuildContext(matches.Select(BuildContextEntry));
         var answer = await _chatCompletionService.AskAsync(ClientSystemInstruction, context, request.Question, Ct);
@@ -215,7 +217,7 @@ public class KnowledgeBaseController : ControllerBase
 
         // Clients see which help articles were used, never ticket numbers/internal detail.
         var sources = matches.Select(ToDto).ToList();
-        return Ok(new KnowledgeBaseAskResponseDto(finalAnswer, sources, 0, 0, 0));
+        return Ok(new KnowledgeBaseAskResponseDto(finalAnswer, sources, 0, 0, 0, _chatCompletionService.IsAvailable));
     }
 
     /// <summary>
@@ -399,17 +401,27 @@ public class KnowledgeBaseController : ControllerBase
             .ToList();
         if (keywords.Count == 0) return new List<ChunkMatch>();
 
-        var candidates = await EligibleChunksQuery(includeTicketSources)
-            .Select(c => new { c.Content, c.TicketId, c.DocumentId })
-            .ToListAsync(Ct);
-
-        if (candidates.Count == 0) return new List<ChunkMatch>();
-
-        var scored = candidates
-            .Select(c => new { c.TicketId, c.DocumentId, c.Content, Score = keywords.Count(k => c.Content.Contains(k, StringComparison.OrdinalIgnoreCase)) })
+        // The counting and the cut-off happen in the database: only the best few ids come back, and only their text is read
+        // afterwards. The previous version pulled the full text of every eligible chunk into memory to count keywords there,
+        // which grows with the whole corpus and is what a "no AI key" installation runs on every search.
+        var top = await EligibleChunksQuery(includeTicketSources)
+            .Select(c => new { c.Id, Score = keywords.Count(k => c.Content.Contains(k)) })
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score)
             .Take(Math.Clamp(take, 1, 500))
+            .ToListAsync(Ct);
+
+        if (top.Count == 0) return new List<ChunkMatch>();
+
+        var topIds = top.Select(x => x.Id).ToList();
+        var chunks = await _db.KnowledgeBaseChunks.AsNoTracking()
+            .Where(c => topIds.Contains(c.Id))
+            .Select(c => new { c.Id, c.Content, c.TicketId, c.DocumentId })
+            .ToListAsync(Ct);
+        var scoreById = top.ToDictionary(x => x.Id, x => x.Score);
+
+        var scored = chunks
+            .Select(c => new { c.TicketId, c.DocumentId, c.Content, Score = scoreById[c.Id] })
             .OrderByDescending(x => x.Content.Length)
             .ToList();
 
@@ -508,20 +520,23 @@ public class KnowledgeBaseController : ControllerBase
                 .Distinct()
                 .ToList();
 
-            var candidates = await EligibleChunksQuery(includeTicketSources: true)
-                .Where(c => c.TicketId != null)
-                .Select(c => new { c.Content, c.TicketId })
-                .ToListAsync(Ct);
-
-            // Keyword fallback "similar" bar: at least half of the query's keywords show up in the ticket.
+            // Keyword fallback "similar" bar: at least half of the query's keywords show up in the ticket. The counting is done
+            // by the database, so only the chunks that clear the bar are read, not the whole corpus.
             var minMatches = Math.Max(1, keywords.Count / 2);
-            var scored = candidates
-                .Select(c => new { c.TicketId, c.Content, Matched = keywords.Count(k => c.Content.Contains(k, StringComparison.OrdinalIgnoreCase)) })
+            var similar = await EligibleChunksQuery(includeTicketSources: true)
+                .Where(c => c.TicketId != null)
+                .Select(c => new { c.Id, Matched = keywords.Count(k => c.Content.Contains(k)) })
                 .Where(x => x.Matched >= minMatches)
                 .OrderByDescending(x => x.Matched)
-                .ToList();
+                .ToListAsync(Ct);
 
-            matches = await ResolveSourcesAsync(scored.Select(s => ((Guid?)s.TicketId, (Guid?)null, s.Content, s.Matched)));
+            var similarIds = similar.Select(x => x.Id).ToList();
+            var chunkById = await _db.KnowledgeBaseChunks.AsNoTracking()
+                .Where(c => similarIds.Contains(c.Id))
+                .Select(c => new { c.Id, c.Content, c.TicketId })
+                .ToDictionaryAsync(c => c.Id, Ct);
+
+            matches = await ResolveSourcesAsync(similar.Select(s => ((Guid?)chunkById[s.Id].TicketId, (Guid?)null, chunkById[s.Id].Content, s.Matched)));
         }
 
         var percentage = totalEligible == 0 ? 0 : Math.Round(100.0 * matches.Count / totalEligible, 1);

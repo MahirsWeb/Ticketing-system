@@ -40,9 +40,9 @@ public class LocalFileStorage : IFileStorage
         var webRoot = _env.WebRootPath ?? Path.Combine(_env.ContentRootPath, "wwwroot");
         var key = await WriteAsync(Path.Combine(webRoot, "avatars"), fileName, content, ct);
 
-        var request = _httpContextAccessor.HttpContext?.Request;
-        var baseUrl = request is not null ? $"{request.Scheme}://{request.Host}" : "";
-        return $"{baseUrl}/avatars/{key}";
+        // Only the path is stored. The address in front of it is put there when a response is written (see
+        // IFileLinkService.ToPublicUrl), so the database does not remember which host name the uploader's request carried.
+        return $"/avatars/{key}";
     }
 
     public Stream? OpenRead(string key)

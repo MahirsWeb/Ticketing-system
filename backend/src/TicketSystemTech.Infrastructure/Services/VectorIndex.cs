@@ -82,7 +82,8 @@ public sealed class VectorIndex : IVectorIndex
         var clock = System.Diagnostics.Stopwatch.StartNew();
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var model = scope.ServiceProvider.GetRequiredService<IEmbeddingService>().ModelName;
+        var embedding = scope.ServiceProvider.GetRequiredService<IEmbeddingService>();
+        var model = embedding.ModelName;
 
         var rows = await db.KnowledgeBaseChunks.AsNoTracking()
             .Where(c => c.Embedding != null && (c.EmbeddingModel == null || c.EmbeddingModel == model))
@@ -93,7 +94,16 @@ public sealed class VectorIndex : IVectorIndex
             .Select(c => new { c.Id, c.TicketId, c.DocumentId, DepartmentId = c.Ticket != null ? c.Ticket.DepartmentId : null, c.Embedding })
             .ToListAsync(ct);
 
-        var entries = rows
+        // A vector of another size than the current ones is a leftover from a different model: it would score 0 against every
+        // question, silently. Say so instead, and leave it out; the reindex (Admin) rebuilds it.
+        var size = embedding.Dimensions ?? rows.GroupBy(r => r.Embedding!.Length).OrderByDescending(g => g.Count()).Select(g => g.Key).FirstOrDefault();
+        var usable = rows.Where(r => r.Embedding!.Length == size).ToList();
+        if (usable.Count != rows.Count)
+            _logger.LogWarning(
+                "{Count} chunk(s) have vectors of a different size than the current {Size}-number ones and are left out of search; run the knowledge-base reindex to rebuild them",
+                rows.Count - usable.Count, size);
+
+        var entries = usable
             .Select(r => new VectorEntry(r.Id, r.TicketId, r.DocumentId, r.DepartmentId, IVectorIndex.Normalize(r.Embedding!)))
             .ToList();
         _logger.LogInformation("Vector index loaded: {Count} chunk(s) in {Ms} ms", entries.Count, clock.ElapsedMilliseconds);

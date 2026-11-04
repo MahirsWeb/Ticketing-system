@@ -340,10 +340,21 @@ export interface WorkTaskDetailDto {
   assignedByName: string;
   assignedToUserId: string;
   assignedToName: string;
+  /** The first start and the last end of the task's work sessions (no end while one is running). */
   startedAtUtc: string | null;
   endedAtUtc: string | null;
   createdAt: string;
   history: WorkTaskAssignmentLogDto[];
+  /** Every stretch of work on the task, oldest first. */
+  sessions: WorkTaskSessionDto[];
+}
+
+export interface WorkTaskSessionDto {
+  id: string;
+  userId: string;
+  userName: string;
+  startedAtUtc: string;
+  endedAtUtc: string | null;
 }
 
 export interface GanttEntryDto {
@@ -354,6 +365,8 @@ export interface GanttEntryDto {
   startedAtUtc: string | null;
   endedAtUtc: string | null;
   status: string;
+  /** False for the stand-in block of a ticket nobody logged work on: it shows how long the ticket was open, not effort. */
+  isLogged: boolean;
 }
 
 export interface GanttResponse {

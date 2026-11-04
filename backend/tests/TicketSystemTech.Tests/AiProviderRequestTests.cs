@@ -38,7 +38,7 @@ public class AiProviderRequestTests
     private static async Task<(string Body, string? Answer)> AskAsync(string context, string question, params (string, string)[] config)
     {
         var handler = new CapturingHandler(ChatAnswer);
-        var service = new GeminiChatCompletionService(new HttpClient(handler), Config(config), NullLogger<GeminiChatCompletionService>.Instance);
+        var service = new AiChatCompletionService(new HttpClient(handler), Config(config), NullLogger<AiChatCompletionService>.Instance);
 
         var answer = await service.AskAsync("be helpful", context, question);
         return (handler.RequestBody!, answer);
@@ -102,7 +102,7 @@ public class AiProviderRequestTests
     public async Task Text_to_be_embedded_is_masked_too()
     {
         var handler = new CapturingHandler("""{"embedding":{"values":[0.1,0.2,0.3]}}""");
-        var service = new GoogleAiEmbeddingService(new HttpClient(handler), Config(), NullLogger<GoogleAiEmbeddingService>.Instance);
+        var service = new AiEmbeddingService(new HttpClient(handler), Config(), NullLogger<AiEmbeddingService>.Instance);
 
         var vector = await service.EmbedAsync("javio se ana@firma.ba, 061 123 456, ne radi štampa");
 

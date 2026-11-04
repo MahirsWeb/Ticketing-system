@@ -228,7 +228,7 @@ export default function EmailsPage() {
                   className="block w-full truncate text-left text-xs text-slate-600"
                 >
                   {m.subject}
-                  {m.hasAttachments && <span className="ml-1">📎</span>}
+                  {m.hasAttachments && <span className="ml-1" role="img" aria-label="Has attachments">📎</span>}
                 </button>
               </div>
             </div>

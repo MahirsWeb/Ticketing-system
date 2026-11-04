@@ -5,7 +5,7 @@ using TicketSystemTech.Infrastructure.Services;
 namespace TicketSystemTech.Api.Configuration;
 
 /// <summary>
-/// Every outbound integration gets its own HttpClient with limits suited to it. They all used to share one unnamed
+/// Every outbound HTTP integration gets its own HttpClient with limits suited to it. They all used to share one unnamed
 /// client with a 100 s timeout and no retry, so a slow Gemini or Microsoft response could hold a request thread for
 /// over a minute and a provider outage kept being hit on every request.
 ///
@@ -16,28 +16,18 @@ public static class OutboundHttp
 {
     public static IServiceCollection AddOutboundHttpClients(this IServiceCollection services)
     {
-        // Email: a POST that timed out may still have been delivered, so the pipeline never repeats it on its own (a second
-        // attempt could mail the same person twice). Whether to try again later is the outbox worker's decision, made
-        // from the outcome BrevoEmailSender reports. Short limits: nothing is waiting on the answer.
-        services.AddHttpClient<IEmailTransport, BrevoEmailSender>()
-            .AddStandardResilienceHandler(o =>
-            {
-                Limits(o, attempt: TimeSpan.FromSeconds(10), total: TimeSpan.FromSeconds(15));
-                NoAutomaticRetry(o);
-            });
-
         // Chat completion: an LLM answer can legitimately take tens of seconds. Generating text is safe to repeat, so one
         // retry covers a transient 429/5xx.
-        services.AddHttpClient<IChatCompletionService, GeminiChatCompletionService>(c => c.Timeout = TimeSpan.FromMinutes(2))
+        services.AddHttpClient<IChatCompletionService, AiChatCompletionService>(c => c.Timeout = TimeSpan.FromMinutes(2))
             .AddStandardResilienceHandler(o =>
             {
                 Limits(o, attempt: TimeSpan.FromSeconds(45), total: TimeSpan.FromSeconds(100));
                 o.Retry.MaxRetryAttempts = 1;
             });
 
-        // Embeddings: GoogleAiEmbeddingService already throttles and retries 429s itself (honouring Retry-After). A second
+        // Embeddings: AiEmbeddingService already throttles and retries 429s itself (honouring Retry-After). A second
         // retry layer underneath would multiply the attempts, so here only the timeouts and the breaker apply.
-        services.AddHttpClient<IEmbeddingService, GoogleAiEmbeddingService>(c => c.Timeout = TimeSpan.FromMinutes(2))
+        services.AddHttpClient<IEmbeddingService, AiEmbeddingService>(c => c.Timeout = TimeSpan.FromMinutes(2))
             .AddStandardResilienceHandler(o =>
             {
                 Limits(o, attempt: TimeSpan.FromSeconds(30), total: TimeSpan.FromSeconds(40));

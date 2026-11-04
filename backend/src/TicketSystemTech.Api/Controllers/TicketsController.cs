@@ -26,7 +26,7 @@ public class TicketsController : ControllerBase
     private readonly ITicketNumberGenerator _ticketNumberGenerator;
     private readonly IEmailSender _emailSender;
     private readonly INotificationPublisher _notificationPublisher;
-    private readonly IKnowledgeBaseIndexer _knowledgeBaseIndexer;
+    private readonly IKnowledgeBaseIndexQueue _indexQueue;
     private readonly IPiiProtector _piiProtector;
     private readonly IHtmlSanitizerService _html;
     private readonly IFileLinkService _links;
@@ -39,7 +39,7 @@ public class TicketsController : ControllerBase
         ITicketNumberGenerator ticketNumberGenerator,
         IEmailSender emailSender,
         INotificationPublisher notificationPublisher,
-        IKnowledgeBaseIndexer knowledgeBaseIndexer,
+        IKnowledgeBaseIndexQueue indexQueue,
         IPiiProtector piiProtector,
         IHtmlSanitizerService html,
         IFileLinkService links,
@@ -54,7 +54,7 @@ public class TicketsController : ControllerBase
         _ticketNumberGenerator = ticketNumberGenerator;
         _emailSender = emailSender;
         _notificationPublisher = notificationPublisher;
-        _knowledgeBaseIndexer = knowledgeBaseIndexer;
+        _indexQueue = indexQueue;
         _piiProtector = piiProtector;
         _html = html;
     }
@@ -226,6 +226,7 @@ public class TicketsController : ControllerBase
     }
 
     private const string TicketCreateScope = "ticket-create";
+    private const string TicketMessageScope = "ticket-message";
 
     /// <summary>Reads the optional Idempotency-Key header. A present but malformed key is an error, never silently ignored.</summary>
     private (string? Key, BadRequestObjectResult? Error) ReadIdempotencyKey()
@@ -238,9 +239,9 @@ public class TicketsController : ControllerBase
             : (null, BadRequest(new { message = $"{IdempotencyKey.HeaderName} must be 1-{IdempotencyKey.MaxLength} letters, digits, '-' or '_'." }));
     }
 
-    private Task<Guid?> FindPreviousResultAsync(Guid userId, string key) =>
+    private Task<Guid?> FindPreviousResultAsync(Guid userId, string key, string scope = TicketCreateScope) =>
         _db.IdempotencyRecords.AsNoTracking()
-            .Where(r => r.UserId == userId && r.Scope == TicketCreateScope && r.Key == key)
+            .Where(r => r.UserId == userId && r.Scope == scope && r.Key == key)
             .Select(r => (Guid?)r.ResourceId)
             .FirstOrDefaultAsync();
 
@@ -249,7 +250,7 @@ public class TicketsController : ControllerBase
     /// if another request with the same key won the race the unique index rejects this one, nothing is written, and
     /// the winner's ticket id is returned so the caller can hand that back instead.
     /// </summary>
-    private async Task<Guid?> SaveCreatedAsync(Guid userId, string? key, Guid ticketId)
+    private async Task<Guid?> SaveCreatedAsync(Guid userId, string? key, Guid ticketId, string scope = TicketCreateScope)
     {
         if (key is null)
         {
@@ -257,7 +258,7 @@ public class TicketsController : ControllerBase
             return null;
         }
 
-        _db.IdempotencyRecords.Add(new IdempotencyRecord { UserId = userId, Scope = TicketCreateScope, Key = key, ResourceId = ticketId });
+        _db.IdempotencyRecords.Add(new IdempotencyRecord { UserId = userId, Scope = scope, Key = key, ResourceId = ticketId });
         try
         {
             await _db.SaveChangesAsync();
@@ -266,7 +267,7 @@ public class TicketsController : ControllerBase
         catch (DbUpdateException)
         {
             _db.ChangeTracker.Clear();
-            var winner = await FindPreviousResultAsync(userId, key);
+            var winner = await FindPreviousResultAsync(userId, key, scope);
             if (winner is null) throw; // not the idempotency index: a genuine failure
             return winner;
         }
@@ -347,7 +348,19 @@ public class TicketsController : ControllerBase
             .Skip((page - 1) * pageSize).Take(pageSize)
             .Select(t => new
             {
-                t.Id, t.TicketNumber, t.Title, t.Status, t.Priority, t.CompanyId, t.ClientId, t.AssignedToUserId, t.CreatedAt, t.DueDateUtc, t.ClosedAtUtc, t.DepartmentId, t.SubBranchId
+                t.Id,
+                t.TicketNumber,
+                t.Title,
+                t.Status,
+                t.Priority,
+                t.CompanyId,
+                t.ClientId,
+                t.AssignedToUserId,
+                t.CreatedAt,
+                t.DueDateUtc,
+                t.ClosedAtUtc,
+                t.DepartmentId,
+                t.SubBranchId
             })
             .ToListAsync();
 
@@ -480,6 +493,7 @@ public class TicketsController : ControllerBase
 
         _db.Notifications.Add(new Notification { UserId = assignee.Id, Type = NotificationType.TicketAssigned, Message = $"Ticket #{ticket.TicketNumber} assigned to you", TicketId = ticket.Id });
         _db.Notifications.Add(new Notification { UserId = client.Id, Type = NotificationType.TicketOpened, Message = $"Your ticket #{ticket.TicketNumber} has been opened", TicketId = ticket.Id });
+        _db.Audit(_currentUser.UserId, "TicketOpened", nameof(Ticket), ticket.Id, $"Assigned to {assignee.Id}; branch {ticket.DepartmentId}");
         await _db.SaveChangesAsync();
 
         await _emailSender.SendAsync(client.Email!, $"Your ticket #{ticket.TicketNumber} has been opened", EmailTemplates.TicketOpened(client.FirstName, ticket.TicketNumber));
@@ -524,6 +538,7 @@ public class TicketsController : ControllerBase
             Type = MessageType.SystemEvent,
             BodyHtml = $"<p>Ticket transferred from <b>{H(fromDepartment?.Name ?? "(unrouted)")}</b> to <b>{H(toDepartment.Name)}</b> by {FullName(transferredBy)}.</p>"
         });
+        _db.Audit(_currentUser.UserId, "TicketTransferred", nameof(Ticket), ticket.Id, $"Branch {fromDepartment?.Id.ToString() ?? "-"} -> {toDepartment.Id}");
         await _db.SaveChangesAsync();
 
         var destinationStaff = await _db.Users
@@ -585,21 +600,16 @@ public class TicketsController : ControllerBase
         });
 
         _db.Notifications.Add(new Notification { UserId = client.Id, Type = NotificationType.TicketClosed, Message = $"Ticket #{ticket.TicketNumber} has been resolved", TicketId = ticket.Id });
+        _db.Audit(_currentUser.UserId, "TicketClosed", nameof(Ticket), ticket.Id, $"Ticket #{ticket.TicketNumber}");
         await _db.SaveChangesAsync();
 
         await _emailSender.SendAsync(client.Email!, $"Your ticket #{ticket.TicketNumber} has been resolved",
             EmailTemplates.TicketClosed(client.FirstName, ticket.TicketNumber, $"{closedBy.FirstName} {closedBy.LastName}"));
         await _notificationPublisher.PushToUserAsync(client.Id, "ticketClosed", new { ticket.Id, ticket.TicketNumber });
 
-        // Embedding calls an external API; the ticket is already closed, so a failure here must not report the close as failed.
-        try
-        {
-            await _knowledgeBaseIndexer.IndexTicketAsync(ticket.Id);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _logger.LogError(ex, "Indexing closed ticket {TicketId} for the knowledge base failed", ticket.Id);
-        }
+        // Embedding calls an external API that can take half a minute: the ticket is already closed, so the answer does not wait for
+        // it. A background worker indexes the ticket (and a failure there is logged, never reported as a failed close).
+        _indexQueue.Enqueue(ticket.Id);
 
         return Ok(await BuildDetailDto(id));
     }
@@ -626,6 +636,9 @@ public class TicketsController : ControllerBase
 
         var from = ticket.Status;
         ticket.Status = request.Status;
+        // Leaving Closed through this endpoint is a reopen like any other: the "closed by / closed at" facts no longer hold.
+        if (from == TicketStatus.Closed) ClearClosedState(ticket);
+        _db.Audit(_currentUser.UserId, "TicketStatusChanged", nameof(Ticket), ticket.Id, $"{from} -> {request.Status}");
 
         var changedBy = await _db.Users.FirstAsync(u => u.Id == _currentUser.UserId);
         _db.TicketMessages.Add(new TicketMessage
@@ -656,6 +669,15 @@ public class TicketsController : ControllerBase
         return (_sla.ComputeDueDateUtc(startUtc, plan.ResolutionTimeHours), null);
     }
 
+    /// <summary>What stops being true when a closed ticket becomes live again. Every way out of Closed goes through here.</summary>
+    private static void ClearClosedState(Ticket ticket)
+    {
+        ticket.ClosedByUserId = null;
+        ticket.ClosedAtUtc = null;
+        // The ticket is live again: if it is (still) past its due date the overdue alert has to be able to fire again.
+        ticket.OverdueNotifiedAtUtc = null;
+    }
+
     /// <summary>
     /// Reopens a closed ticket — e.g. something was missed and needs to be added or fixed before it's
     /// really done. Any Admin or Employee with access to the ticket can reopen it, not just whoever closed it.
@@ -670,10 +692,8 @@ public class TicketsController : ControllerBase
         if (ticket.Status != TicketStatus.Closed) return BadRequest(new { message = "Only closed tickets can be reopened." });
 
         ticket.Status = TicketStatus.Open;
-        ticket.ClosedByUserId = null;
-        ticket.ClosedAtUtc = null;
-        // The ticket is live again: if it is (still) past its due date the overdue alert has to be able to fire again.
-        ticket.OverdueNotifiedAtUtc = null;
+        ClearClosedState(ticket);
+        _db.Audit(_currentUser.UserId, "TicketReopened", nameof(Ticket), ticket.Id, $"Ticket #{ticket.TicketNumber}");
 
         var reopenedBy = await _db.Users.FirstAsync(u => u.Id == _currentUser.UserId);
         _db.TicketMessages.Add(new TicketMessage
@@ -724,6 +744,7 @@ public class TicketsController : ControllerBase
         });
 
         _db.Notifications.Add(new Notification { UserId = user.Id, Type = NotificationType.TicketAssigned, Message = $"Ticket #{ticket.TicketNumber} assigned to you", TicketId = ticket.Id });
+        _db.Audit(_currentUser.UserId, "TicketAssigneeAdded", nameof(Ticket), ticket.Id, $"Added {user.Id}");
         try
         {
             await _db.SaveChangesAsync();
@@ -754,6 +775,7 @@ public class TicketsController : ControllerBase
         if (assignment is null) return NotFound();
 
         _db.TicketAssignees.Remove(assignment);
+        _db.Audit(_currentUser.UserId, "TicketAssigneeRemoved", nameof(Ticket), ticket.Id, $"Removed {userId}");
         await _db.EndRunningSessionsAsync(new[] { id }, userId, DateTime.UtcNow); // the person stops working it
         if (ticket.AssignedToUserId == userId)
         {
@@ -874,15 +896,24 @@ public class TicketsController : ControllerBase
         if (ticket.Status == TicketStatus.Closed)
             return BadRequest(new { message = "This ticket is closed. Reopen it to add a message." });
 
+        // The same message sent twice (a double click, a retry after a timeout) must be one message: a request that carries
+        // an Idempotency-Key the server has already seen gets the first answer back instead of a second copy.
+        var authorId = _currentUser.UserId!.Value;
+        var (idempotencyKey, keyError) = ReadIdempotencyKey();
+        if (keyError is not null) return keyError;
+        if (idempotencyKey is not null && await FindPreviousResultAsync(authorId, idempotencyKey, TicketMessageScope) is { } earlierId)
+            return Ok(await BuildMessageDtoAsync(earlierId));
+
         var message = new TicketMessage
         {
             TicketId = id,
-            AuthorId = _currentUser.UserId!.Value,
+            AuthorId = authorId,
             Type = request.Type,
             BodyHtml = _html.Sanitize(request.BodyHtml)
         };
         _db.TicketMessages.Add(message);
-        await _db.SaveChangesAsync();
+        var raced = await SaveCreatedAsync(authorId, idempotencyKey, message.Id, TicketMessageScope);
+        if (raced is { } winner) return Ok(await BuildMessageDtoAsync(winner));
 
         if (request.Type == MessageType.Response)
         {
@@ -908,20 +939,17 @@ public class TicketsController : ControllerBase
         // Only worth embedding once the ticket is past triage (search never returns New/Open tickets), and the
         // embedding call is an external dependency: its failure must not fail a message that is already saved.
         if (request.Type == MessageType.InternalNote && ticket.Status is not (TicketStatus.New or TicketStatus.Open))
-        {
-            try
-            {
-                await _knowledgeBaseIndexer.IndexTicketAsync(ticket.Id);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                _logger.LogError(ex, "Indexing ticket {TicketId} after an internal note failed", ticket.Id);
-            }
-        }
+            _indexQueue.Enqueue(ticket.Id);
 
-        var author = await _db.Users.FirstAsync(u => u.Id == message.AuthorId);
-        return Ok(new TicketMessageDto(message.Id, message.Type.ToString(), message.BodyHtml, message.AuthorId,
-            $"{author.FirstName} {author.LastName}", message.CreatedAt, new List<TicketAttachmentDto>()));
+        return Ok(await BuildMessageDtoAsync(message.Id));
+    }
+
+    private async Task<TicketMessageDto> BuildMessageDtoAsync(Guid messageId)
+    {
+        var message = await _db.TicketMessages.AsNoTracking().FirstAsync(m => m.Id == messageId);
+        var author = await _db.Users.AsNoTracking().FirstAsync(u => u.Id == message.AuthorId);
+        return new TicketMessageDto(message.Id, message.Type.ToString(), message.BodyHtml, message.AuthorId,
+            $"{author.FirstName} {author.LastName}", message.CreatedAt, new List<TicketAttachmentDto>());
     }
 
     private async Task<bool> AssigneeExistsAsync(Guid ticketId, Guid userId)

@@ -16,6 +16,7 @@ export function ClientAiHelpPanel({ initialQuery = '' }: { initialQuery?: string
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [asked, setAsked] = useState(false);
+  const [aiAvailable, setAiAvailable] = useState(true);
   const [confirmingStop, setConfirmingStop] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -30,6 +31,7 @@ export function ClientAiHelpPanel({ initialQuery = '' }: { initialQuery?: string
       const res = await knowledgeBaseApi.askClient(query, controller.signal);
       setAnswer(res.answer);
       setSources(res.sources);
+      setAiAvailable(res.aiAvailable !== false);
     } catch (err: any) {
       if (err?.code !== 'ERR_CANCELED') throw err;
     } finally {
@@ -47,7 +49,7 @@ export function ClientAiHelpPanel({ initialQuery = '' }: { initialQuery?: string
   if (!open) {
     return (
       <Button variant="secondary" onClick={() => setOpen(true)}>
-        🤖 {t('aiHelp_title')}
+        <span aria-hidden>🤖</span> {t('aiHelp_title')}
       </Button>
     );
   }
@@ -71,6 +73,11 @@ export function ClientAiHelpPanel({ initialQuery = '' }: { initialQuery?: string
         </button>
       </div>
       <p className="mb-3 text-xs text-slate-500">{t('aiHelp_disclaimer')}</p>
+      {asked && !aiAvailable && (
+        <p role="status" className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          {t('aiHelp_unavailable')}
+        </p>
+      )}
       <form onSubmit={handleAsk} className="mb-3 flex gap-2">
         <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('aiHelp_placeholder')} />
         {loading ? (

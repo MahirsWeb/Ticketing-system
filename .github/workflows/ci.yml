@@ -69,11 +69,12 @@ jobs:
 
   backend-linux:
     name: Backend (Linux, with SQL Server)
-    # The Docker target, and the only job that runs the integration tests (the who-may-see-what matrix) against a real SQL
-    # Server. It has been green since its first run, but SQL Server in a container occasionally fails to start, so it still
-    # does not block a merge. After a few more green runs, remove continue-on-error.
+    # The Docker target, and the job that runs the integration tests (the who-may-see-what matrix) against a real SQL Server:
+    # the Windows job above skips them. A change that loosens an authorisation rule must fail here, so this job blocks a merge
+    # like the others (it used to be informative only; it has been green on every run since it was added). Also the one that
+    # checks formatting, because the formatter expects the line endings of the platform it runs on and this checkout is the
+    # one the repository is stored with.
     runs-on: ubuntu-latest
-    continue-on-error: true
     services:
       mssql:
         image: mcr.microsoft.com/mssql/server:2022-latest
@@ -102,6 +103,9 @@ jobs:
 
       - name: Restore
         run: dotnet restore TicketSystemTech.sln
+
+      - name: Formatting (dotnet format finds nothing to change)
+        run: dotnet format TicketSystemTech.sln --verify-no-changes --no-restore
 
       - name: Build
         run: dotnet build TicketSystemTech.sln --no-restore -c Release
@@ -151,13 +155,16 @@ jobs:
 
   docker-image:
     name: Docker image
-    # Builds the backend image exactly as a deployment would (restore, publish, runtime image) and checks that the runtime in
-    # it is .NET 10, that it does not run as root, and that no local settings got in. It has been green since its first run, but
-    # it still does not block a merge.
+    # Builds the backend image exactly as a deployment would (restore, publish, runtime image) and checks what the image is: .NET 10,
+    # pinned by digest, not root, with a health check, and a refusal to start on a bad configuration. It does not block a merge
+    # until the steps added with the pinned digests and the health check have been green once.
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+
+      - name: The base images are pinned by digest
+        run: test "$(grep -c '^FROM .*@sha256:' backend/Dockerfile)" = "2"
 
       - name: Build the image
         run: docker build --tag ticketsystemtech-api:ci backend
@@ -170,4 +177,23 @@ jobs:
           user_id=$(docker run --rm --entrypoint id ticketsystemtech-api:ci -u)
           echo "runs as user id: $user_id"
           test "$user_id" != "0"
-          docker run --rm --entrypoint sh ticketsystemtech-api:ci -c "touch /data/uploads/.probe /app/wwwroot/avatars/.probe"
+          docker run --rm --entrypoint sh ticketsystemtech-api:ci -c "touch /data/uploads/.probe /data/logs/.probe /app/wwwroot/avatars/.probe"
+
+      - name: The image has a health check, and the check reports a dead application as unhealthy
+        run: |
+          docker inspect --format '{{json .Config.Healthcheck.Test}}' ticketsystemtech-api:ci | grep -- '--healthcheck'
+          if docker run --rm --entrypoint dotnet ticketsystemtech-api:ci TicketSystemTech.Api.dll --healthcheck; then
+            echo "::error::The health check said 'healthy' with no application running"
+            exit 1
+          fi
+
+      - name: A server with developer defaults refuses to start and says why
+        run: |
+          set +e
+          output=$(docker run --rm ticketsystemtech-api:ci 2>&1)
+          code=$?
+          echo "$output"
+          test "$code" != "0"
+          echo "$output" | grep -q "configuration is invalid"
+          echo "$output" | grep -q "Jwt:Secret"
+          echo "$output" | grep -q "Frontend:BaseUrl"

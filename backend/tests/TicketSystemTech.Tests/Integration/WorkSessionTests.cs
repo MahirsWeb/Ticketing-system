@@ -32,9 +32,17 @@ public class WorkSessionTests : IAsyncLifetime
     {
         var ticket = new Ticket
         {
-            TicketNumber = "WS-" + Guid.NewGuid().ToString("N")[..8], Title = "Work session test", Description = "<p>x</p>",
-            ClientId = _world.CliX.Id, CompanyId = _world.CompanyId, Status = TicketStatus.InProgress, DepartmentId = _world.BranchA,
-            AssignedToUserId = mainWorker?.Id, OpenedAtUtc = DateTime.UtcNow.AddDays(-3), Priority = TicketPriority.Medium, Source = TicketSource.TicketSystem
+            TicketNumber = "WS-" + Guid.NewGuid().ToString("N")[..8],
+            Title = "Work session test",
+            Description = "<p>x</p>",
+            ClientId = _world.CliX.Id,
+            CompanyId = _world.CompanyId,
+            Status = TicketStatus.InProgress,
+            DepartmentId = _world.BranchA,
+            AssignedToUserId = mainWorker?.Id,
+            OpenedAtUtc = DateTime.UtcNow.AddDays(-3),
+            Priority = TicketPriority.Medium,
+            Source = TicketSource.TicketSystem
         };
         if (mainWorker is not null) ticket.Assignees.Add(new TicketAssignee { UserId = mainWorker.Id });
         foreach (var helper in helpers) ticket.Assignees.Add(new TicketAssignee { UserId = helper.Id });

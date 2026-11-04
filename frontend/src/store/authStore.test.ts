@@ -40,3 +40,24 @@ describe('authStore', () => {
     expect(Object.keys(stored.state).sort()).toEqual(['accessToken', 'user']);
   });
 });
+
+describe('an expired session', () => {
+  it('is remembered, so the sign-in page can say why the person is back, and forgotten by a new sign-in', () => {
+    useAuthStore.setState({ accessToken: 'token', user: { id: 'u1' } as never, signedOutOnPurpose: false, sessionExpired: false });
+
+    useAuthStore.getState().logout(); // what a 401 does
+
+    expect(useAuthStore.getState().sessionExpired).toBe(true);
+    useAuthStore.getState().setSession('new-token', { id: 'u1' } as never);
+    expect(useAuthStore.getState().sessionExpired).toBe(false);
+  });
+
+  it('is not claimed when the person signed out themselves, or was never signed in', () => {
+    useAuthStore.setState({ accessToken: 'token', user: { id: 'u1' } as never, sessionExpired: false });
+    useAuthStore.getState().signOut();
+    expect(useAuthStore.getState().sessionExpired).toBe(false);
+
+    useAuthStore.getState().logout(); // a 401 for a request made without a session
+    expect(useAuthStore.getState().sessionExpired).toBe(false);
+  });
+});

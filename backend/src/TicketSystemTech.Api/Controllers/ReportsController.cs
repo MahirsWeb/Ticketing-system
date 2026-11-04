@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TicketSystemTech.Api.Contracts;
+using TicketSystemTech.Api.Filters;
 using Microsoft.Extensions.Options;
 using TicketSystemTech.Application.Common.Interfaces;
 using TicketSystemTech.Application.Common.Options;
@@ -18,6 +19,7 @@ namespace TicketSystemTech.Api.Controllers;
 [ApiController]
 [Route("api/reports")]
 [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
+[RejectReversedDateRange]
 public class ReportsController : ControllerBase
 {
     private const string InsightsSystemInstruction =
@@ -274,7 +276,9 @@ public class ReportsController : ControllerBase
         var answer = await _chatCompletionService.AskAsync(
             InsightsSystemInstruction, context.ToString(), "Which problems occurred most in this period and what should we do about them?", Ct);
 
-        return Ok(new AiInsightsResponseDto(answer ?? "AI analysis isn't configured yet (missing Google AI key)."));
+        return Ok(new AiInsightsResponseDto(answer ?? (_chatCompletionService.IsAvailable
+            ? "The AI did not answer this time. Please try again."
+            : "AI is switched off or not configured on this installation.")));
     }
 
     /// <summary>
@@ -340,7 +344,7 @@ public class ReportsController : ControllerBase
 
             // Same blocks as the Gantt chart. Hours are only given for logged work; the stand-in for a ticket nobody logged time on
             // would otherwise report "opened to closed" as if it were effort.
-            var ticketBlocks = await Queries.TicketWorkBlocks.ForUserAsync(_db, employee.Id, from, to, isAdmin ? null : _currentUser.DepartmentId, Ct);
+            var ticketBlocks = await Queries.TicketWorkBlocks.ForUserAsync(_db, employee.Id, from, to, isAdmin ? null : _currentUser.DepartmentId, DateTime.UtcNow, Ct);
             foreach (var b in ticketBlocks)
             {
                 timelineRows.Add(new TimelineExportRow(
@@ -348,15 +352,17 @@ public class ReportsController : ControllerBase
                     b.IsLogged && b.End.HasValue ? Math.Round((b.End.Value - b.Start).TotalHours, 1) : (double?)null));
             }
 
-            var taskBlocks = await _db.WorkTasks.AsNoTracking()
-                .Where(x => x.AssignedToUserId == employee.Id && x.StartedAtUtc != null && x.StartedAtUtc < to && (x.EndedAtUtc == null || x.EndedAtUtc >= from))
-                .Select(x => new { x.Title, x.Status, x.StartedAtUtc, x.EndedAtUtc })
+            // One row per stretch of work, as on the chart.
+            var now = DateTime.UtcNow;
+            var taskBlocks = await _db.WorkTaskSessions.AsNoTracking()
+                .Where(x => x.UserId == employee.Id && x.StartedAtUtc < to && (x.EndedAtUtc ?? now) >= from)
+                .Select(x => new { x.WorkTask!.Title, x.StartedAtUtc, x.EndedAtUtc })
                 .ToListAsync(Ct);
             foreach (var b in taskBlocks)
             {
                 timelineRows.Add(new TimelineExportRow(
-                    employeeName, "Task", b.Title, b.Status.ToString(), b.StartedAtUtc, b.EndedAtUtc,
-                    b.StartedAtUtc.HasValue && b.EndedAtUtc.HasValue ? Math.Round((b.EndedAtUtc.Value - b.StartedAtUtc.Value).TotalHours, 1) : (double?)null));
+                    employeeName, "Task", b.Title, b.EndedAtUtc.HasValue ? "Done" : "InProgress", b.StartedAtUtc, b.EndedAtUtc,
+                    b.EndedAtUtc.HasValue ? Math.Round((b.EndedAtUtc.Value - b.StartedAtUtc).TotalHours, 1) : (double?)null));
             }
         }
 

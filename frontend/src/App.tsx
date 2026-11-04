@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { DocumentMeta } from './components/DocumentMeta';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import LoginPage from './pages/auth/LoginPage';
 import SetNewPasswordPage from './pages/auth/SetNewPasswordPage';
@@ -50,6 +51,7 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+        <DocumentMeta />
         <Suspense fallback={<PageFallback />}>
           <Routes>
             <Route path="/login" element={<LoginPage />} />

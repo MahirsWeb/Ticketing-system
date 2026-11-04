@@ -56,6 +56,24 @@ public sealed class ApiExceptionMiddleware
                     traceId, Code: "CONCURRENT_UPDATE");
                 break;
 
+            case DbUpdateException { InnerException: Microsoft.Data.SqlClient.SqlException { Number: 2601 or 2627 } }:
+                // A unique index refused a second copy: two requests raced to create the same thing (the same person added
+                // twice, the same key used twice). The loser is told to look again, not that the server broke.
+                _logger.LogInformation(ex, "Duplicate rejected on {Path} (trace {TraceId})", context.Request.Path, traceId);
+                context.Response.StatusCode = StatusCodes.Status409Conflict;
+                body = new ApiError(
+                    "This was already done by someone else (or by an earlier identical request). Reload the page and check.",
+                    traceId, Code: "DUPLICATE");
+                break;
+
+            case MailboxNotConnectedException:
+                // The same answer whichever action needed the mailbox: it is a state of the branch, not a mistake in the request.
+                context.Response.StatusCode = StatusCodes.Status409Conflict;
+                body = new ApiError(
+                    "No mailbox is connected for your branch. Connect one in the email settings first.",
+                    traceId, Code: "MAILBOX_NOT_CONNECTED");
+                break;
+
             case ExternalServiceException external:
                 // An outside provider is down, slow or refused us: the caller did nothing wrong, and the message was
                 // written to be shown. 503 = try again shortly, 502 = the provider rejected the request.

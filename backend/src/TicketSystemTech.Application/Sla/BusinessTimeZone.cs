@@ -37,6 +37,27 @@ public static class BusinessTimeZone
         _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
     };
 
+    /// <summary>
+    /// The UTC instants a local calendar day starts and ends at. <paramref name="localDate"/> is a date as a person typed it
+    /// (only its Y-M-D counts); without one, today in the zone. A day is 23 or 25 hours long where the clocks change.
+    /// </summary>
+    public static (DateTime StartUtc, DateTime EndUtc, DateOnly LocalDate) DayWindow(DateTime? localDate, TimeZoneInfo zone, DateTime nowUtc)
+    {
+        var day = localDate is { } given
+            ? DateOnly.FromDateTime(given)
+            : DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(AsUtc(nowUtc), zone));
+
+        DateTime ToUtc(DateOnly d)
+        {
+            var midnight = DateTime.SpecifyKind(d.ToDateTime(TimeOnly.MinValue), DateTimeKind.Unspecified);
+            // Midnight does not exist (clocks skip it) or exists twice (clocks repeat it) in a few zones: take the next valid instant.
+            if (zone.IsInvalidTime(midnight)) midnight = midnight.AddHours(1);
+            return TimeZoneInfo.ConvertTimeToUtc(midnight, zone);
+        }
+
+        return (ToUtc(day), ToUtc(day.AddDays(1)), day);
+    }
+
     /// <summary>The local calendar date of a UTC instant.</summary>
     public static DateOnly LocalDate(DateTime utc, TimeZoneInfo zone) =>
         DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(AsUtc(utc), zone));

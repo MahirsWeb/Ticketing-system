@@ -146,7 +146,7 @@ export default function TicketDetailPage() {
             {ticket.attachments.map((a) => (
               <li key={a.id}>
                 <a href={a.fileUrl} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">
-                  📎 {a.fileName}
+                  <span aria-hidden>📎</span> {a.fileName}
                 </a>
               </li>
             ))}

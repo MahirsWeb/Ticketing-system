@@ -115,12 +115,20 @@ export function Card({ className, children, ...props }: React.HTMLAttributes<HTM
 
 export function ErrorText({ children }: { children?: React.ReactNode }) {
   if (!children) return null;
-  return <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{children}</p>;
+  return (
+    <p role="alert" className="mt-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+      {children}
+    </p>
+  );
 }
 
 export function SuccessText({ children }: { children?: React.ReactNode }) {
   if (!children) return null;
-  return <p className="mt-2 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">{children}</p>;
+  return (
+    <p role="status" className="mt-2 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+      {children}
+    </p>
+  );
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -147,7 +155,7 @@ const PRIORITY_STYLES: Record<string, string> = {
 };
 
 export function PriorityBadge({ priority }: { priority: string | null }) {
-  if (!priority) return <span className="text-xs text-slate-300">—</span>;
+  if (!priority) return <span aria-label="No priority" className="text-xs text-slate-500">—</span>;
   return (
     <span className={clsx('rounded-full px-2.5 py-0.5 text-xs font-semibold', PRIORITY_STYLES[priority] ?? 'bg-slate-100 text-slate-600')}>
       {priority}

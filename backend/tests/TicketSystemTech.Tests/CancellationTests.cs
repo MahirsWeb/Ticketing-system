@@ -27,7 +27,7 @@ public class CancellationTests
     public async Task A_cancelled_embedding_request_propagates_instead_of_returning_null()
     {
         var handler = new HangingHandler();
-        var service = new GoogleAiEmbeddingService(new HttpClient(handler), ConfigWithKey(), NullLogger<GoogleAiEmbeddingService>.Instance);
+        var service = new AiEmbeddingService(new HttpClient(handler), ConfigWithKey(), NullLogger<AiEmbeddingService>.Instance);
         using var cts = new CancellationTokenSource();
 
         var pending = service.EmbedAsync("printer ne štampa", cts.Token);
@@ -43,7 +43,7 @@ public class CancellationTests
     public async Task A_cancelled_chat_request_propagates_instead_of_returning_null()
     {
         var handler = new HangingHandler();
-        var service = new GeminiChatCompletionService(new HttpClient(handler), ConfigWithKey(), NullLogger<GeminiChatCompletionService>.Instance);
+        var service = new AiChatCompletionService(new HttpClient(handler), ConfigWithKey(), NullLogger<AiChatCompletionService>.Instance);
         using var cts = new CancellationTokenSource();
 
         var pending = service.AskAsync("system", "context", "question", cts.Token);
@@ -56,8 +56,8 @@ public class CancellationTests
     [Fact]
     public async Task A_real_failure_is_still_reported_as_null_so_callers_can_fall_back()
     {
-        var service = new GeminiChatCompletionService(
-            new HttpClient(new ThrowingHandler()), ConfigWithKey(), NullLogger<GeminiChatCompletionService>.Instance);
+        var service = new AiChatCompletionService(
+            new HttpClient(new ThrowingHandler()), ConfigWithKey(), NullLogger<AiChatCompletionService>.Instance);
 
         Assert.Null(await service.AskAsync("system", "context", "question"));
     }

@@ -71,10 +71,20 @@ public static class DbSeeder
         logger.LogInformation("Seeded initial Admin account: {Email}", seedEmail);
         if (wasGenerated)
         {
-            // Only ever surfaced here, once — not persisted anywhere in plain text.
-            logger.LogWarning(
-                "Generated initial password for {Email} (valid {Minutes} min, must be changed on first login): {Password}",
-                seedEmail, tempPasswordOptions.Value.ValidityMinutes, seedPassword);
+            // The password is never written through the logger: a log goes to the console AND to a file that outlives the console.
+            // With SeedAdmin:PrintGeneratedPassword it is shown once, on the terminal only (the quick start of the README does this);
+            // otherwise it is not shown at all, and --reset-admin-password gives a new one when it is needed.
+            if (configuration.GetValue("SeedAdmin:PrintGeneratedPassword", false))
+            {
+                Console.Out.WriteLine(
+                    $"Generated initial password for {seedEmail} (valid {tempPasswordOptions.Value.ValidityMinutes} min, must be changed on first login): {seedPassword}");
+            }
+            else
+            {
+                logger.LogWarning(
+                    "The initial Admin {Email} was created with a generated password that was NOT shown. Set SeedAdmin:Password, or run with " +
+                    "--reset-admin-password {Email} to get a new temporary password.", seedEmail, seedEmail);
+            }
         }
     }
 }

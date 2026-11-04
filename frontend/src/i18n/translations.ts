@@ -34,6 +34,16 @@ export const translations = {
     login_errTempPasswordExpired: 'Your temporary password has expired. Please ask an admin or consultant to generate a new one.',
     login_errAccountLocked: 'Too many failed sign-in attempts. Please try again in a few minutes, or reset your password.',
     login_errGeneric: 'Invalid email or password.',
+    login_sessionExpired: 'Your session has expired. Sign in again; a reply you were writing has been kept.',
+
+    title_account: 'Account',
+    title_ticket: 'Ticket',
+    title_newOnBehalf: 'New ticket for a client',
+    title_user: 'User',
+    title_company: 'Company',
+    title_similar: 'Similar tickets',
+    title_notFound: 'Page not found',
+    aiHelp_unavailable: 'AI is switched off or not configured on this installation, so only matching help articles are shown.',
 
     aiHelp_title: 'Ask the AI assistant for help',
     aiHelp_panelTitle: 'AI Help',
@@ -92,6 +102,16 @@ export const translations = {
     login_errTempPasswordExpired: 'Vaša privremena lozinka je istekla. Zamolite administratora ili konsultanta da generiše novu.',
     login_errAccountLocked: 'Previše neuspjelih pokušaja prijave. Pokušajte ponovo za nekoliko minuta ili resetujte lozinku.',
     login_errGeneric: 'Pogrešan email ili lozinka.',
+    login_sessionExpired: 'Vaša sesija je istekla. Prijavite se ponovo; odgovor koji ste pisali je sačuvan.',
+
+    title_account: 'Račun',
+    title_ticket: 'Tiket',
+    title_newOnBehalf: 'Novi tiket za klijenta',
+    title_user: 'Korisnik',
+    title_company: 'Firma',
+    title_similar: 'Slični tiketi',
+    title_notFound: 'Stranica nije pronađena',
+    aiHelp_unavailable: 'AI je isključen ili nije podešen na ovoj instalaciji, pa se prikazuju samo odgovarajući članci pomoći.',
 
     aiHelp_title: 'Zatražite pomoć od AI asistenta',
     aiHelp_panelTitle: 'AI pomoć',

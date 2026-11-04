@@ -33,6 +33,7 @@ public class UsersController : ControllerBase
     private readonly IFileStorage _fileStorage;
     private readonly IMemoryCache _cache;
     private readonly ITicketAssignmentService _assignments;
+    private readonly IFileLinkService _links;
 
     public UsersController(
         UserManager<ApplicationUser> userManager,
@@ -44,8 +45,10 @@ public class UsersController : ControllerBase
         IOptions<FrontendOptions> frontendOptions,
         IFileStorage fileStorage,
         IMemoryCache cache,
-        ITicketAssignmentService assignments)
+        ITicketAssignmentService assignments,
+        IFileLinkService links)
     {
+        _links = links;
         _assignments = assignments;
         _userManager = userManager;
         _db = db;
@@ -209,6 +212,10 @@ public class UsersController : ControllerBase
         var wasEmployee = user.Role == UserRole.Employee;
         var movedAway = wasEmployee && (request.Role != UserRole.Employee || user.DepartmentId != departmentId || user.SubBranchId != subBranchId);
 
+        _db.Audit(_currentUser.UserId, "UserUpdated", nameof(ApplicationUser), user.Id,
+            $"Role: {user.Role} -> {request.Role}; branch: {user.DepartmentId?.ToString() ?? "-"} -> {departmentId?.ToString() ?? "-"}; " +
+            $"sub-branch: {user.SubBranchId?.ToString() ?? "-"} -> {subBranchId?.ToString() ?? "-"}; company: {user.CompanyId?.ToString() ?? "-"} -> {companyId?.ToString() ?? "-"}");
+
         user.FirstName = request.FirstName;
         user.LastName = request.LastName;
         user.Role = request.Role;
@@ -227,7 +234,7 @@ public class UsersController : ControllerBase
     /// <summary>
     /// Admin-only: marks an account active/inactive. Inactive means "no longer collaborating" —
     /// the account can't log in (enforced in AuthController.Login) and stops receiving any app emails
-    /// (enforced centrally in BrevoEmailSender). Can be reversed at any time.
+    /// (enforced centrally by the e-mail outbox worker). Can be reversed at any time.
     /// </summary>
     [HttpPatch("{id:guid}/active")]
     [Authorize(Roles = nameof(UserRole.Admin))]
@@ -237,6 +244,7 @@ public class UsersController : ControllerBase
         if (user is null) return NotFound();
         if (user.Id == _currentUser.UserId) return BadRequest(new { message = "You cannot deactivate your own account." });
 
+        _db.Audit(_currentUser.UserId, request.IsActive ? "UserActivated" : "UserDeactivated", nameof(ApplicationUser), user.Id, $"Role of target: {user.Role}");
         user.IsActive = request.IsActive;
         await _userManager.UpdateAsync(user);
         _cache.Remove(UserStatusCache.Key(user.Id));
@@ -280,7 +288,7 @@ public class UsersController : ControllerBase
             u.PhoneNumber, u.IsActive, u.EmailConfirmed, u.CreatedAtUtc,
             u.DepartmentId, u.DepartmentId.HasValue && departmentNames.TryGetValue(u.DepartmentId.Value, out var dn) ? dn : null,
             u.SubBranchId, u.SubBranchId.HasValue && subBranchNames.TryGetValue(u.SubBranchId.Value, out var sn) ? sn : null,
-            u.ProfilePictureUrl, u.LastLoginAtUtc)).ToList();
+            _links.ToPublicUrl(u.ProfilePictureUrl), u.LastLoginAtUtc)).ToList();
 
         return Ok(result);
     }
@@ -349,7 +357,7 @@ public class UsersController : ControllerBase
             u.PhoneNumber, u.IsActive, u.EmailConfirmed, u.CreatedAtUtc,
             u.DepartmentId, u.DepartmentId.HasValue && departmentNames.TryGetValue(u.DepartmentId.Value, out var dn) ? dn : null,
             u.SubBranchId, u.SubBranchId.HasValue && subBranchNames.TryGetValue(u.SubBranchId.Value, out var sn) ? sn : null,
-            u.ProfilePictureUrl, u.LastLoginAtUtc)).ToList();
+            _links.ToPublicUrl(u.ProfilePictureUrl), u.LastLoginAtUtc)).ToList();
 
         return Ok(new UserPageDto(items, page, pageSize, total, clientCount, staffCount));
     }
@@ -385,7 +393,7 @@ public class UsersController : ControllerBase
             u.Id, u.FirstName, u.LastName, u.Email!, u.Role.ToString(),
             u.CompanyId, companyName, u.PhoneNumber, u.IsActive, u.EmailConfirmed, u.CreatedAtUtc,
             u.DepartmentId, departmentName, u.SubBranchId, subBranchName,
-            u.ProfilePictureUrl, u.LastLoginAtUtc));
+            _links.ToPublicUrl(u.ProfilePictureUrl), u.LastLoginAtUtc));
     }
 
     private const long MaxProfilePictureSizeBytes = 5 * 1024 * 1024; // 5 MB
@@ -417,7 +425,7 @@ public class UsersController : ControllerBase
         user.ProfilePictureUrl = url;
         await _userManager.UpdateAsync(user);
         _fileStorage.DeletePublicImage(previousPicture); // the old picture is no longer referenced by anything
-        return Ok(new { profilePictureUrl = url });
+        return Ok(new { profilePictureUrl = _links.ToPublicUrl(url) });
     }
 
     /// <summary>
@@ -514,6 +522,9 @@ public class UsersController : ControllerBase
         var result = await _userManager.CreateAsync(user, tempPassword);
         if (!result.Succeeded)
             return BadRequest(new { message = string.Join(" ", result.Errors.Select(e => e.Description)) });
+
+        _db.Audit(_currentUser.UserId, "UserCreated", nameof(ApplicationUser), user.Id, $"Role: {role}");
+        await _db.SaveChangesAsync();
 
         await _emailSender.SendAsync(email, "You've been invited to Ticket System Tech",
             EmailTemplates.Invite(firstName, email, tempPassword, _tempPasswordOptions.ValidityMinutes, $"{_frontendOptions.BaseUrl}/login"));

@@ -94,6 +94,10 @@ public sealed class ApiWorld : IAsyncLifetime
         // The tests run the e-mail worker themselves, at moments they choose; a worker on a timer would send messages
         // while a test is still looking at them.
         SetEnvironment("Email__Outbox__Enabled", "false");
+        // Small, so the ceiling per account on the sign-in endpoint can be reached in a test (the default is 30 a minute).
+        SetEnvironment("RateLimits__LoginPerAccountPerMinute", "5");
+        // The per-address ceiling (15 a minute) would be hit by the tests of the per-account one, which share one address.
+        SetEnvironment("RateLimits__AuthPerMinute", "1000");
 
         Factory = new ApiFactory();
         _client = Factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
@@ -181,8 +185,17 @@ public sealed class ApiWorld : IAsyncLifetime
         var email = $"{key.ToLowerInvariant()}@authz.test";
         var user = new ApplicationUser
         {
-            UserName = email, Email = email, EmailConfirmed = true, FirstName = key, LastName = "Tester", Role = role,
-            DepartmentId = branch, CompanyId = companyId, PhoneNumber = phone, IsActive = true, PhoneNumberPrompted = true
+            UserName = email,
+            Email = email,
+            EmailConfirmed = true,
+            FirstName = key,
+            LastName = "Tester",
+            Role = role,
+            DepartmentId = branch,
+            CompanyId = companyId,
+            PhoneNumber = phone,
+            IsActive = true,
+            PhoneNumberPrompted = true
         };
         var created = await users.CreateAsync(user, Password);
         if (!created.Succeeded) throw new InvalidOperationException($"Creating {key}: " + string.Join("; ", created.Errors.Select(e => e.Description)));
@@ -229,8 +242,15 @@ public sealed class ApiWorld : IAsyncLifetime
         {
             var ticket = new Ticket
             {
-                TicketNumber = "AZ-" + key, Title = "Ticket " + key, Description = "<p>test</p>", ClientId = client.Id, CompanyId = CompanyId,
-                Status = status, DepartmentId = branch, Priority = TicketPriority.Medium, Source = TicketSource.TicketSystem,
+                TicketNumber = "AZ-" + key,
+                Title = "Ticket " + key,
+                Description = "<p>test</p>",
+                ClientId = client.Id,
+                CompanyId = CompanyId,
+                Status = status,
+                DepartmentId = branch,
+                Priority = TicketPriority.Medium,
+                Source = TicketSource.TicketSystem,
                 ResolutionSummary = status == TicketStatus.Closed ? "fixed" : null,
                 ClosedAtUtc = status == TicketStatus.Closed ? DateTime.UtcNow : null
             };
@@ -260,8 +280,11 @@ public sealed class ApiWorld : IAsyncLifetime
         // unless B's ticket has been filtered out BEFORE the ranking: the filter must not merely hide B's ticket afterwards.
         KnowledgeBaseChunk Chunk(Guid? ticketId, Guid? documentId, string content, params float[] embedding) => new()
         {
-            TicketId = ticketId, DocumentId = documentId, Content = content,
-            Embedding = embedding, EmbeddingModel = FakeEmbeddingService.Model
+            TicketId = ticketId,
+            DocumentId = documentId,
+            Content = content,
+            Embedding = embedding,
+            EmbeddingModel = FakeEmbeddingService.Model
         };
         db.KnowledgeBaseChunks.AddRange(
             Chunk(Tickets["A1"], null, "zebra marker-ticket-A solution", 0.8f, 0.6f, 0f),

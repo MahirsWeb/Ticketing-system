@@ -61,7 +61,7 @@ public class KnowledgeBaseDocumentIndexer : IKnowledgeBaseDocumentIndexer
 
         foreach (var chunkText in SplitIntoChunks(text))
         {
-            var embedding = await _embeddingService.EmbedAsync(chunkText, ct);
+            var embedding = await _embeddingService.EmbedAsync(chunkText, EmbeddingPriority.Background, ct);
             _db.KnowledgeBaseChunks.Add(new KnowledgeBaseChunk
             {
                 DocumentId = document.Id,
@@ -95,10 +95,10 @@ public class KnowledgeBaseDocumentIndexer : IKnowledgeBaseDocumentIndexer
         var embedded = new List<(string Text, float[] Vector)>();
         foreach (var piece in pieces)
         {
-            var vector = await _embeddingService.EmbedAsync(piece, ct);
+            var vector = await _embeddingService.EmbedAsync(piece, EmbeddingPriority.Background, ct);
             if (vector is null)
                 return new DocumentReindexResult(false,
-                    "The embedding service did not answer (check GoogleAi:ApiKey and the quota). The document was left unchanged.", 0);
+                    "The embedding service did not answer (check the Ai settings and the quota). The document was left unchanged.", 0);
 
             embedded.Add((piece, vector));
             progress?.Invoke(embedded.Count, pieces.Count);

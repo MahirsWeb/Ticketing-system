@@ -91,7 +91,7 @@ function Toolbar({ editor, onAttachClick }: { editor: Editor; onAttachClick?: ()
         <>
           <div className="mx-1 h-5 w-px bg-slate-300" />
           <ToolbarButton title="Attach a file" onClick={onAttachClick}>
-            📎 Attach
+            <span aria-hidden>📎</span> Attach
           </ToolbarButton>
         </>
       )}
@@ -142,7 +142,7 @@ export function RichTextEditor({ value, onChange, placeholder, onFilesSelected, 
   if (!editor) return null;
 
   return (
-    <div className="rounded-md border border-slate-300 bg-white">
+    <div className="rounded-md border border-slate-300 bg-white focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-600">
       <Toolbar editor={editor} onAttachClick={onFilesSelected ? () => fileInputRef.current?.click() : undefined} />
       <EditorContent editor={editor} />
       {onFilesSelected && (

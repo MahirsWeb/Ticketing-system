@@ -77,8 +77,10 @@ frontend/   React + TypeScript (Vite, Tailwind, TipTap editor, Recharts grafovi)
 
 ```bash
 git clone <link-ka-repozitoriju>
-cd ProjekatTIKETSISTEM
+cd <folder-koji-je-git-napravio>
 ```
+
+(Ime foldera je ime repozitorija, npr. `Ticketing-system`. Sve naredne komande se pišu u odnosu na taj folder.)
 
 ### 2. Provjeri da SQL Server radi
 
@@ -113,17 +115,22 @@ Otvori novi `appsettings.Development.json` i popuni:
   Izvan `Development` okruženja `Pii:HashKey` je obavezan.
 - **`SeedAdmin:Email`** — tvoj email; ovaj nalog će automatski biti napravljen kao Admin prvi put kad app
   krene.
-- **`GoogleAi:ApiKey`** — *opciono, ali potrebno za AI asistenta.* Besplatan ključ: [aistudio.google.com](https://aistudio.google.com/app/apikey).
-- **`Brevo:ApiKey`** i **`Brevo:SenderEmail`** — *opciono.* Potrebni samo ako želiš da "zaboravljena lozinka",
-  pozivnice i obavijesti o tiketima stvarno šalju email. `SenderEmail` je adresa koju si u Brevo nalogu **potvrdio kao
-  pošiljaoca** (Brevo šalje samo s takve adrese); nema zadane vrijednosti, pa bez nje ništa ne ide. Besplatan nalog:
-  [brevo.com](https://www.brevo.com). Kako se email šalje opisuje [Slanje email-ova](#slanje-email-ova).
+- **`Ai:ApiKey`** — *opciono, ali potrebno za AI asistenta.* Besplatan Google ključ: [aistudio.google.com](https://aistudio.google.com/app/apikey)
+  (stari naziv `GoogleAi:ApiKey` i dalje radi). AI se može i potpuno isključiti (`Ai:Enabled` = `false`) ili usmjeriti na
+  **lokalni model** na tvom računaru, bez ikakvog interneta (npr. Ollama): vidi [AI: davalac, lokalni model i šta napušta sistem](#ai-davalac-lokalni-model-i-šta-napušta-sistem).
+- **`Smtp:Host`, `Smtp:Port`, `Smtp:Username`, `Smtp:Password`, `Smtp:FromAddress`** — *opciono.* Potrebni samo ako želiš da
+  "zaboravljena lozinka", pozivnice i obavijesti o tiketima stvarno šalju email: bilo koji SMTP server (firmin mail server,
+  Gmail/Office 365 s lozinkom za aplikaciju, ili za probu [smtp4dev](https://github.com/rnwood/smtp4dev) koji poruke samo hvata).
+  `FromAddress` nema zadanu vrijednost, pa bez nje ništa ne ide. Kako se email šalje opisuje [Slanje email-ova](#slanje-email-ova).
 - **`MicrosoftGraph`** — *opciono.* Potrebno samo za Outlook email integraciju (pretvaranje email-ova u
   tikete). Slobodno ostavi prazno ako ti ne treba.
 
 ### 4. Pokreni backend
 
+Korak 3 te je ostavio u `backend/src/TicketSystemTech.Api`; vrati se u folder `backend`:
+
 ```bash
+cd ../..
 dotnet restore
 dotnet run --project src/TicketSystemTech.Api
 ```
@@ -144,6 +151,10 @@ Generated initial password for tvoj-email@example.com (valid 20 min, must be cha
 ```
 
 **Zapamti tu privremenu lozinku** — treba ti za prvu prijavu (vidi [Prijava u aplikaciju](#prijava-u-aplikaciju)).
+
+> Ta linija se ispisuje samo zato što `appsettings.Development.json.example` ima `SeedAdmin:PrintGeneratedPassword` =
+> `true`. Na serveru je to isključeno (lozinka se ne smije naći ni u konzoli ni u log fajlu); tamo ili upiši
+> `SeedAdmin:Password`, ili novu privremenu lozinku dobij komandom iz sekcije [Prijava u aplikaciju](#prijava-u-aplikaciju).
 
 ### 5. Podesi frontend konfiguraciju
 
@@ -185,10 +196,21 @@ Kad terminal ispiše nešto poput:
 3. Lozinka: privremena lozinka koju je backend ispisao u terminalu (korak 4 gore)
 4. Aplikacija će odmah tražiti da postaviš stalnu lozinku — nakon toga si prijavljen kao Admin.
 
-Ako privremena lozinka istekne prije nego je iskoristiš (važi 20 minuta po defaultu), samo restartuj
-backend (`Ctrl+C` pa opet `dotnet run ...`) — pošto nalog s tim emailom već postoji, prijaviš se preko
-"Zaboravljena lozinka" (radi samo ako je `Brevo:ApiKey` podešen) ili zatraži da se lozinka ponovo generiše
-direktno u bazi.
+Ako privremena lozinka istekne prije nego je iskoristiš (važi 20 minuta po defaultu) ili je zaboraviš, ne treba ništa da
+brišeš u bazi. Zaustavi backend i pokreni:
+
+```bash
+cd backend   # iz korijena projekta
+dotnet run --project src/TicketSystemTech.Api -- --reset-admin-password tvoj-email@example.com
+```
+
+Komanda daje tom Admin nalogu novu privremenu lozinku (ispiše je **samo u taj terminal**, ne u log), skida zaključavanje,
+poništava stare sesije i upisuje zapis u audit log (bez lozinke). Radi samo za Admin naloge. Ako ne želiš da se lozinka ikad
+generiše, upiši svoju u `SeedAdmin:Password` prije prvog pokretanja; i ona se mora promijeniti pri prvoj prijavi.
+
+Generisana lozinka se u terminalu prikazuje samo ako je `SeedAdmin:PrintGeneratedPassword` = `true` (u
+`appsettings.Development.json.example` jeste, da bi brzo pokretanje ovdje radilo); na serveru je isključeno, pa se lozinka
+ne može pojaviti ni u konzoli ni u log fajlu.
 
 ---
 
@@ -238,19 +260,30 @@ Posljedice koje treba znati:
 | `Jwt:AccessTokenMinutes` | Ne (default 30, u primjeru 120) | Koliko dugo login sesija traje prije nego se mora ponovo ulogovati. |
 | `Pii:HashKey` | ✅ Da (obavezno izvan Development) | Ključ HMAC hasha kojim se nalozi traže po emailu. **Ne mijenjaj ga nakon što već postoje nalozi** — niko se više ne bi mogao ulogovati. Enkripcija sadržaja koristi ključeve iz tabele `DataProtectionKeys`, koja mora biti u svakom backupu. |
 | `Storage:UploadsPath` | Ne | Folder za priloge tiketa i dokumente baze znanja (default `App_Data/uploads` pored aplikacije). Ne servira se javno; za produkciju postavi putanju **van** foldera koji se redeploya. Prilozi se otvaraju kroz potpisane linkove koji ističu za 4 sata. |
-| `SeedAdmin:Email` / `Password` | ✅ Email da, lozinka ne | Email za prvi Admin nalog koji se automatski pravi. Ako ostaviš `Password` prazno, generiše se nasumična privremena lozinka (ispiše se u terminalu). |
+| `SeedAdmin:Email` / `Password` | ✅ Email da, lozinka ne | Email za prvi Admin nalog koji se automatski pravi. Ako ostaviš `Password` prazno, generiše se nasumična privremena lozinka. |
+| `SeedAdmin:PrintGeneratedPassword` | Ne (default `false`) | Ako je `true`, generisana lozinka se **jednom** ispiše u terminal (nikad u log). Inače se ne prikazuje, a nova se dobija komandom `--reset-admin-password`. |
 | `Startup:Migrate` | Ne (default `true`) | Da li backend pri pokretanju sam primjenjuje migracije i jednokratne popravke baze. Postavi na `false` ako migracije radiš kao zaseban korak (`dotnet TicketSystemTech.Api.dll --migrate-only` — primijeni migracije, seeduje prvog admina i izađe); backend tada odbija da krene na neažuriranoj bazi. Više instanci koje krenu istovremeno čekaju jedna drugu (SQL Server zaključak), pa se migracije ne izvršavaju paralelno. |
 | `Sla:Mode` | Ne (default `CalendarHours`) | Kako se računa rok tiketa iz SLA plana. `CalendarHours` = sati teku non-stop (plan od 24 h = rok za 24 h). `BusinessHours` = broje se samo radni sati. Rok koji osoblje ručno unese uvijek ima prednost. |
 | `Sla:TimeZoneId`, `Sla:WorkdayStart`, `Sla:WorkdayEnd` | Ne | Samo za `BusinessHours`: vremenska zona (default `Europe/Sarajevo`) i radno vrijeme (default `08:00`–`16:00`). |
 | `Sla:WorkDays`, `Sla:Holidays` | Ne | Samo za `BusinessHours`: radni dani (default ponedjeljak–petak) i neradni datumi (`yyyy-MM-dd`). Ako ih postaviš, **zamjenjuju** default; ne dodaju se na njega. |
-| `GoogleAi:ApiKey` | Za AI funkcije | Bez ovoga, AI asistent i pretraga tiketa ne rade (ostatak aplikacije radi normalno). |
-| `Brevo:ApiKey` | Za slanje email-ova | Bez ovoga se email-ovi ne šalju (poruka se u outboxu označi kao *Skipped*, upozorenje u logu, aplikacija ne puca). |
-| `Brevo:SenderEmail` / `SenderName` | Za slanje email-ova | Adresa (i ime) pošiljaoca; adresa mora biti potvrđena u Brevo nalogu. Nema zadane vrijednosti. |
+| `Ai:Enabled` | Ne (default `true`) | `false` isključuje AI potpuno: ništa se ne šalje nikome, a ekrani kažu da je AI nedostupan (pretraga po ključnim riječima radi). |
+| `Ai:Provider` | Ne (default `Gemini`) | `Gemini`, `OpenAiCompatible` (Ollama, vLLM, LM Studio, Azure OpenAI, OpenAI...) ili `None`. |
+| `Ai:ApiKey` | Za Gemini | Ključ davaoca (stari naziv `GoogleAi:ApiKey` radi). Za lokalni model nije potreban. |
+| `Ai:Endpoint`, `Ai:ChatModel`, `Ai:EmbeddingModel` | Za `OpenAiCompatible` | Adresa (npr. `http://localhost:11434/v1`) i imena modela. Za Gemini imaju zadane vrijednosti i mogu se nadjačati. |
+| `Ai:EmbeddingDimensions` | Ne | Veličina vektora. Promjena (ili promjena modela) znači da stari vektori više ne vrijede; admin pokrene *Reindex* i oni se obnove. |
+| `Ai:RedactPersonalData`, `Ai:MaxOutputTokens`, `Ai:BackgroundMinIntervalSeconds` | Ne (true / 2048 / 2.5) | Maskiranje emailova i telefona prije slanja, najveći odgovor modela, razmak između pozadinskih poziva pri indeksiranju (korisnička pitanja ne čekaju na njega). |
+| `Smtp:Host`, `Port` (587), `Security` (`StartTls`, `Ssl` ili `None`), `Username`, `Password` | Za slanje email-ova | SMTP server. Bez `Host` se email-ovi ne šalju (poruka se u outboxu označi kao *Skipped*, upozorenje u logu, aplikacija ne puca). Šifrovanje se nikad ne spušta samo od sebe: ako je tražen `StartTls`, a server ga ne nudi, poruka se ne šalje u čistom tekstu. |
+| `Smtp:FromAddress` / `FromName` / `ReplyTo` / `TimeoutSeconds` | `FromAddress` za slanje | Pošiljalac (adresa nema zadanu vrijednost), ime, adresa za odgovor, i koliko dugo se čeka server (20 s). |
 | `Email:Outbox:Enabled` | Ne (default `true`) | Uključuje radnika koji šalje email-ove iz outboxa. Ako ga isključiš, poruke se samo gomilaju u tabeli `EmailOutbox`. |
 | `Email:Outbox:PollSeconds`, `BatchSize`, `LeaseSeconds` | Ne (5 / 20 / 120) | Koliko često radnik gleda ima li šta za slanje, koliko poruka uzme odjednom i koliko dugo se poruka koju šalje drži "zauzetom" (ako radnik pukne usred slanja, poruka se nakon toga ponovo nudi). |
 | `Email:Outbox:KeepSentDays`, `KeepFailedDays` | Ne (7 / 30) | Poslane i preskočene poruke se brišu nakon 7 dana, one koje se nisu mogle isporučiti nakon 30 (do tada se u `LastError` vidi zašto). |
-| `RateLimits:AiStaffPerTenMinutes` | Ne (default 60) | Koliko AI upita (pretraga, pitanja, slični tiketi, AI sažetak) jedna osoba iz osoblja smije u 10 minuta. Klijentski AI chat je zasebno ograničen na 8 upita u 5 minuta. |
-| `ForwardedHeaders:KnownProxies` / `KnownNetworks` | Samo iza reverse proxyja | Adrese (npr. `10.0.0.5`) ili mreže (`10.0.0.0/8`) proxyja kojem se vjeruje da kaže pravu adresu posjetioca. Bez ovoga se `X-Forwarded-*` zaglavlja ignorišu. Ograničenja zahtjeva po osobi rade i bez ovoga; po adresi (npr. prijava) tek kad je ovo ispravno podešeno. |
+| `RateLimits:AuthPerMinute` / `LoginPerAccountPerMinute` / `AiStaffPerTenMinutes` | Ne (15 / 30 / 60) | Prijava i drugi nalog-endpointi po mrežnoj adresi; pokušaji prijave po nalogu (broji se ukucani email, postojao nalog ili ne); AI upiti osoblja po osobi u 10 minuta. Klijentski AI chat je zasebno ograničen na 8 upita u 5 minuta. |
+| `ForwardedHeaders:KnownProxies` / `KnownNetworks` | Samo iza reverse proxyja | Adrese (npr. `10.0.0.5`) ili mreže (`10.0.0.0/8`) proxyja kojem se vjeruje da kaže pravu adresu posjetioca. **Ništa nije povjereno po defaultu, ni ovaj računar**: bez ovoga se `X-Forwarded-*` zaglavlja ignorišu, pa zahtjev ne može sam izabrati svoju adresu. Proxy na istom računaru se mora navesti (`127.0.0.1` ili `::1`). |
+| `AllowedHosts` | Na serveru da | Imena po kojima se aplikacija smije zvati, odvojena sa `;`. Default `localhost;127.0.0.1;[::1]`: zahtjev s drugim `Host` imenom dobija `400`. Za rad na mreži upiši ime servera. Na serveru (`Production`) `*` nije dozvoljen. |
+| `Frontend:BaseUrl` | Na serveru da | Adresa na kojoj ljudi otvaraju aplikaciju; od nje se prave linkovi u email-ovima. Na serveru ne smije biti `localhost`. |
+| `DataProtection:CertificatePath` + `CertificatePassword`, ili `CertificateThumbprint` (`CertificateStoreLocation`) | Na serveru da | Certifikat kojim se šifruju ključevi iz tabele `DataProtectionKeys`. Vidi [Produkcija i bezbjednost](#produkcija-i-bezbjednost). |
+| `DataProtection:AllowUnprotectedKeys` | Ne (default `false`) | Samo kad svjesno prihvataš da ključevi budu u bazi nešifrovani na serveru. Na razvojnom računaru nije potrebno. |
+| `Logging:File:Enabled`, `Path`, `RetainedFiles`, `MaxFileSizeMb` | Ne (true / `logs/ticketsystem-.log` / 30 / 100) | Log ide u konzolu i u dnevni fajl (rotira se po danu i po veličini). Lozinke i tokeni se ne loguju. |
 | `MicrosoftGraph:ClientId` / `ClientSecret` | Za Outlook integraciju | Bez ovoga, samo Settings → Email Integracija ostaje neaktivna; ostatak aplikacije radi normalno. |
 | `TemporaryPassword:ValidityMinutes` | Ne | Koliko dugo privremene lozinke (za nove naloge) važe prije isteka. |
 
@@ -259,18 +292,19 @@ Posljedice koje treba znati:
 ## Slanje email-ova
 
 Aplikacija email **ne šalje dok korisnik čeka**. Svaki email (pozivnica, obavijest o tiketu, privremena lozinka...) se prvo
-upiše kao red u tabelu `EmailOutbox`, a zaseban radnik u pozadini ga šalje preko Brevoa:
+upiše kao red u tabelu `EmailOutbox`, a zaseban radnik u pozadini ga šalje preko SMTP servera iz `Smtp` sekcije:
 
-- Ako je Brevo preopterećen ili nedostupan (odgovori `429`, `5xx`, mrežna greška, istek vremena), poruka se **pokuša ponovo**
-  nakon 1, 2, 4, 8, 16 pa svakih 30 minuta, ukupno **8 pokušaja** (oko dva sata). Ako Brevo odbije samu poruku (npr.
-  nepostojeća adresa, nepotvrđen pošiljalac, loš ključ), ponovni pokušaj ne bi pomogao pa se poruka odmah označi kao *Failed*.
+- Ako je server zauzet ili nedostupan (odgovori `4xx`, mrežna greška, istek vremena, pogrešna lozinka u `Smtp:Password`),
+  poruka se **pokuša ponovo** nakon 1, 2, 4, 8, 16 pa svakih 30 minuta, ukupno **8 pokušaja** (oko dva sata); ako ispraviš
+  podešavanje u tom roku, poruke odu. Ako server odbije samu poruku (`5xx`, npr. nepostojeći primalac), ponovni pokušaj ne bi
+  pomogao pa se poruka odmah označi kao *Failed*.
 - Poruka preživi **restart aplikacije**: ostaje u tabeli i šalje se kad aplikacija ponovo krene. Ako je pokrenuto više
   instanci, svaka poruka se zaključa prije slanja pa je ne šalju dvije odjednom.
-- Isporuka je **"najmanje jednom"**: ako aplikacija pukne baš između Brevoovog prihvatanja i zapisa u bazu da je poslano,
-  poruka se nakon isteka zaključavanja pošalje još jednom. Takav duplikat je cijena toga da se poruka ne izgubi.
-- Račun koji je deaktiviran više ne prima email (poruka se označi *Skipped*), a bez `Brevo:ApiKey`/`Brevo:SenderEmail`
-  se ništa ne šalje, ali se zna šta je preskočeno.
-- Adresa primaoca je u tabeli **šifrovana** kao i sve druge email adrese.
+- Isporuka je **"najmanje jednom"**: ako aplikacija pukne baš između prihvatanja poruke na serveru i zapisa u bazu da je
+  poslano, poruka se nakon isteka zaključavanja pošalje još jednom. Takav duplikat je cijena toga da se poruka ne izgubi.
+- Račun koji je deaktiviran više ne prima email: pravilo primjenjuje sâm radnik, za bilo koji transport, pa se poruka označi
+  *Skipped*. Bez `Smtp:Host` ili `Smtp:FromAddress` se ništa ne šalje, ali se zna šta je preskočeno.
+- Adresa primaoca je u tabeli **šifrovana** kao i sve druge email adrese, a u log se ne upisuje.
 - Link za "zaboravljenu lozinku" najprije prođe kroz mali memorijski red (da odgovor na zahtjev ne otkrije vremenom postoji
   li nalog), pa se odatle upiše u outbox kao i ostalo. Ako aplikacija padne u tih nekoliko trenutaka prije upisa, korisnik
   link jednostavno ponovo traži.
@@ -278,11 +312,106 @@ upiše kao red u tabelu `EmailOutbox`, a zaseban radnik u pozadini ga šalje pre
 Pregled stanja: `SELECT Status, COUNT(*) FROM EmailOutbox GROUP BY Status` (0 = čeka, 1 = poslano, 2 = preskočeno, 3 = nije
 isporučeno; razlog je u koloni `LastError`).
 
-## Ograničenja AI upotrebe
+Za probu bez pravog servera pokreni [smtp4dev](https://github.com/rnwood/smtp4dev) i upiši `Smtp:Host` = `localhost`,
+`Smtp:Port` = `25` (ili port koji ti smtp4dev pokaže), `Smtp:Security` = `None` i bilo koju `Smtp:FromAddress`.
 
-AI poziva plaćeni servis, pa je upotreba ograničena: pitanje može imati najviše 2.000 znakova, jedan izvor koji se šalje
-modelu najviše 6.000, a cijeli kontekst najviše 60.000. Prije slanja se iz teksta uklanjaju email adrese i brojevi telefona.
-Ograničenje broja upita je **po osobi** (vidi `RateLimits:AiStaffPerTenMinutes` u tabeli iznad).
+## AI: davalac, lokalni model i šta napušta sistem
+
+AI je podešavanje, ne ugrađena stavka. `Ai:Provider` bira davaoca:
+
+| Davalac | Kad | Podešavanje |
+|---|---|---|
+| `Gemini` (default) | Imaš Google ključ | `Ai:ApiKey`. |
+| `OpenAiCompatible` | Model na tvom računaru ili na serveru kupca, bez interneta | Npr. Ollama: `Ai:Provider` = `OpenAiCompatible`, `Ai:Endpoint` = `http://localhost:11434/v1`, `Ai:ChatModel` = `llama3.1`, `Ai:EmbeddingModel` = `nomic-embed-text`. Isto vrijedi za bilo koji server s OpenAI REST-om (`/chat/completions`, `/embeddings`). |
+| `None` ili `Ai:Enabled` = `false` | Bez AI-ja | Ništa se ne šalje; ekrani to kažu ("AI nedostupan"), pretraga po ključnim riječima i dalje radi. |
+
+**Šta napušta sistem kad je AI uključen i davalac je vani (Gemini):** tekst pitanja i dijelovi tiketa i dokumentacije
+koji su potrebni za odgovor, uz ograničenja: pitanje najviše 2.000 znakova, jedan izvor 6.000, cijeli kontekst 60.000, a
+odgovor ima gornju granicu. **Email adrese i brojevi telefona se maskiraju** prije slanja (`Ai:RedactPersonalData`); imena
+i slobodan tekst iz tiketa ne. Ključ ide u zaglavlje, nikad u adresu. Besplatni nivo Google AI Studija može koristiti
+poslani tekst za poboljšanje modela; za pravu upotrebu treba plaćeni nivo ili Vertex AI uz ugovor o obradi podataka, ili
+lokalni model, od kojeg ništa ne izlazi. Odluku o tome donosi vlasnik instalacije.
+
+Promjena modela ili veličine vektora (`Ai:EmbeddingModel`, `Ai:EmbeddingDimensions`) znači da su stari vektori
+neupotrebljivi: pretraga ih preskače i upozori u logu, a *Reindex* (Admin → Settings → Knowledge Base) ih zaboravlja i pravi
+nove, uključujući dokumente. Interaktivna pitanja nikad ne čekaju na pozadinsko indeksiranje.
+
+Ograničenje broja upita je **po osobi** (`RateLimits:AiStaffPerTenMinutes`), ne po mrežnoj adresi.
+
+---
+
+## Produkcija i bezbjednost
+
+Na razvojnom računaru ništa od ovoga ne treba. Na serveru (`ASPNETCORE_ENVIRONMENT=Production`, što je i u Docker slici)
+aplikacija **odbija da krene** i nabroji sve što fali, dok ne podesiš:
+
+1. **`Frontend:BaseUrl`**: adresa na kojoj ljudi otvaraju aplikaciju (ne `localhost`).
+2. **`AllowedHosts`**: imena servera (ne `*`).
+3. **Certifikat za ključeve**. Ključevi koji šifruju lične podatke (email, telefon, adresu) i Outlook tokene čuvaju se u
+   tabeli `DataProtectionKeys`, u istoj bazi kao i podaci. Bez certifikata, kopija baze je kopija i brave i ključa. S
+   certifikatom se ključevi upisuju šifrovani, a certifikat nije u bazi ni u njenim backupima.
+
+   ```bash
+   cd backend
+   dotnet run --project src/TicketSystemTech.Api -- --create-key-certificate keyring.pfx "neka-duga-lozinka"
+   ```
+
+   pa `DataProtection:CertificatePath` = `keyring.pfx`, `DataProtection:CertificatePassword` = ta lozinka (iz varijable
+   okruženja ili tajni, ne iz fajla u git-u). Na Windowsu se umjesto fajla može koristiti certifikat iz Windows spremišta:
+   `DataProtection:CertificateThumbprint`. **Sačuvaj certifikat i lozinku odvojeno od backupa baze i napravi njihovu kopiju:
+   bez njih šifrovani podaci ne mogu da se pročitaju.** Postojeći ključ ostaje u čistom tekstu dok se ne zamijeni novim
+   (ključevi se mijenjaju svakih 90 dana); nova instalacija je šifrovana od prvog dana. Ko svjesno ne želi certifikat:
+   `DataProtection:AllowUnprotectedKeys` = `true`.
+
+Ostalo što vrijedi znati:
+
+- **Iza reverse proxyja** navedi njegovu adresu u `ForwardedHeaders:KnownProxies` (ili mrežu u `KnownNetworks`); inače sve
+  prijave izgledaju kao da dolaze s proxyja i dijele jedno ograničenje. Ni proxy na istom računaru nije povjeren dok se ne navede.
+- **Log**: konzola i dnevni fajl (`Logging:File`). U Docker slici fajlovi idu u `/data/logs`. Svaki zahtjev ima oznaku
+  (`X-Correlation-Id`) koja je u svakoj liniji loga i u svakom audit zapisu tog zahtjeva.
+- **Audit log** (`AuditLogs`) bilježi osjetljive radnje: ko, šta, nad čim, kada, s koje adrese i kojeg zahtjeva (kreiranje,
+  izmjena i deaktivacija naloga, otvaranje, zatvaranje, ponovno otvaranje i prenos tiketa, promjena izvršilaca, izmjene
+  poslovnica, resetovanje lozinke, spajanje mailboxa, radno vrijeme). Da bude samo za dodavanje, korisniku baze kojim radi
+  aplikacija oduzmi izmjenu i brisanje:
+  `DENY UPDATE, DELETE ON dbo.AuditLogs TO [korisnik_aplikacije];` (ne važi za `dbo`/vlasnika baze, pa aplikacija na serveru
+  ne treba da radi kao on).
+- **Health**: `/health/live` (proces je živ), `/health/ready` (baza odgovara i šema je aktuelna). Docker slika ima
+  `HEALTHCHECK` koji pita `/health/live`.
+- **Docker slika**: bazne slike su zakucane digestom (Dependabot predlaže nove), proces nije root, a volume treba na
+  `/data` (prilozi i log fajlovi) i `/app/wwwroot/avatars` (profilne slike). Primjer:
+
+  ```bash
+  docker run -p 8080:8080 \
+    -e ConnectionStrings__DefaultConnection="Server=...;Database=TicketSystemTech;..." \
+    -e Jwt__Secret=... -e Pii__HashKey=... \
+    -e Frontend__BaseUrl=https://tickets.firma.ba -e AllowedHosts=tickets.firma.ba \
+    -e DataProtection__CertificatePath=/certs/keyring.pfx -e DataProtection__CertificatePassword=... \
+    -v tickets-data:/data -v tickets-avatars:/app/wwwroot/avatars -v /putanja/do/certs:/certs:ro \
+    ticketsystemtech-api
+  ```
+
+  `HEALTHCHECK` slike sam uzima ime iz `AllowedHosts`, pa radi i kad je tamo samo ime servera. Health check koji vrši
+  platforma (Kubernetes, load balancer) obično dolazi s IP adresom kao `Host`; ako ga koristiš, dodaj tu adresu u `AllowedHosts`.
+- **Frontend na serveru.** Repozitorij ne služi `frontend/dist`; to radi web server po izboru (IIS, nginx, Caddy...), a
+  njegovo podešavanje je dio instalacije. Prvo `VITE_API_BASE_URL=https://api.firma.ba npm run build` (adresa API-ja se
+  ugrađuje pri gradnji), pa server mora: (1) za svaku putanju koja nije fajl vratiti `index.html` (aplikacija ima svoje rute);
+  (2) slati sigurnosna zaglavlja, jer ih API šalje samo za svoje odgovore. Početna tačka (ono što je ranije stajalo u
+  `vercel.json`, ali **primijenjeno**, ne samo prijavljivano):
+
+  ```
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://api.firma.ba wss://api.firma.ba; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Strict-Transport-Security: max-age=15552000
+  ```
+
+  Isprobajte ga najprije kao `Content-Security-Policy-Report-Only` dok konzola preglednika ne prestane prijavljivati
+  prekršaje. `img-src ... https:` dopušta slike s bilo koje adrese, uključujući one u tuđem sadržaju tiketa i email-ova
+  (takva slika javlja pošiljaocu da je tiket otvoren); suzite ga ako to ne želite. Zaglavlja za sam API se ne podešavaju.
+  U `Cors:AllowedOrigins` mora biti adresa na kojoj se frontend otvara.
+- **Zaštita grane `main`** na GitHubu (Settings → Branches → Add rule): zahtijevaj pull request i da prođu provjere
+  *Backend (Windows)*, *Backend (Linux, with SQL Server)* i *Frontend*. To se ne može podesiti iz koda.
 
 ---
 
@@ -343,7 +472,7 @@ promijeni port u `backend/src/TicketSystemTech.Api/Properties/launchSettings.jso
 pokreni frontend sa `npm run dev -- --port 5174` pa prilagodi `VITE_API_BASE_URL`.
 
 **AI asistent kaže da nema dovoljno informacija za sve**
-→ Provjeri da je `GoogleAi:ApiKey` postavljen, i da si pokrenuo indeksiranje (Admin → Settings →
+→ Provjeri da je AI uključen i podešen (`Ai:ApiKey`, ili `Ai:Endpoint` i modeli za lokalni model; ekran kaže ako je AI isključen), i da si pokrenuo indeksiranje (Admin → Settings →
 Knowledge Base → "Reindex missing tickets") barem jednom. Indeksiranje radi u pozadini (možeš napustiti stranicu),
 pokazuje napredak, i nastavlja gdje je stalo. Embeduju se samo tiketi koje pretraga može vratiti (imaju dovoljno
 internih bilješki), pa je to znatno manje posla nego ranije.
@@ -367,8 +496,8 @@ oznaci pokazuje sve što se desilo s tim jednim zahtjevom. Pozivalac može posla
 (8–64 znaka: slova, cifre, `.`, `_`, `-`), pa jedna oznaka prati zahtjev kroz više sistema.
 
 **Zaboravio sam admin lozinku**
-→ Restartuj backend — ako nalog i dalje postoji (samo je lozinka nepoznata), obriši ga direktno u bazi
-(`AspNetUsers` tabela) i ponovo pokreni backend da se ponovo zasija sa svježom privremenom lozinkom.
+→ Zaustavi backend i pokreni `dotnet run --project src/TicketSystemTech.Api -- --reset-admin-password tvoj-email@example.com`
+(vidi [Prijava u aplikaciju](#prijava-u-aplikaciju)). Ne briši ništa u bazi.
 
 ---
 
@@ -391,11 +520,17 @@ TypeScript tipova. Isto rade i GitHub Actions
 
 - **Backend (Windows)** mora proći: build, testovi, provjera da **migracije odgovaraju modelu** (promjena entiteta bez
   nove migracije obara build) i provjera paketa, gdje **visoke ili kritične** poznate ranjivosti obaraju build.
-- **Backend (Linux, sa SQL Serverom u kontejneru)** pokreće i integracijske testove. Za sada je informativan: SQL Server u
-  kontejneru ponekad ne uspije da se podigne, pa ne blokira.
-- **Docker image** se gradi kao pri pravom puštanju u rad i provjerava se da u njemu radi .NET 10 (informativno dok
-  prvi put ne prođe).
+- **Backend (Linux, sa SQL Serverom u kontejneru)** mora proći: pokreće i **integracijske testove** (Windows ih preskače jer
+  GitHubov Windows runner ne može imati SQL Server), te provjeru formatiranja (`dotnet format --verify-no-changes`).
+- **Docker image** se gradi kao pri pravom puštanju u rad i provjerava se: .NET 10, zakucani digesti, proces nije root, health
+  check postoji i javlja grešku kad aplikacija ne radi, a server s razvojnim postavkama odbija da krene i kaže zašto
+  (informativno dok se novi koraci jednom ne zelene).
 - **Frontend** prolazi lint, testove, build i `npm audit`.
+- **Dependabot** (`.github/dependabot.yml`) otvara pull request kad paket, Docker slika ili GitHub Action ima novu verziju.
+
+Formatiranje: `dotnet format` očekuje završetke redova platforme na kojoj radi. Na Windowsu sa `core.autocrlf=true` (podrazumijevano)
+datoteke su CRLF i provjera prolazi; ako dodaš fajl s LF završecima (npr. iz drugog alata), `dotnet format whitespace` ga
+ispravi.
 
 ### Testovi autorizacije (integracijski)
 
@@ -409,8 +544,15 @@ memoriji, sa pravim migracijama) nad privremenom bazom i provjerava ko šta smij
 - da token prestaje važiti kad se nalog deaktivira, premjesti ili promijeni lozinku;
 - ograničenja AI upotrebe (dužina pitanja, broj upita po osobi) i zaštitu šifarnika koji se koriste;
 - slanje email-ova kroz outbox: upis poruke, šifrovana adresa, uspjeh, ponovni pokušaji s rastućim razmakom, odustajanje,
-  trajno odbijanje, preskakanje, dva radnika istovremeno (poruka se pošalje jednom) i radnik koji pukne usred slanja. Brevo
-  je u tim testovima zamijenjen lažnim, pa se ništa ne šalje.
+  trajno odbijanje, preskakanje, dva radnika istovremeno (poruka se pošalje jednom) i radnik koji pukne usred slanja. SMTP
+  transport je dodatno probran protiv pravog SMTP razgovora (MailKit prema malom serveru na `localhost`): odgovori `4xx`,
+  `5xx`, pogrešna prijava, server koji ćuti ili prekine vezu; mail server u tim testovima nije pravi, pa se ništa ne šalje;
+- audit zapise osjetljivih radnji (ko, šta, koji zahtjev), šifrovanje ključeva u bazi certifikatom, komandu za reset Admin
+  lozinke, da generisana lozinka ne dospije u log, ograničenje prijave po nalogu, povjerenje prema proxyju, log fajl i probu
+  koju traži Docker;
+- radne sesije zadataka (ponovno pokretanje dodaje sesiju, budući datumi i mjeseci se odbijaju), dan na vremenskoj liniji u
+  poslovnoj zoni, neodgođeni odgovor pri zatvaranju tiketa, jedinstven odgovor "nema povezanog mailboxa" i slanje iste poruke
+  dva puta.
 
 Testovi trebaju SQL Server na kojem smiju praviti i brisati **svoje** baze (`TicketSystemTech_AuthzTest_*`; vaša
 baza se ne dira). Na razvojnom računaru ništa ne treba podešavati: koriste server iz vašeg
@@ -419,18 +561,35 @@ se ignoriše). Bez ikakvog SQL Servera ovi testovi se **preskaču** (prikažu se
 
 ---
 
+## Odluke i kriteriji prihvatanja
+
+- [`docs/adr/`](docs/adr): zašto je nešto urađeno tako kako jeste (hosting i model proizvoda sa stanjem svake odluke, email outbox i
+  SMTP, AI davalac i vektori, lični podaci i ključevi).
+- [`docs/kriteriji-prihvatanja.md`](docs/kriteriji-prihvatanja.md): šta znači „prošlo“, šta je dokazano i čime, šta nije moguće
+  dokazati na jednom računaru, šta je svjesno ostalo otvoreno, i kako ponoviti samo razliku nakon nove izmjene.
+- [`IZVJESTAJ_ISPRAVKI.md`](IZVJESTAJ_ISPRAVKI.md): izvještaj o ispravkama po stavkama analize i po krugovima testiranja.
+
+---
+
 ## Poznata ograničenja
 
 - **Prilozi (attachments)** se čuvaju na lokalnom disku (`Storage:UploadsPath`, podrazumijevano `App_Data/uploads`),
   van web roota, i otvaraju se samo preko potpisanih linkova koji ističu. To je normalno za lokalno pokretanje, ali
   za pravi produkcijski hosting treba ili disk koji se ne briše pri redeployu ili druga `IFileStorage` implementacija.
-- **Docker image** (`backend/Dockerfile`) se ne pokreće kao root. U njemu su dva foldera na koja treba postaviti volume, inače
-  se sadržaj gubi s kontejnerom: `/data` (prilozi i dokumenti, privatno; `Storage__UploadsPath` već pokazuje tamo) i
-  `/app/wwwroot/avatars` (profilne slike). Konfiguracija se zadaje varijablama okruženja u obliku `Jwt__Secret`,
-  `Pii__HashKey`, `ConnectionStrings__DefaultConnection`, `Brevo__SenderEmail`... Iza reverse proxyja treba postaviti i
-  `ForwardedHeaders__KnownProxies__0`. Health check za load balancer: `/health/ready`.
-- Aplikacija je dizajnirana da radi **potpuno lokalno** (SQL Server + backend + frontend na istom računaru).
-  Ne postoji trenutno cloud deployment (Render/Vercel/Supabase konfiguracija koja se ranije koristila je
-  uklonjena kad je projekat prebačen na lokalni SQL Server).
+- Aplikacija je dizajnirana da radi **potpuno lokalno** (SQL Server + backend + frontend na istom računaru), a ista slika se
+  može pokrenuti u Dockeru (vidi [Produkcija i bezbjednost](#produkcija-i-bezbjednost)). Ostaci cloud postavke (Render, Vercel)
+  i Brevo su uklonjeni. Okruženja za pregled (preview deploy) ne postoje: svako okruženje (razvoj, test, produkcija) ima svoj
+  API, svoju bazu i svoj `Cors:AllowedOrigins`.
+- **SQL Server Express** ima granicu od **10 GB** po bazi (vektori znanja i prilozi u bazi nisu, ali tiketi jesu) i nema SQL
+  Agent, pa backup ne može da se zakaže iz njega: koristi Task Scheduler + `sqlcmd -Q "BACKUP DATABASE ..."` ili punu
+  (Standard) edicija. Za više od nekoliko stotina korisnika preporučuje se Standard. Backup baze **mora** ići zajedno s
+  certifikatom za ključeve, ali odvojeno od njega.
+- **Jedna instanca**: prilozi su na disku, SignalR i keš u memoriji. Više instanci iza balansera traži zajednički disk i Redis
+  za SignalR; to nije urađeno.
+- **xunit**: testovi koriste xunit 2.9.3, koji NuGet označava kao *Legacy* (zamijenjen sa `xunit.v3`), ali bez ranjivosti.
+  Prelazak na v3 na .NET 10 traži novi izvršitelj testova (Microsoft Testing Platform), što mijenja komande (`dotnet test`
+  filteri, TRX izvještaj) i podršku u IDE-u, pa je svjesno odgođen.
+- Nije urađeno: izvoz i anonimizacija ličnih podataka na zahtjev (GDPR), OpenTelemetry (OTLP) izvoz, IIS paket i docker-compose
+  za kupce, više davalaca prijave od lokalnih naloga.
 - JWT login tokeni se ne obnavljaju automatski (refresh token rotacija) — kad token istekne, korisnik se
   jednostavno ponovo uloguje.

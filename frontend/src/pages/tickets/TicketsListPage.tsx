@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import clsx from 'clsx';
 import { ticketsApi } from '../../api/tickets';
 import { lookupsApi } from '../../api/lookups';
 import { usersApi } from '../../api/users';
 import type { DepartmentItemFull, TicketListItem, UserListItemDto } from '../../types';
-import { Button, Card, Input, PriorityBadge, Select, Spinner } from '../../components/ui';
+import { Button, Card, ErrorText, Input, PriorityBadge, Select, Spinner } from '../../components/ui';
 import { DateRangePicker } from '../../components/DateRangePicker';
 import { useAuthStore } from '../../store/authStore';
+import { useDebouncedValue } from '../../lib/useDebouncedValue';
 import { format } from 'date-fns';
 
 const PAGE_SIZE = 20;
@@ -78,6 +79,7 @@ export default function TicketsListPage() {
   const [departments, setDepartments] = useState<DepartmentItemFull[]>([]);
   const [employees, setEmployees] = useState<UserListItemDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Everything the list is filtered, sorted and paged by lives in the address, so a refresh, the back button, a bookmark or a
   // link sent to a colleague shows the same list.
@@ -122,6 +124,25 @@ export default function TicketsListPage() {
     );
   }
 
+  // The search box is typed into freely and written to the address only once typing pauses: "Izv" is one request, not three.
+  const [searchText, setSearchText] = useState(search);
+  const settledSearch = useDebouncedValue(searchText, 300);
+  const addressSearch = useRef(search);
+  const latest = useRef({ search, update });
+  latest.current = { search, update };
+  useEffect(() => {
+    if (settledSearch === latest.current.search) return;
+    addressSearch.current = settledSearch;
+    latest.current.update({ q: settledSearch }, { replace: true });
+  }, [settledSearch]);
+  useEffect(() => {
+    // The address changed by itself (back button, a link): show it. A change this page just wrote must not overwrite what is being typed.
+    if (search !== addressSearch.current) {
+      addressSearch.current = search;
+      setSearchText(search);
+    }
+  }, [search]);
+
   useEffect(() => {
     if (!isStaff) return;
     if (isAdmin) lookupsApi.departments().then(setDepartments);
@@ -157,6 +178,13 @@ export default function TicketsListPage() {
         if (!current) return;
         setItems(res.items);
         setTotalCount(res.totalCount);
+        setLoadError(null);
+      })
+      .catch(() => {
+        if (!current) return;
+        setItems([]);
+        setTotalCount(0);
+        setLoadError('The tickets could not be loaded. Try again in a moment.');
       })
       .finally(() => current && setLoading(false));
     return () => {
@@ -220,8 +248,8 @@ export default function TicketsListPage() {
           <Input
             aria-label="Search tickets by number or title"
             placeholder="Search by number or title…"
-            value={search}
-            onChange={(e) => update({ q: e.target.value }, { replace: true })}
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
           />
         </div>
         {isAdmin && (
@@ -277,6 +305,7 @@ export default function TicketsListPage() {
         />
       </Card>
 
+      {loadError && <ErrorText>{loadError}</ErrorText>}
       <p className="mb-2 px-1 text-xs text-slate-500" role="status">
         {totalCount} ticket{totalCount === 1 ? '' : 's'} · {rangeLabel}
       </p>

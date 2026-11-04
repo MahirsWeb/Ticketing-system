@@ -3,11 +3,21 @@
 **/.vs/
 *.user
 
-# Never part of an image: local settings with real secrets, and anything people uploaded while developing.
-**/appsettings.Development.json
-**/appsettings.Local.json
+# Not part of the runtime image: the tests and what they leave behind.
+tests/
+**/TestResults/
+**/test-results.trx
+
+# Never part of an image: local settings with real secrets (appsettings.json itself is kept; every appsettings.<anything>.json is
+# not), certificates and keys, log files, and anything people uploaded while developing.
+**/appsettings.*.json
 **/.env
 **/.env.*
+**/*.pfx
+**/*.p12
+**/*.pem
+**/*.key
+**/logs/
 **/App_Data/
 **/wwwroot/uploads/*
 !**/wwwroot/uploads/.gitkeep

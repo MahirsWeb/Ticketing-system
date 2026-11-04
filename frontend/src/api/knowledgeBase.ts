@@ -7,6 +7,8 @@ export interface KnowledgeBaseAskResponse {
   similarTicketCount: number;
   totalEligibleTicketCount: number;
   similarPercentage: number;
+  /** False when AI is switched off or not configured on this installation: the answer is only the closest matching sources. */
+  aiAvailable: boolean;
 }
 
 export type ReindexState = 'Idle' | 'Running' | 'Completed' | 'Failed';

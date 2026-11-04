@@ -50,7 +50,7 @@ public class KnowledgeBaseIndexer : IKnowledgeBaseIndexer
         if (content.Length == 0) return false;
 
         var chunk = await _db.KnowledgeBaseChunks.FirstOrDefaultAsync(c => c.TicketId == ticketId, ct);
-        var embedding = await _embeddingService.EmbedAsync(content, ct);
+        var embedding = await _embeddingService.EmbedAsync(content, EmbeddingPriority.Background, ct);
 
         if (chunk is null)
         {

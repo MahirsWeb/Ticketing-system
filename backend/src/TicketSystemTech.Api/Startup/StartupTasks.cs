@@ -53,7 +53,9 @@ public static class StartupTasks
         var piiProtector = scope.ServiceProvider.GetRequiredService<IPiiProtector>();
         await Step("Encryption check", logger, () => PiiBackfillMigration.RunAsync(db, piiProtector, logger, ct));
 
-        await Step("Embedding format", logger, () => EmbeddingFormatBackfill.RunAsync(db, GoogleAiEmbeddingService.Model, logger, ct));
+        await Step("Embedding format", logger, () => EmbeddingFormatBackfill.RunAsync(db, AiSettings.DefaultGeminiEmbeddingModel, logger, ct));
+
+        await Step("Avatar paths", logger, () => AvatarPathBackfill.RunAsync(db, logger, ct));
 
         await Step("Seed", logger, () => DbSeeder.SeedAsync(
             db,

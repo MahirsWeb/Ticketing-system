@@ -17,7 +17,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 {
     public FakeEmbeddingService Embeddings { get; } = new();
     public FakeChatCompletionService Chat { get; } = new();
-    /// <summary>The wire to Brevo. Everything above it is real: the application files e-mail in the outbox table as it does in
+    /// <summary>The wire to the mail server. Everything above it is real: the application files e-mail in the outbox table as it does in
     /// production, and the tests run the worker by hand against this fake.</summary>
     public FakeEmailTransport Transport { get; } = new();
 

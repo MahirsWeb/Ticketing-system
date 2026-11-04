@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 using TicketSystemTech.Api.Contracts;
 using TicketSystemTech.Api.Emails;
 using TicketSystemTech.Api.Middleware;
+using TicketSystemTech.Api.Security;
 using TicketSystemTech.Application.Common.Interfaces;
 using TicketSystemTech.Application.Common.Options;
 using TicketSystemTech.Domain.Entities;
@@ -29,6 +30,7 @@ public class AuthController : ControllerBase
     private readonly INotificationPublisher _notificationPublisher;
     private readonly IMemoryCache _cache;
     private readonly IBackgroundEmailQueue _emailQueue;
+    private readonly LoginAttemptLimiter _loginLimiter;
 
     public AuthController(
         UserManager<ApplicationUser> userManager,
@@ -38,8 +40,10 @@ public class AuthController : ControllerBase
         AppDbContext db,
         INotificationPublisher notificationPublisher,
         IMemoryCache cache,
-        IBackgroundEmailQueue emailQueue)
+        IBackgroundEmailQueue emailQueue,
+        LoginAttemptLimiter loginLimiter)
     {
+        _loginLimiter = loginLimiter;
         _cache = cache;
         _emailQueue = emailQueue;
         _userManager = userManager;
@@ -66,6 +70,13 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<ActionResult<LoginResponse>> Login(LoginRequest request)
     {
+        // Counted per typed e-mail, existing account or not, so the answer is the same for both.
+        if (!_loginLimiter.TryAcquire(request.Email))
+        {
+            Response.Headers.RetryAfter = "60";
+            return StatusCode(StatusCodes.Status429TooManyRequests, new { message = "Too many sign-in attempts for this account. Try again in a minute." });
+        }
+
         var user = await _userManager.FindByEmailAsync(request.Email);
         if (user is null || !user.IsActive)
         {

@@ -101,8 +101,55 @@ public sealed class KnowledgeBaseReindexService : BackgroundService, IKnowledgeB
         _logger.LogInformation("Document reindex finished: {Succeeded}, {Message}", result.Succeeded, result.Message);
     }
 
+    /// <summary>
+    /// A vector made by another model, or of another size, can never be compared with a question's: search ignores it (and
+    /// used to score it 0 without a word). Leaving it in place also made this job believe the ticket was "already embedded"
+    /// for ever, so after a change of model nothing was ever redone. So the first step of a reindex is to forget such
+    /// vectors on tickets, which makes the selection below pick those tickets up again; the documents that own such chunks
+    /// are returned so they can be rebuilt from their stored originals.
+    /// </summary>
+    private async Task<List<Guid>> ForgetStaleVectorsAsync(CancellationToken ct)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var embedding = scope.ServiceProvider.GetRequiredService<IEmbeddingService>();
+        var modelId = embedding.ModelName;
+
+        var staleIds = await db.KnowledgeBaseChunks.AsNoTracking()
+            .Where(c => c.Embedding != null && c.EmbeddingModel != null && c.EmbeddingModel != modelId)
+            .Select(c => c.Id)
+            .ToListAsync(ct);
+
+        if (embedding.Dimensions is { } dimensions)
+        {
+            var wrongSize = await db.Database
+                .SqlQuery<Guid>($"SELECT [Id] AS [Value] FROM [KnowledgeBaseChunks] WHERE [EmbeddingBinary] IS NOT NULL AND DATALENGTH([EmbeddingBinary]) <> {dimensions * sizeof(float)}")
+                .ToListAsync(ct);
+            staleIds = staleIds.Union(wrongSize).ToList();
+        }
+
+        if (staleIds.Count == 0) return new List<Guid>();
+
+        var cleared = await db.KnowledgeBaseChunks
+            .Where(c => staleIds.Contains(c.Id) && c.TicketId != null)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.Embedding, (float[]?)null).SetProperty(c => c.EmbeddingModel, (string?)null), ct);
+
+        var documentIds = await db.KnowledgeBaseChunks.AsNoTracking()
+            .Where(c => staleIds.Contains(c.Id) && c.DocumentId != null)
+            .Select(c => c.DocumentId!.Value)
+            .Distinct()
+            .ToListAsync(ct);
+
+        _logger.LogWarning(
+            "Knowledge-base reindex: {Tickets} ticket chunk(s) and {Documents} document(s) had vectors that do not match the current model '{Model}' and will be rebuilt",
+            cleared, documentIds.Count, modelId);
+        return documentIds;
+    }
+
     private async Task RunAsync(CancellationToken ct)
     {
+        var staleDocumentIds = await ForgetStaleVectorsAsync(ct);
+
         List<Guid> ticketIds;
         using (var scope = _scopeFactory.CreateScope())
         {
@@ -118,7 +165,7 @@ public sealed class KnowledgeBaseReindexService : BackgroundService, IKnowledgeB
                 .ToListAsync(ct);
         }
 
-        Update(s => s with { Total = ticketIds.Count, Message = ticketIds.Count == 0 ? "Nothing to do." : "Embedding tickets…" });
+        Update(s => s with { Total = ticketIds.Count, Message = ticketIds.Count == 0 && staleDocumentIds.Count == 0 ? "Nothing to do." : "Embedding tickets…" });
         _logger.LogInformation("Knowledge-base reindex started: {Count} ticket(s) to embed", ticketIds.Count);
 
         var embedded = 0;
@@ -150,18 +197,31 @@ public sealed class KnowledgeBaseReindexService : BackgroundService, IKnowledgeB
                     State = ReindexState.Failed,
                     FinishedAtUtc = DateTime.UtcNow,
                     Message = $"Stopped after {ConsecutiveFailureLimit} failures in a row: the embedding provider returned nothing. " +
-                              "Check that GoogleAi:ApiKey is set and the quota is not exhausted, then run the reindex again — it continues where it stopped."
+                              "Check the AI settings (Ai:Provider, Ai:ApiKey / Ai:Endpoint, Ai:Enabled) and that the quota is not exhausted, then run the reindex again — it continues where it stopped."
                 });
                 _logger.LogWarning("Knowledge-base reindex aborted after {Limit} consecutive failures", ConsecutiveFailureLimit);
                 return;
             }
         }
 
+        // Documents whose vectors came from another model are rebuilt from their stored originals.
+        var documentsRebuilt = 0;
+        foreach (var documentId in staleDocumentIds)
+        {
+            ct.ThrowIfCancellationRequested();
+            using var scope = _scopeFactory.CreateScope();
+            var result = await scope.ServiceProvider.GetRequiredService<IKnowledgeBaseDocumentIndexer>()
+                .ReindexDocumentAsync(documentId, (_, _) => { }, ct);
+            if (result.Succeeded) documentsRebuilt++; else failed++;
+        }
+
         Update(s => s with
         {
             State = ReindexState.Completed,
             FinishedAtUtc = DateTime.UtcNow,
-            Message = failed == 0 ? "Done." : $"Done, but {failed} ticket(s) could not be embedded. Run it again to retry them."
+            Message = failed == 0
+                ? (documentsRebuilt == 0 ? "Done." : $"Done ({documentsRebuilt} document(s) rebuilt for the current model).")
+                : $"Done, but {failed} item(s) could not be embedded. Run it again to retry them."
         });
         _logger.LogInformation("Knowledge-base reindex finished: {Embedded} embedded, {Failed} failed", embedded, failed);
     }

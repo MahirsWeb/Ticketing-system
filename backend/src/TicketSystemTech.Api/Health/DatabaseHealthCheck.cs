@@ -6,7 +6,7 @@ namespace TicketSystemTech.Api.Health;
 
 /// <summary>
 /// "Can this instance actually serve requests?" The old /api/health returned a constant "ok", so a host's health
-/// check (Render, a load balancer, IIS monitoring) saw a healthy app while every request failed because the database
+/// check (a load balancer, a container orchestrator, IIS monitoring) saw a healthy app while every request failed because the database
 /// was unreachable or the schema was behind.
 /// </summary>
 public sealed class DatabaseHealthCheck : IHealthCheck

@@ -201,9 +201,10 @@ export function DateRangePicker({
                   <button
                     type="button"
                     onClick={() => setViewMonth((m) => subMonths(m, 1))}
+                    aria-label="Previous month"
                     className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
                   >
-                    ‹
+                    <span aria-hidden>‹</span>
                   </button>
                   <button
                     type="button"
@@ -215,9 +216,10 @@ export function DateRangePicker({
                   <button
                     type="button"
                     onClick={() => setViewMonth((m) => addMonths(m, 1))}
+                    aria-label="Next month"
                     className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
                   >
-                    ›
+                    <span aria-hidden>›</span>
                   </button>
                 </div>
                 <div className="grid grid-cols-7 gap-0.5 text-center text-[11px] font-semibold text-slate-500">
@@ -243,7 +245,7 @@ export function DateRangePicker({
                         onClick={() => pickDay(day)}
                         className={[
                           'h-7 w-7 rounded-md text-xs',
-                          !inMonth && 'text-slate-300',
+                          !inMonth && 'text-slate-500',
                           inMonth && !isStart && !isEnd && !inRange && 'text-slate-700 hover:bg-slate-100',
                           inRange && !isStart && !isEnd && 'bg-blue-50 text-blue-700',
                           (isStart || isEnd) && 'bg-blue-700 font-semibold text-white hover:bg-blue-800',
@@ -266,9 +268,10 @@ export function DateRangePicker({
                   <button
                     type="button"
                     onClick={() => setViewMonth((m) => subYears(m, 1))}
+                    aria-label="Previous year"
                     className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
                   >
-                    ‹
+                    <span aria-hidden>‹</span>
                   </button>
                   <button
                     type="button"
@@ -280,9 +283,10 @@ export function DateRangePicker({
                   <button
                     type="button"
                     onClick={() => setViewMonth((m) => addYears(m, 1))}
+                    aria-label="Next year"
                     className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
                   >
-                    ›
+                    <span aria-hidden>›</span>
                   </button>
                 </div>
                 <div className="grid grid-cols-3 gap-1">
@@ -312,9 +316,10 @@ export function DateRangePicker({
                   <button
                     type="button"
                     onClick={() => setViewMonth((m) => subYears(m, YEAR_BLOCK_SIZE))}
+                    aria-label="Previous years"
                     className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
                   >
-                    ‹
+                    <span aria-hidden>‹</span>
                   </button>
                   <div className="text-sm font-semibold text-slate-700">
                     {yearBlockStart} – {yearBlockStart + YEAR_BLOCK_SIZE - 1}
@@ -322,9 +327,10 @@ export function DateRangePicker({
                   <button
                     type="button"
                     onClick={() => setViewMonth((m) => addYears(m, YEAR_BLOCK_SIZE))}
+                    aria-label="Next years"
                     className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
                   >
-                    ›
+                    <span aria-hidden>›</span>
                   </button>
                 </div>
                 <div className="grid grid-cols-3 gap-1">

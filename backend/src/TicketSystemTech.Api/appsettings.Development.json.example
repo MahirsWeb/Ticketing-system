@@ -12,8 +12,13 @@
     "Secret": "PROMIJENI-OVO-U-NASUMICAN-STRING-OD-BAREM-32-KARAKTERA",
     "AccessTokenMinutes": 120
   },
-  "Brevo": {
-    "ApiKey": ""
+  "Smtp": {
+    "Host": "",
+    "Port": 587,
+    "Security": "StartTls",
+    "Username": "",
+    "Password": "",
+    "FromAddress": ""
   },
   "GoogleAi": {
     "ApiKey": ""
@@ -30,6 +35,7 @@
   },
   "SeedAdmin": {
     "Email": "tvoj-email@example.com",
-    "Password": ""
+    "Password": "",
+    "PrintGeneratedPassword": true
   }
 }

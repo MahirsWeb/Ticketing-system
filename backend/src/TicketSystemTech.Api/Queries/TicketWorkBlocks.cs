@@ -18,13 +18,15 @@ public static class TicketWorkBlocks
 {
     /// <summary>
     /// The blocks of <paramref name="userId"/> that touch the period [<paramref name="from"/>, <paramref name="to"/>).
-    /// <paramref name="onlyBranch"/> restricts the tickets to one branch (null = no restriction).
+    /// <paramref name="onlyBranch"/> restricts the tickets to one branch (null = no restriction). Something that has not ended
+    /// lasts until <paramref name="nowUtc"/>, so on a day that has not happened yet there is nothing: a ticket that is open
+    /// (or a session that is running) is not at work on every future day.
     /// </summary>
     public static async Task<List<TicketWorkBlock>> ForUserAsync(AppDbContext db, Guid userId, DateTime from, DateTime to,
-        Guid? onlyBranch, CancellationToken ct = default)
+        Guid? onlyBranch, DateTime nowUtc, CancellationToken ct = default)
     {
         var logged = await db.TicketWorkSessions.AsNoTracking()
-            .Where(s => s.UserId == userId && s.StartedAtUtc < to && (s.EndedAtUtc == null || s.EndedAtUtc >= from))
+            .Where(s => s.UserId == userId && s.StartedAtUtc < to && (s.EndedAtUtc ?? nowUtc) >= from)
             .Where(s => onlyBranch == null || s.Ticket!.DepartmentId == onlyBranch)
             .Select(s => new TicketWorkBlock(s.TicketId, s.Ticket!.TicketNumber, s.Ticket.Title, s.Ticket.Status, s.StartedAtUtc, s.EndedAtUtc, true))
             .ToListAsync(ct);
@@ -34,7 +36,7 @@ public static class TicketWorkBlocks
         // of effort (the export leaves its hours empty).
         var standIn = await db.Tickets.AsNoTracking()
             .Where(t => t.AssignedToUserId == userId && !t.WorkSessions.Any()
-                && t.OpenedAtUtc != null && t.OpenedAtUtc < to && (t.ClosedAtUtc == null || t.ClosedAtUtc >= from))
+                && t.OpenedAtUtc != null && t.OpenedAtUtc < to && (t.ClosedAtUtc ?? nowUtc) >= from)
             .Where(t => onlyBranch == null || t.DepartmentId == onlyBranch)
             .Select(t => new TicketWorkBlock(t.Id, t.TicketNumber, t.Title, t.Status, t.OpenedAtUtc!.Value, t.ClosedAtUtc, false))
             .ToListAsync(ct);

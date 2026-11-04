@@ -185,6 +185,10 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -198,6 +202,10 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(45)
+                        .HasColumnType("nvarchar(45)");
 
                     b.Property<Guid?>("UserId")
                         .HasColumnType("uniqueidentifier");
@@ -948,11 +956,11 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<DateTime?>("EndedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("StartedAtUtc")
-                        .HasColumnType("datetime2");
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
@@ -966,13 +974,11 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("AssignedByUserId");
 
+                    b.HasIndex("AssignedToUserId");
+
                     b.HasIndex("CreatedByUserId");
 
                     b.HasIndex("DepartmentId");
-
-                    b.HasIndex("AssignedToUserId", "StartedAtUtc");
-
-                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("AssignedToUserId", "StartedAtUtc"), new[] { "EndedAtUtc", "Status" });
 
                     b.ToTable("WorkTasks");
                 });
@@ -1007,6 +1013,38 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                     b.HasIndex("WorkTaskId");
 
                     b.ToTable("WorkTaskAssignmentLogs");
+                });
+
+            modelBuilder.Entity("TicketSystemTech.Domain.Entities.WorkTaskSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("EndedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("StartedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("WorkTaskId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "StartedAtUtc");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("UserId", "StartedAtUtc"), new[] { "EndedAtUtc", "WorkTaskId" });
+
+                    b.HasIndex("WorkTaskId", "StartedAtUtc");
+
+                    b.ToTable("WorkTaskSessions");
                 });
 
             modelBuilder.Entity("TicketSystemTech.Infrastructure.Identity.ApplicationUser", b =>
@@ -1460,6 +1498,23 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                     b.Navigation("WorkTask");
                 });
 
+            modelBuilder.Entity("TicketSystemTech.Domain.Entities.WorkTaskSession", b =>
+                {
+                    b.HasOne("TicketSystemTech.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TicketSystemTech.Domain.Entities.WorkTask", "WorkTask")
+                        .WithMany("Sessions")
+                        .HasForeignKey("WorkTaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("WorkTask");
+                });
+
             modelBuilder.Entity("TicketSystemTech.Infrastructure.Identity.ApplicationUser", b =>
                 {
                     b.HasOne("TicketSystemTech.Domain.Entities.Company", null)
@@ -1502,6 +1557,8 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("TicketSystemTech.Domain.Entities.WorkTask", b =>
                 {
                     b.Navigation("AssignmentHistory");
+
+                    b.Navigation("Sessions");
                 });
 #pragma warning restore 612, 618
         }

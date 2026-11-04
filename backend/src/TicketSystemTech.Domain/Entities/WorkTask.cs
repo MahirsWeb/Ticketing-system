@@ -25,9 +25,13 @@ public class WorkTask : BaseEntity
 
     public WorkTaskStatus Status { get; set; } = WorkTaskStatus.Pending;
 
-    /// <summary>Set manually or via the start/stop timer button. Drives the Gantt timeline block.</summary>
-    public DateTime? StartedAtUtc { get; set; }
-    public DateTime? EndedAtUtc { get; set; }
+    /// <summary>The stretches of work, started with the timer button or entered by hand. They drive the Gantt timeline blocks.</summary>
+    public ICollection<WorkTaskSession> Sessions { get; set; } = new List<WorkTaskSession>();
 
     public ICollection<WorkTaskAssignmentLog> AssignmentHistory { get; set; } = new List<WorkTaskAssignmentLog>();
+
+    /// <summary>Concurrency token: two people handing the same task over (or correcting its time) at once are told about the
+    /// conflict (409) instead of the later save silently erasing the earlier one.</summary>
+    [System.ComponentModel.DataAnnotations.Timestamp]
+    public byte[] RowVersion { get; set; } = Array.Empty<byte>();
 }

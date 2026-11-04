@@ -83,9 +83,18 @@ public class AiLimitsAndLookupTests : IAsyncLifetime
         var plan = new SlaPlan { Name = "In use " + Guid.NewGuid().ToString("N")[..6], ResolutionTimeHours = 8 };
         var ticket = new Ticket
         {
-            TicketNumber = "LK-" + Guid.NewGuid().ToString("N")[..8], Title = "lookups", Description = "<p>x</p>", ClientId = _world.CliX.Id,
-            CompanyId = _world.CompanyId, Status = TicketStatus.InProgress, DepartmentId = _world.BranchA,
-            HelpTopicId = topic.Id, CategoryId = category.Id, SlaPlanId = plan.Id, Priority = TicketPriority.Medium, Source = TicketSource.TicketSystem
+            TicketNumber = "LK-" + Guid.NewGuid().ToString("N")[..8],
+            Title = "lookups",
+            Description = "<p>x</p>",
+            ClientId = _world.CliX.Id,
+            CompanyId = _world.CompanyId,
+            Status = TicketStatus.InProgress,
+            DepartmentId = _world.BranchA,
+            HelpTopicId = topic.Id,
+            CategoryId = category.Id,
+            SlaPlanId = plan.Id,
+            Priority = TicketPriority.Medium,
+            Source = TicketSource.TicketSystem
         };
 
         await _world.Db(async db =>
@@ -156,8 +165,15 @@ public class AiLimitsAndLookupTests : IAsyncLifetime
             {
                 var ticket = new Ticket
                 {
-                    TicketNumber = prefix + number, Title = "sort", Description = "<p>x</p>", ClientId = _world.CliX.Id, CompanyId = _world.CompanyId,
-                    Status = TicketStatus.InProgress, DepartmentId = _world.BranchA, Priority = TicketPriority.Medium, Source = TicketSource.TicketSystem
+                    TicketNumber = prefix + number,
+                    Title = "sort",
+                    Description = "<p>x</p>",
+                    ClientId = _world.CliX.Id,
+                    CompanyId = _world.CompanyId,
+                    Status = TicketStatus.InProgress,
+                    DepartmentId = _world.BranchA,
+                    Priority = TicketPriority.Medium,
+                    Source = TicketSource.TicketSystem
                 };
                 db.Tickets.Add(ticket);
                 _tickets.Add(ticket.Id);

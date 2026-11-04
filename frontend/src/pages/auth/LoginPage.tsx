@@ -29,6 +29,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const setSession = useAuthStore((s) => s.setSession);
+  const sessionExpired = useAuthStore((s) => s.sessionExpired);
   const { t } = useLanguage();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -73,6 +74,12 @@ export default function LoginPage() {
         </div>
         <h1 className="mb-1 text-2xl font-bold text-slate-900">{t('login_welcomeBack')}</h1>
         <p className="mb-8 text-sm text-slate-500">{t('login_subtitle')}</p>
+
+        {sessionExpired && (
+          <p role="status" className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            {t('login_sessionExpired')}
+          </p>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <IconInput

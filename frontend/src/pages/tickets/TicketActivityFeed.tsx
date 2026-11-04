@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { ticketsApi } from '../../api/tickets';
 import type { MessageType, TicketDetailDto, TicketMessageDto } from '../../types';
-import { Button } from '../../components/ui';
+import { Button, ErrorText } from '../../components/ui';
 import { RichTextEditor } from '../../components/RichTextEditor';
 import { SafeHtml } from '../../components/SafeHtml';
 import { sanitizeHtml } from '../../lib/sanitizeHtml';
+import { newIdempotencyKey } from '../../lib/idempotency';
+import { clearDraft, draftKey, loadDraft, saveDraft } from '../../lib/drafts';
 
 /// Unified chat-like feed: Response, Internal Note, and system lifecycle events (opened/assigned/transferred/closed)
 /// all shown together in one chronological stream, distinguished by bubble color — no more switching tabs to see everything.
@@ -22,13 +24,31 @@ export function TicketActivityFeed({
   canReplyInternal: boolean;
   onMessageAdded: (m: TicketMessageDto) => void;
 }) {
-  const [body, setBody] = useState('');
-  const [files, setFiles] = useState<File[]>([]);
   const [replyType, setReplyType] = useState<MessageType>('Response');
+  const [files, setFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   const canReplyAtAll = canReplyResponse || canReplyInternal;
   const effectiveType: MessageType = canReplyResponse && canReplyInternal ? replyType : canReplyInternal ? 'InternalNote' : 'Response';
+
+  // What is being written is kept in the tab while it is not sent: if the sign-in expires in the middle of a reply, the person is
+  // taken to the sign-in page and the words are still here when they come back.
+  const storedUnder = draftKey(ticket.id, effectiveType);
+  const [body, setBody] = useState(() => loadDraft(storedUnder));
+  useEffect(() => {
+    setBody(loadDraft(storedUnder));
+  }, [storedUnder]);
+  useEffect(() => {
+    saveDraft(storedUnder, body);
+  }, [storedUnder, body]);
+
+  // One key per message being composed: sending the same text again (a double click, a retry after a timeout) is the same message,
+  // not two. Changing the text, or sending it, makes it a different message and so a new key.
+  const [messageKey, setMessageKey] = useState(newIdempotencyKey);
+  useEffect(() => {
+    setMessageKey(newIdempotencyKey());
+  }, [body, effectiveType]);
 
   function addFiles(newFiles: File[]) {
     setFiles((prev) => [...prev, ...newFiles]);
@@ -41,15 +61,20 @@ export function TicketActivityFeed({
   async function handleSend() {
     if (!body.trim() || body === '<p></p>') return;
     setSending(true);
+    setSendError(null);
     try {
-      const message = (await ticketsApi.addMessage(ticket.id, effectiveType, body)) as TicketMessageDto;
+      const message = (await ticketsApi.addMessage(ticket.id, effectiveType, body, messageKey)) as TicketMessageDto;
       if (files.length > 0) {
         const uploaded = await ticketsApi.uploadAttachments(ticket.id, files, message.id);
         message.attachments = uploaded;
       }
       onMessageAdded(message);
+      clearDraft(storedUnder);
       setBody('');
       setFiles([]);
+    } catch (err: any) {
+      // The text stays in the editor (and in the draft); pressing send again uses the same key, so it cannot be posted twice.
+      setSendError(err?.response?.data?.message ?? 'The message could not be sent. Your text is still here; try again.');
     } finally {
       setSending(false);
     }
@@ -92,7 +117,7 @@ export function TicketActivityFeed({
                   {m.attachments.map((a) => (
                     <li key={a.id}>
                       <a href={a.fileUrl} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">
-                        📎 {a.fileName}
+                        <span aria-hidden>📎</span> {a.fileName}
                       </a>
                     </li>
                   ))}
@@ -133,7 +158,7 @@ export function TicketActivityFeed({
             <ul className="flex flex-wrap gap-2">
               {files.map((f, i) => (
                 <li key={`${f.name}-${i}`} className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">
-                  📎 {f.name}
+                  <span aria-hidden>📎</span> {f.name}
                   <button type="button" onClick={() => removeFile(i)} className="ml-1 font-bold text-slate-500 hover:text-red-600">
                     ×
                   </button>
@@ -141,6 +166,7 @@ export function TicketActivityFeed({
               ))}
             </ul>
           )}
+          <ErrorText>{sendError}</ErrorText>
           <Button onClick={handleSend} disabled={sending}>
             {sending ? 'Sending…' : effectiveType === 'Response' ? 'Send reply' : 'Add internal note'}
           </Button>

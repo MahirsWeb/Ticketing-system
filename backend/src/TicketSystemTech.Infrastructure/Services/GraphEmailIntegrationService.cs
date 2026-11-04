@@ -297,7 +297,7 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
     private async Task<EmailConnection> GetValidConnectionAsync(Guid departmentId, CancellationToken ct)
     {
         var conn = await _db.EmailConnections.FirstOrDefaultAsync(c => c.DepartmentId == departmentId, ct)
-            ?? throw new InvalidOperationException("No mailbox connected for this branch.");
+            ?? throw new MailboxNotConnectedException();
 
         if (conn.AccessTokenExpiresAtUtc <= DateTime.UtcNow.AddMinutes(1))
         {

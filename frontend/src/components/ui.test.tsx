@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Field, Input, Label, Select, Textarea } from './ui';
+import { ErrorText, Field, Input, Label, Select, SuccessText, Textarea } from './ui';
 
 describe('Field', () => {
   it('connects the label to the control, so the control has a name', () => {
@@ -54,5 +54,30 @@ describe('Field', () => {
     render(<Input aria-label="Search" />);
 
     expect(screen.getByLabelText('Search')).not.toHaveAttribute('id');
+  });
+});
+
+describe('messages are announced', () => {
+  it('an error is an alert and a confirmation is a status, so a screen reader hears them without moving focus', () => {
+    render(
+      <>
+        <ErrorText>It failed</ErrorText>
+        <SuccessText>It worked</SuccessText>
+      </>
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('It failed');
+    expect(screen.getByRole('status')).toHaveTextContent('It worked');
+  });
+
+  it('renders nothing when there is nothing to say', () => {
+    const { container } = render(
+      <>
+        <ErrorText />
+        <SuccessText>{''}</SuccessText>
+      </>
+    );
+
+    expect(container).toBeEmptyDOMElement();
   });
 });

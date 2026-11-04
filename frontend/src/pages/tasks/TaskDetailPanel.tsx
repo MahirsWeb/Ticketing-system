@@ -27,18 +27,20 @@ export function TaskDetailPanel({
 }) {
   const [candidates, setCandidates] = useState<{ id: string; name: string }[]>([]);
   const [reassignTo, setReassignTo] = useState('');
-  const [started, setStarted] = useState(toLocalInputValue(task.startedAtUtc));
-  const [ended, setEnded] = useState(toLocalInputValue(task.endedAtUtc));
+  // The manual correction is of the LATEST work session; earlier ones are listed below and stay as they are.
+  const latest = task.sessions.length > 0 ? task.sessions[task.sessions.length - 1] : null;
+  const [started, setStarted] = useState(toLocalInputValue(latest?.startedAtUtc ?? null));
+  const [ended, setEnded] = useState(toLocalInputValue(latest?.endedAtUtc ?? null));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const isAssignee = currentUserId === task.assignedToUserId;
-  const timerRunning = !!task.startedAtUtc && !task.endedAtUtc;
+  const timerRunning = task.sessions.some((s) => s.endedAtUtc === null);
 
   useEffect(() => {
-    setStarted(toLocalInputValue(task.startedAtUtc));
-    setEnded(toLocalInputValue(task.endedAtUtc));
-  }, [task.startedAtUtc, task.endedAtUtc]);
+    setStarted(toLocalInputValue(latest?.startedAtUtc ?? null));
+    setEnded(toLocalInputValue(latest?.endedAtUtc ?? null));
+  }, [latest?.startedAtUtc, latest?.endedAtUtc]);
 
   useEffect(() => {
     if (!canManage) return;
@@ -101,11 +103,11 @@ export function TaskDetailPanel({
               <div className="mt-1">
                 {timerRunning ? (
                   <Button type="button" variant="danger" className="text-xs" disabled={busy} onClick={() => run(() => workTasksApi.stop(task.id))}>
-                    ⏹ Stop
+                    <span aria-hidden>⏹</span> Stop
                   </Button>
                 ) : (
                   <Button type="button" className="text-xs" disabled={busy} onClick={() => run(() => workTasksApi.start(task.id))}>
-                    ▶ Start
+                    <span aria-hidden>▶</span> Start
                   </Button>
                 )}
               </div>
@@ -113,7 +115,7 @@ export function TaskDetailPanel({
           )}
 
           <div className="md:col-span-2">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Manual start / end time</div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Start / end of the latest work session</div>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <input
                 type="datetime-local"
@@ -149,6 +151,22 @@ export function TaskDetailPanel({
           </div>
         </div>
       )}
+
+      <div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Work sessions</div>
+        {task.sessions.length === 0 ? (
+          <p className="mt-1 text-xs text-slate-500">No work has been logged on this task yet.</p>
+        ) : (
+          <ul className="mt-1 space-y-1 text-xs text-slate-600">
+            {task.sessions.map((s) => (
+              <li key={s.id}>
+                <span className="font-medium text-slate-800">{s.userName}</span> — {format(new Date(s.startedAtUtc), 'dd.MM.yyyy HH:mm')} →{' '}
+                {s.endedAtUtc ? format(new Date(s.endedAtUtc), 'HH:mm') : 'running'}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       <div>
         <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Assignment history</div>

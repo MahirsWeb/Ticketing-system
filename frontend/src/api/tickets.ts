@@ -103,8 +103,8 @@ export const ticketsApi = {
   deleteWorkSession: (id: string, sessionId: string) =>
     apiClient.delete<TicketDetailDto>(`/api/tickets/${id}/work-sessions/${sessionId}`).then((r) => r.data),
 
-  addMessage: (id: string, type: MessageType, bodyHtml: string) =>
-    apiClient.post(`/api/tickets/${id}/messages`, { type, bodyHtml }).then((r) => r.data),
+  addMessage: (id: string, type: MessageType, bodyHtml: string, idempotencyKey?: string) =>
+    apiClient.post(`/api/tickets/${id}/messages`, { type, bodyHtml }, idempotencyHeaders(idempotencyKey)).then((r) => r.data),
 
   uploadAttachments: (id: string, files: File[], messageId?: string) => {
     const form = new FormData();

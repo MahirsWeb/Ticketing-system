@@ -3,7 +3,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TicketSystemTech.Api.Contracts;
 using TicketSystemTech.Api.Emails;
+using Microsoft.Extensions.Options;
 using TicketSystemTech.Application.Common.Interfaces;
+using TicketSystemTech.Application.Common.Options;
+using TicketSystemTech.Application.Sla;
+using TicketSystemTech.Application.WorkTime;
 using TicketSystemTech.Domain.Entities;
 using TicketSystemTech.Domain.Enums;
 using TicketSystemTech.Infrastructure.Persistence;
@@ -27,9 +31,15 @@ public class WorkTasksController : ControllerBase
     private readonly ICurrentUserService _currentUser;
     private readonly IEmailSender _emailSender;
     private readonly INotificationPublisher _notificationPublisher;
+    private readonly Lazy<TimeZoneInfo> _zone;
 
-    public WorkTasksController(AppDbContext db, ICurrentUserService currentUser, IEmailSender emailSender, INotificationPublisher notificationPublisher)
+    /// <summary>One session of a task is a working stretch, not a week: anything longer is a typing mistake (or a timer left running).</summary>
+    private static readonly TimeSpan LongestSession = TimeSpan.FromHours(24);
+
+    public WorkTasksController(AppDbContext db, ICurrentUserService currentUser, IEmailSender emailSender, INotificationPublisher notificationPublisher,
+        IOptions<SlaOptions> slaOptions)
     {
+        _zone = new Lazy<TimeZoneInfo>(() => BusinessTimeZone.Resolve(slaOptions.Value.TimeZoneId));
         _db = db;
         _currentUser = currentUser;
         _emailSender = emailSender;
@@ -94,13 +104,22 @@ public class WorkTasksController : ControllerBase
         var departmentIds = tasks.Select(t => t.DepartmentId).Distinct().ToList();
         var departments = await _db.Departments.Where(d => departmentIds.Contains(d.Id)).ToDictionaryAsync(d => d.Id, d => d.Name);
 
+        var taskIds = tasks.Select(t => t.Id).ToList();
+        var summaries = await _db.WorkTaskSessions.AsNoTracking()
+            .Where(s => taskIds.Contains(s.WorkTaskId))
+            .GroupBy(s => s.WorkTaskId)
+            .Select(g => new { TaskId = g.Key, First = g.Min(s => s.StartedAtUtc), Running = g.Any(s => s.EndedAtUtc == null), Last = g.Max(s => s.EndedAtUtc) })
+            .ToDictionaryAsync(x => x.TaskId);
+
         var items = tasks.Select(t => new WorkTaskListItem(
             t.Id, t.Title, t.Status.ToString(),
             t.DepartmentId, departments.GetValueOrDefault(t.DepartmentId, ""),
             t.CreatedByUserId, users.GetValueOrDefault(t.CreatedByUserId, ""),
             t.AssignedByUserId, users.GetValueOrDefault(t.AssignedByUserId, ""),
             t.AssignedToUserId, users.GetValueOrDefault(t.AssignedToUserId, ""),
-            t.StartedAtUtc, t.EndedAtUtc, t.CreatedAt
+            summaries.TryGetValue(t.Id, out var sum) ? sum.First : null,
+            sum is null || sum.Running ? null : sum.Last,
+            t.CreatedAt
         )).ToList();
 
         return Ok(items);
@@ -142,26 +161,66 @@ public class WorkTasksController : ControllerBase
         return Ok(await BuildDetailDto(id));
     }
 
-    /// <summary>Manually corrects the start/end time — anyone with access to the task, not just the assignee.</summary>
+    /// <summary>
+    /// Manually corrects the time of the task's latest stretch of work (anyone with access to the task, not just the assignee),
+    /// or enters one if the task has none yet. Earlier stretches are left alone. Clearing both times removes the latest stretch.
+    /// The same rules as for tickets apply: no overlap with another stretch of this task, nothing in the future, and no single
+    /// stretch longer than a day.
+    /// </summary>
     [HttpPatch("{id:guid}/time")]
     [Authorize(Roles = StaffOnly)]
     public async Task<ActionResult<WorkTaskDetailDto>> SetTime(Guid id, SetWorkTaskTimeRequest request)
     {
-        var task = await _db.WorkTasks.FirstOrDefaultAsync(t => t.Id == id);
+        var task = await _db.WorkTasks.Include(t => t.Sessions).FirstOrDefaultAsync(t => t.Id == id);
         if (task is null) return NotFound();
         if (!CanAccess(task)) return Forbid();
-        if (request.StartedAtUtc.HasValue && request.EndedAtUtc.HasValue && request.EndedAtUtc < request.StartedAtUtc)
-            return BadRequest(new { message = "End time cannot be before start time." });
 
-        task.StartedAtUtc = request.StartedAtUtc;
-        task.EndedAtUtc = request.EndedAtUtc;
-        task.Status = task.EndedAtUtc.HasValue ? WorkTaskStatus.Done : task.StartedAtUtc.HasValue ? WorkTaskStatus.InProgress : WorkTaskStatus.Pending;
+        var latest = task.Sessions.OrderByDescending(s => s.StartedAtUtc).FirstOrDefault();
+        var remaining = task.Sessions.ToList();
+
+        if (request.StartedAtUtc is null && request.EndedAtUtc is null)
+        {
+            if (latest is not null)
+            {
+                _db.WorkTaskSessions.Remove(latest);
+                remaining.Remove(latest);
+            }
+        }
+        else if (request.StartedAtUtc is null)
+        {
+            return BadRequest(new { message = "A work session needs a start time." });
+        }
+        else
+        {
+            var started = BusinessTimeZone.AsUtc(request.StartedAtUtc.Value);
+            DateTime? ended = request.EndedAtUtc is { } end ? BusinessTimeZone.AsUtc(end) : null;
+
+            var others = task.Sessions.Where(s => s != latest).Select(s => new WorkSessionRules.Span(s.Id, s.StartedAtUtc, s.EndedAtUtc));
+            var problem = WorkSessionRules.Validate(started, ended, DateTime.UtcNow, others, LongestSession, subject: "task");
+            if (problem is not null) return BadRequest(new { message = problem });
+
+            if (latest is null)
+            {
+                latest = new WorkTaskSession { WorkTaskId = task.Id, UserId = task.AssignedToUserId };
+                _db.WorkTaskSessions.Add(latest);
+                remaining.Add(latest);
+            }
+            latest.StartedAtUtc = started;
+            latest.EndedAtUtc = ended;
+        }
+
+        task.Status = remaining.Any(s => s.EndedAtUtc is null) ? WorkTaskStatus.InProgress
+            : remaining.Count > 0 ? WorkTaskStatus.Done
+            : WorkTaskStatus.Pending;
         await _db.SaveChangesAsync();
 
         return Ok(await BuildDetailDto(id));
     }
 
-    /// <summary>Starts the live timer. Only the current assignee — the person actually doing the work — can start/stop it.</summary>
+    /// <summary>
+    /// Starts the live timer: a new stretch of work. The earlier ones stay. Only the current assignee — the person actually
+    /// doing the work — can start/stop it.
+    /// </summary>
     [HttpPost("{id:guid}/start")]
     [Authorize(Roles = StaffOnly)]
     public async Task<ActionResult<WorkTaskDetailDto>> Start(Guid id)
@@ -169,10 +228,10 @@ public class WorkTasksController : ControllerBase
         var task = await _db.WorkTasks.FirstOrDefaultAsync(t => t.Id == id);
         if (task is null) return NotFound();
         if (task.AssignedToUserId != _currentUser.UserId) return Forbid();
-        if (task.StartedAtUtc.HasValue && !task.EndedAtUtc.HasValue) return BadRequest(new { message = "Timer is already running." });
+        if (await _db.WorkTaskSessions.AnyAsync(s => s.WorkTaskId == id && s.EndedAtUtc == null))
+            return BadRequest(new { message = "Timer is already running." });
 
-        task.StartedAtUtc = DateTime.UtcNow;
-        task.EndedAtUtc = null;
+        _db.WorkTaskSessions.Add(new WorkTaskSession { WorkTaskId = id, UserId = task.AssignedToUserId, StartedAtUtc = DateTime.UtcNow });
         task.Status = WorkTaskStatus.InProgress;
         await _db.SaveChangesAsync();
 
@@ -186,9 +245,12 @@ public class WorkTasksController : ControllerBase
         var task = await _db.WorkTasks.FirstOrDefaultAsync(t => t.Id == id);
         if (task is null) return NotFound();
         if (task.AssignedToUserId != _currentUser.UserId) return Forbid();
-        if (!task.StartedAtUtc.HasValue || task.EndedAtUtc.HasValue) return BadRequest(new { message = "Timer is not currently running." });
 
-        task.EndedAtUtc = DateTime.UtcNow;
+        var running = await _db.WorkTaskSessions.Where(s => s.WorkTaskId == id && s.EndedAtUtc == null).OrderByDescending(s => s.StartedAtUtc).FirstOrDefaultAsync();
+        if (running is null) return BadRequest(new { message = "Timer is not currently running." });
+
+        var now = DateTime.UtcNow;
+        running.EndedAtUtc = now > running.StartedAtUtc ? now : running.StartedAtUtc.AddMilliseconds(1);
         task.Status = WorkTaskStatus.Done;
         await _db.SaveChangesAsync();
 
@@ -196,7 +258,7 @@ public class WorkTasksController : ControllerBase
     }
 
     /// <summary>
-    /// Combined per-person timeline for one calendar day (UTC), merging ticket work sessions and task
+    /// Combined per-person timeline for one calendar day (in the business time zone, Sla:TimeZoneId: the day the person typed), merging ticket work sessions and task
     /// work sessions — the data source for the Dashboard Gantt chart.
     /// </summary>
     [HttpGet("gantt")]
@@ -207,9 +269,9 @@ public class WorkTasksController : ControllerBase
         if (_currentUser.Role != UserRole.Admin && targetUser.DepartmentId != _currentUser.DepartmentId)
             return Forbid();
 
-        var day = DateTime.SpecifyKind((date ?? DateTime.UtcNow).Date, DateTimeKind.Utc);
-        var entries = await BuildGanttEntriesAsync(userId, day);
-        return Ok(new GanttResponse(userId, $"{targetUser.FirstName} {targetUser.LastName}", day, entries));
+        var (from, to, localDay) = BusinessTimeZone.DayWindow(date, _zone.Value, DateTime.UtcNow);
+        var entries = await BuildGanttEntriesAsync(userId, from, to);
+        return Ok(new GanttResponse(userId, $"{targetUser.FirstName} {targetUser.LastName}", DateTime.SpecifyKind(localDay.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc), entries));
     }
 
     /// <summary>
@@ -224,7 +286,8 @@ public class WorkTasksController : ControllerBase
         if (_currentUser.Role != UserRole.Admin && departmentId != _currentUser.DepartmentId)
             return Forbid();
 
-        var day = DateTime.SpecifyKind((date ?? DateTime.UtcNow).Date, DateTimeKind.Utc);
+        var (from, to, localDay) = BusinessTimeZone.DayWindow(date, _zone.Value, DateTime.UtcNow);
+        var day = DateTime.SpecifyKind(localDay.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc);
         var employees = await _db.Users.AsNoTracking()
             .Where(u => u.Role == UserRole.Employee && u.DepartmentId == departmentId && u.IsActive)
             .OrderBy(u => u.FirstName)
@@ -233,7 +296,7 @@ public class WorkTasksController : ControllerBase
         var users = new List<GanttResponse>();
         foreach (var employee in employees)
         {
-            var entries = await BuildGanttEntriesAsync(employee.Id, day);
+            var entries = await BuildGanttEntriesAsync(employee.Id, from, to);
             users.Add(new GanttResponse(employee.Id, $"{employee.FirstName} {employee.LastName}", day, entries));
         }
 
@@ -245,21 +308,19 @@ public class WorkTasksController : ControllerBase
     /// them with no logged work at all still shows, from opening to closing, so it does not disappear just because nobody typed
     /// in a time. People added to a ticket as extra help have no sessions and therefore no block on it.
     /// </summary>
-    private async Task<List<GanttEntryDto>> BuildGanttEntriesAsync(Guid userId, DateTime day)
+    private async Task<List<GanttEntryDto>> BuildGanttEntriesAsync(Guid userId, DateTime dayStart, DateTime dayEnd)
     {
-        var dayEnd = day.AddDays(1);
-
-        var blocks = await Queries.TicketWorkBlocks.ForUserAsync(_db, userId, day, dayEnd, null);
+        var now = DateTime.UtcNow;
+        var blocks = await Queries.TicketWorkBlocks.ForUserAsync(_db, userId, dayStart, dayEnd, null, now);
         var tickets = blocks
-            .Select(b => new GanttEntryDto("Ticket", b.TicketId, $"#{b.TicketNumber} — {b.Title}", b.Status.ToString(), b.Start, b.End, b.Status.ToString()))
+            .Select(b => new GanttEntryDto("Ticket", b.TicketId, $"#{b.TicketNumber} — {b.Title}", b.Status.ToString(), b.Start, b.End, b.Status.ToString(), b.IsLogged))
             .ToList();
 
-        var tasks = await _db.WorkTasks.AsNoTracking()
-            .Where(t => t.AssignedToUserId == userId
-                && t.StartedAtUtc != null
-                && t.StartedAtUtc < dayEnd
-                && (t.EndedAtUtc == null || t.EndedAtUtc >= day))
-            .Select(t => new GanttEntryDto("WorkTask", t.Id, t.Title, null, t.StartedAtUtc, t.EndedAtUtc, t.Status.ToString()))
+        // A running stretch of work lasts until now, so on a day that has not happened yet it is not there.
+        var tasks = await _db.WorkTaskSessions.AsNoTracking()
+            .Where(s => s.UserId == userId && s.StartedAtUtc < dayEnd && (s.EndedAtUtc ?? now) >= dayStart)
+            .Select(s => new GanttEntryDto("WorkTask", s.WorkTaskId, s.WorkTask!.Title, null, s.StartedAtUtc, s.EndedAtUtc,
+                s.EndedAtUtc == null ? nameof(WorkTaskStatus.InProgress) : nameof(WorkTaskStatus.Done), true))
             .ToListAsync();
 
         return tickets.Concat(tasks).OrderBy(e => e.StartedAtUtc).ToList();
@@ -298,13 +359,20 @@ public class WorkTasksController : ControllerBase
             h.AssignedByUserId, NameOf(h.AssignedByUserId), h.AssignedToUserId, NameOf(h.AssignedToUserId), h.AssignedAtUtc
         )).ToList();
 
+        var sessions = await _db.WorkTaskSessions.AsNoTracking().Where(x => x.WorkTaskId == taskId).OrderBy(x => x.StartedAtUtc).ToListAsync();
+        var workerIds = sessions.Select(x => x.UserId).Distinct().ToList();
+        var workers = await _db.Users.Where(u => workerIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FirstName + " " + u.LastName);
+        var sessionDtos = sessions.Select(x => new WorkTaskSessionDto(x.Id, x.UserId, workers.GetValueOrDefault(x.UserId, ""), x.StartedAtUtc, x.EndedAtUtc)).ToList();
+        DateTime? firstStart = sessions.Count == 0 ? null : sessions[0].StartedAtUtc;
+        DateTime? lastEnd = sessions.Count == 0 || sessions.Any(x => x.EndedAtUtc is null) ? null : sessions.Max(x => x.EndedAtUtc);
+
         return new WorkTaskDetailDto(
             t.Id, t.Title, t.Description, t.Status.ToString(),
             t.DepartmentId, t.Department?.Name ?? "",
             t.CreatedByUserId, NameOf(t.CreatedByUserId),
             t.AssignedByUserId, NameOf(t.AssignedByUserId),
             t.AssignedToUserId, NameOf(t.AssignedToUserId),
-            t.StartedAtUtc, t.EndedAtUtc, t.CreatedAt, historyDtos
+            firstStart, lastEnd, t.CreatedAt, historyDtos, sessionDtos
         );
     }
 }

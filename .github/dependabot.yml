@@ -1,0 +1,38 @@
+# Keeps the dependencies current without anyone remembering to: a pull request is opened when something has a newer version,
+# and CI (build, tests, vulnerability gate) decides whether it is safe to merge.
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # These must move together, or the application starts with mismatched halves of one framework.
+      entity-framework:
+        patterns: ["Microsoft.EntityFrameworkCore*"]
+      aspnet-core:
+        patterns: ["Microsoft.AspNetCore.*", "Microsoft.Extensions.*"]
+      testing:
+        patterns: ["xunit*", "Microsoft.NET.Test.Sdk", "coverlet.*"]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      react:
+        patterns: ["react", "react-dom", "@types/react*"]
+      testing:
+        patterns: ["vitest*", "@testing-library/*", "jsdom"]
+
+  - package-ecosystem: docker
+    directory: /backend
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

@@ -83,17 +83,10 @@ public class EmailIntegrationController : ControllerBase
     public async Task<ActionResult<List<InboxMessageSummaryDto>>> ListMessages([FromQuery] int take = 25)
     {
         if (RequireDepartment() is BadRequestObjectResult noBranch) return noBranch;
-        try
-        {
-            var messages = await _emailService.ListInboxAsync(_currentUser.DepartmentId!.Value, take);
-            return Ok(messages.Select(m => new InboxMessageSummaryDto(
-                m.MessageId, m.Subject, m.FromEmail, m.FromName, m.BodyPreview, m.ReceivedAtUtc,
-                m.HasAttachments, m.IsMarked, m.ConvertedTicketId)).ToList());
-        }
-        catch (InvalidOperationException)
-        {
-            return BadRequest(new { message = "No mailbox connected for your branch." });
-        }
+        var messages = await _emailService.ListInboxAsync(_currentUser.DepartmentId!.Value, take);
+        return Ok(messages.Select(m => new InboxMessageSummaryDto(
+            m.MessageId, m.Subject, m.FromEmail, m.FromName, m.BodyPreview, m.ReceivedAtUtc,
+            m.HasAttachments, m.IsMarked, m.ConvertedTicketId)).ToList());
     }
 
     [HttpPost("messages/{messageId}/mark")]
@@ -108,17 +101,10 @@ public class EmailIntegrationController : ControllerBase
     public async Task<ActionResult<EmailPrefillDto>> GetPrefill(string messageId)
     {
         if (RequireDepartment() is BadRequestObjectResult noBranch) return noBranch;
-        try
-        {
-            var detail = await _emailService.GetMessageAsync(_currentUser.DepartmentId!.Value, messageId);
-            return Ok(new EmailPrefillDto(
-                detail.MessageId, detail.FromEmail, detail.Subject, detail.BodyHtml,
-                detail.ReceivedAtUtc, detail.Attachments.Count > 0));
-        }
-        catch (InvalidOperationException)
-        {
-            return BadRequest(new { message = "No mailbox connected for your branch." });
-        }
+        var detail = await _emailService.GetMessageAsync(_currentUser.DepartmentId!.Value, messageId);
+        return Ok(new EmailPrefillDto(
+            detail.MessageId, detail.FromEmail, detail.Subject, detail.BodyHtml,
+            detail.ReceivedAtUtc, detail.Attachments.Count > 0));
     }
 
     /// <summary>Called after a ticket is created from a marked email: copies the email's attachments onto the ticket and marks it converted.</summary>

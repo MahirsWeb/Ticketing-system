@@ -5,6 +5,7 @@ using TicketSystemTech.Api.BackgroundJobs;
 using TicketSystemTech.Application.Common;
 using TicketSystemTech.Application.Common.Interfaces;
 using TicketSystemTech.Domain.Entities;
+using TicketSystemTech.Domain.Enums;
 using TicketSystemTech.Infrastructure.Services;
 
 namespace TicketSystemTech.Tests.Integration;
@@ -12,7 +13,7 @@ namespace TicketSystemTech.Tests.Integration;
 /// <summary>
 /// T-07: e-mail used to be sent while the request was still open, and one that did not go out was lost. Now it is filed in a table
 /// and a worker delivers it. These tests drive the real chain (the application's own IEmailSender, the real table, the real
-/// worker) with a fake in place of Brevo, and run the worker by hand at moments of their choosing.
+/// worker) with a fake in place of the mail server, and run the worker by hand at moments of their choosing.
 /// </summary>
 [Collection(ApiCollection.Name)]
 public class EmailOutboxTests : IAsyncLifetime
@@ -179,7 +180,7 @@ public class EmailOutboxTests : IAsyncLifetime
     [SqlFact]
     public async Task A_provider_that_cannot_take_the_message_is_asked_again_later_with_growing_waits()
     {
-        Transport.Answer = _ => EmailSendResult.Retry("Brevo answered 503");
+        Transport.Answer = _ => EmailSendResult.Retry("The SMTP server answered 451");
         await Sender.SendAsync(Recipient, "Hello", "<p>Body</p>");
         var t0 = DateTime.UtcNow.AddSeconds(1);
 
@@ -187,7 +188,7 @@ public class EmailOutboxTests : IAsyncLifetime
         var first = await OnlyRowAsync();
         Assert.Equal(EmailOutboxStatus.Pending, first.Status);
         Assert.Equal(1, first.Attempts);
-        Assert.Equal("Brevo answered 503", first.LastError);
+        Assert.Equal("The SMTP server answered 451", first.LastError);
         AssertSameInstant(t0.AddMinutes(1), first.NextAttemptAtUtc);
         Assert.Null(first.LeasedUntilUtc);
 
@@ -214,7 +215,7 @@ public class EmailOutboxTests : IAsyncLifetime
     [SqlFact]
     public async Task A_message_that_never_gets_through_is_given_up_after_the_last_attempt_and_kept_for_inspection()
     {
-        Transport.Answer = _ => EmailSendResult.Retry("Brevo answered 503");
+        Transport.Answer = _ => EmailSendResult.Retry("The SMTP server answered 451");
         await Sender.SendAsync(Recipient, "Hello", "<p>Body</p>");
         var now = DateTime.UtcNow.AddSeconds(1);
 
@@ -228,7 +229,7 @@ public class EmailOutboxTests : IAsyncLifetime
         Assert.Equal(EmailOutboxStatus.Failed, row.Status);
         Assert.Equal(EmailRetryPolicy.MaxAttempts, row.Attempts);
         Assert.Contains("Gave up", row.LastError);
-        Assert.Contains("503", row.LastError);
+        Assert.Contains("451", row.LastError);
         Assert.NotNull(row.CompletedAtUtc);
 
         Assert.Equal(0, await Worker.ProcessOnceAsync(now.AddDays(1)));
@@ -238,7 +239,7 @@ public class EmailOutboxTests : IAsyncLifetime
     [SqlFact]
     public async Task A_message_the_provider_refuses_for_good_is_not_tried_again()
     {
-        Transport.Answer = _ => EmailSendResult.Failed("Brevo answered 400");
+        Transport.Answer = _ => EmailSendResult.Failed("The SMTP server answered 550");
         await Sender.SendAsync(Recipient, "Hello", "<p>Body</p>");
         var now = DateTime.UtcNow.AddSeconds(1);
 
@@ -247,7 +248,7 @@ public class EmailOutboxTests : IAsyncLifetime
         var row = await OnlyRowAsync();
         Assert.Equal(EmailOutboxStatus.Failed, row.Status);
         Assert.Equal(1, row.Attempts);
-        Assert.Equal("Brevo answered 400", row.LastError);
+        Assert.Equal("The SMTP server answered 550", row.LastError);
         Assert.NotNull(row.CompletedAtUtc);
 
         Assert.Equal(0, await Worker.ProcessOnceAsync(now.AddHours(5)));
@@ -290,6 +291,31 @@ public class EmailOutboxTests : IAsyncLifetime
         Assert.Equal(1, bad.Attempts);
         Assert.Equal(nameof(InvalidOperationException), bad.LastError);
         Assert.Equal(EmailOutboxStatus.Sent, good.Status);
+    }
+
+    [SqlFact]
+    public async Task Mail_to_a_deactivated_account_is_skipped_by_the_worker_whatever_the_transport_is()
+    {
+        var person = await _world.CreateActorAsync("outboxInactive", UserRole.Client, null, _world.CompanyId);
+        try
+        {
+            await Sender.SendAsync(person.Email, "While active", "<p>1</p>");
+            Assert.Equal(1, await Worker.ProcessOnceAsync(DateTime.UtcNow.AddSeconds(1)));
+            Assert.Equal((person.Email, "While active"), Assert.Single(Transport.Calls));
+
+            await _world.Db(db => db.Users.Where(u => u.Id == person.Id).ExecuteUpdateAsync(s => s.SetProperty(u => u.IsActive, false)));
+            await Sender.SendAsync(person.Email, "After deactivation", "<p>2</p>");
+            Assert.Equal(1, await Worker.ProcessOnceAsync(DateTime.UtcNow.AddSeconds(2)));
+
+            Assert.Single(Transport.Calls); // the second one never reached the transport
+            var skipped = Assert.Single(await RowsAsync(), r => r.Subject == "After deactivation");
+            Assert.Equal(EmailOutboxStatus.Skipped, skipped.Status);
+            Assert.Contains("inactive", skipped.LastError);
+        }
+        finally
+        {
+            await _world.Db(db => db.Users.Where(u => u.Id == person.Id).ExecuteDeleteAsync());
+        }
     }
 
     // ======================= several workers, a worker that dies =======================
@@ -345,7 +371,11 @@ public class EmailOutboxTests : IAsyncLifetime
         var now = DateTime.UtcNow;
         EmailOutboxItem Item(string subject, EmailOutboxStatus status, DateTime? completed) => new()
         {
-            ToEmail = Recipient, Subject = subject, HtmlBody = "<p>x</p>", Status = status, CompletedAtUtc = completed
+            ToEmail = Recipient,
+            Subject = subject,
+            HtmlBody = "<p>x</p>",
+            Status = status,
+            CompletedAtUtc = completed
         };
 
         await _world.Db(async db =>

@@ -113,6 +113,7 @@ export default function DashboardPage() {
   const [ganttBranchData, setGanttBranchData] = useState<BranchGanttResponse | null>(null);
   const [ganttLoading, setGanttLoading] = useState(false);
   const [ganttError, setGanttError] = useState<string | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
 
   const rangeDays = Math.round((to.getTime() - from.getTime()) / 86400000);
   const canRunAiInsights = rangeDays >= MIN_AI_INSIGHTS_DAYS;
@@ -129,6 +130,8 @@ export default function DashboardPage() {
   }, [isAdmin, user?.id]);
 
   useEffect(() => {
+    // Only the answer to the person / branch / day that is selected now is shown, however late an earlier one arrives.
+    let current = true;
     if (ganttMode === 'branch') {
       if (!ganttDepartmentId) {
         setGanttBranchData(null);
@@ -138,10 +141,12 @@ export default function DashboardPage() {
       setGanttError(null);
       workTasksApi
         .ganttBranch(ganttDepartmentId, format(ganttDate, 'yyyy-MM-dd'))
-        .then(setGanttBranchData)
-        .catch((err: any) => setGanttError(err?.response?.data?.message ?? 'Could not load the timeline.'))
-        .finally(() => setGanttLoading(false));
-      return;
+        .then((data) => current && setGanttBranchData(data))
+        .catch((err: any) => current && setGanttError(err?.response?.data?.message ?? 'Could not load the timeline.'))
+        .finally(() => current && setGanttLoading(false));
+      return () => {
+        current = false;
+      };
     }
     if (!ganttUserId) {
       setGanttData(null);
@@ -151,27 +156,48 @@ export default function DashboardPage() {
     setGanttError(null);
     workTasksApi
       .gantt(ganttUserId, format(ganttDate, 'yyyy-MM-dd'))
-      .then(setGanttData)
-      .catch((err: any) => setGanttError(err?.response?.data?.message ?? 'Could not load the timeline.'))
-      .finally(() => setGanttLoading(false));
+      .then((data) => current && setGanttData(data))
+      .catch((err: any) => current && setGanttError(err?.response?.data?.message ?? 'Could not load the timeline.'))
+      .finally(() => current && setGanttLoading(false));
+    return () => {
+      current = false;
+    };
   }, [ganttMode, ganttUserId, ganttDepartmentId, ganttDate]);
 
   useEffect(() => {
+    // A slower answer to an earlier filter must not overwrite the answer to the current one, and a failed request is a message on
+    // the screen, not an unhandled error in the console.
+    let current = true;
     const params = { from: from.toISOString(), to: to.toISOString(), departmentId: departmentId || undefined, agentId: agentId || undefined };
+    const keep = <T,>(set: (value: T) => void) => (value: T) => {
+      if (current) set(value);
+    };
+    const failed = () => {
+      if (current) setReportError('Some of the figures could not be loaded for this selection. Change the selection or reload the page.');
+    };
 
-    reportsApi.summary(params).then(setSummary);
-    reportsApi.timeSeries(params).then(setSeries);
-    reportsApi.leaderboard(params).then(setLeaderboard);
-    reportsApi.topIssues({ ...params, limit: 15 }).then(setTopIssues);
-    if (isAdmin) reportsApi.byBranch({ from: params.from, to: params.to }).then(setBranchBreakdown);
+    setReportError(null);
+    reportsApi.summary(params).then(keep(setSummary)).catch(failed);
+    reportsApi.timeSeries(params).then(keep(setSeries)).catch(failed);
+    reportsApi.leaderboard(params).then(keep(setLeaderboard)).catch(failed);
+    reportsApi.topIssues({ ...params, limit: 15 }).then(keep(setTopIssues)).catch(failed);
+    if (isAdmin) reportsApi.byBranch({ from: params.from, to: params.to }).then(keep(setBranchBreakdown)).catch(failed);
     setAiInsight(null);
     setAiError(null);
+    return () => {
+      current = false;
+    };
   }, [from, to, departmentId, agentId, isAdmin]);
 
   useEffect(() => {
+    let current = true;
     reportsApi
       .periodComparison({ from: from.toISOString(), to: to.toISOString(), departmentId: departmentId || undefined, agentId: agentId || undefined, groupBy })
-      .then(setPeriodPoints);
+      .then((points) => current && setPeriodPoints(points))
+      .catch(() => current && setReportError('Some of the figures could not be loaded for this selection. Change the selection or reload the page.'));
+    return () => {
+      current = false;
+    };
   }, [from, to, departmentId, agentId, groupBy]);
 
   // Employees grouped by branch when viewing "all branches"; filtered to one branch otherwise.
@@ -300,10 +326,12 @@ export default function DashboardPage() {
             }}
           />
           <Button variant="secondary" onClick={handleExport} disabled={exporting}>
-            {exporting ? 'Exporting…' : '⬇ Export XLSX'}
+            {exporting ? 'Exporting…' : <><span aria-hidden>⬇</span> Export XLSX</>}
           </Button>
         </div>
       </div>
+
+      <ErrorText>{reportError}</ErrorText>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
         <KpiCard label="New" value={summary?.totalNew ?? '—'} hint="Tickets submitted but not yet opened/routed to a branch." />

@@ -11,10 +11,13 @@ public static class WorkSessionRules
 
     /// <summary>
     /// Returns why the session cannot be saved, or null if it can. <paramref name="others"/> are the ticket's other sessions
-    /// (leave out the one being edited). Sessions of one ticket may not overlap: one person works a ticket at a time, so an
+    /// (leave out the one being edited). <paramref name="longest"/>, when given, caps how long one finished session may be; <paramref name="subject"/> is
+    /// the word used in the messages ("ticket" or "task").
+    /// Sessions of one ticket may not overlap: one person works a ticket at a time, so an
     /// overlap would be counted twice. That also means a ticket has at most one running session.
     /// </summary>
-    public static string? Validate(DateTime startedAtUtc, DateTime? endedAtUtc, DateTime nowUtc, IEnumerable<Span> others)
+    public static string? Validate(DateTime startedAtUtc, DateTime? endedAtUtc, DateTime nowUtc, IEnumerable<Span> others,
+        TimeSpan? longest = null, string subject = "ticket")
     {
         if (endedAtUtc is { } end && end <= startedAtUtc)
             return "The end of a work session must be after its start.";
@@ -23,14 +26,17 @@ public static class WorkSessionRules
         if (endedAtUtc is { } endsAt && endsAt > nowUtc + ClockTolerance)
             return "A work session cannot end in the future.";
 
+        if (longest is { } limit && endedAtUtc is { } finished && finished - startedAtUtc > limit)
+            return $"A work session cannot last longer than {limit.TotalHours:0} hours. Split it into several sessions.";
+
         var newEnd = endedAtUtc ?? DateTime.MaxValue;
         foreach (var other in others)
         {
             var otherEnd = other.EndedAtUtc ?? DateTime.MaxValue;
             if (startedAtUtc < otherEnd && other.StartedAtUtc < newEnd)
                 return other.EndedAtUtc is null
-                    ? "Another work session on this ticket is still running. End it first."
-                    : "This overlaps another work session on the same ticket.";
+                    ? $"Another work session on this {subject} is still running. End it first."
+                    : $"This overlaps another work session on the same {subject}.";
         }
         return null;
     }

@@ -11,6 +11,10 @@ public interface IFileLinkService
     /// Returns null/empty unchanged so callers can pass optional values straight through.</summary>
     string? ToDownloadUrl(string? storedReference);
 
+    /// <summary>Turns a stored profile-picture reference (<c>/avatars/{file}</c>, or an old absolute URL) into the address the browser
+    /// loads it from. Null/empty is returned unchanged; a value that is not an avatar of this system is not handed out.</summary>
+    string? ToPublicUrl(string? storedReference);
+
     /// <summary>True when <paramref name="token"/> is a valid, unexpired link for exactly this key.</summary>
     bool IsValid(string key, string? token);
 

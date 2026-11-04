@@ -151,7 +151,17 @@ public sealed class EmailOutboxDispatcher : BackgroundService
         EmailSendResult result;
         try
         {
-            result = await transport.SendAsync(item.ToEmail, item.Subject, item.HtmlBody, ct);
+            // Whatever the transport is (SMTP today, anything tomorrow), an account that has been deactivated no longer receives
+            // mail from the application: the rule lives here, not in a particular provider's sender.
+            if (await RecipientIsInactiveAsync(scope.ServiceProvider, db, item.ToEmail, ct))
+            {
+                _logger.LogInformation("Outbox message {OutboxId} skipped — the recipient's account is inactive.", id);
+                result = EmailSendResult.Skipped("The recipient's account is inactive.");
+            }
+            else
+            {
+                result = await transport.SendAsync(item.ToEmail, item.Subject, item.HtmlBody, ct);
+            }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -172,6 +182,12 @@ public sealed class EmailOutboxDispatcher : BackgroundService
         // make the next start send it again.
         await db.SaveChangesAsync(CancellationToken.None);
         return true;
+    }
+
+    private static async Task<bool> RecipientIsInactiveAsync(IServiceProvider services, AppDbContext db, string toEmail, CancellationToken ct)
+    {
+        var normalized = services.GetRequiredService<IPiiProtector>().Hash(toEmail);
+        return await db.Users.AnyAsync(u => u.NormalizedEmail == normalized && !u.IsActive, ct);
     }
 
     private void Apply(EmailOutboxItem item, EmailSendResult result, DateTime nowUtc)

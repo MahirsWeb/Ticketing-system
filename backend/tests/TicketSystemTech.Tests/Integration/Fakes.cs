@@ -12,14 +12,32 @@ public sealed class FakeEmbeddingService : IEmbeddingService
 
     public bool Enabled { get; set; } = true;
 
-    public Task<float[]?> EmbedAsync(string text, CancellationToken ct = default) =>
-        Task.FromResult<float[]?>(Enabled ? new[] { 1f, 0f, 0f } : null);
+    public int? Dimensions => 3;
+
+    public bool IsAvailable => Enabled;
+
+    /// <summary>How long a call takes, to stand in for a provider that is slow.</summary>
+    public TimeSpan Delay { get; set; } = TimeSpan.Zero;
+
+    private int _calls;
+
+    /// <summary>How many embeddings were asked for.</summary>
+    public int Calls => Volatile.Read(ref _calls);
+
+    public async Task<float[]?> EmbedAsync(string text, EmbeddingPriority priority, CancellationToken ct = default)
+    {
+        Interlocked.Increment(ref _calls);
+        if (Delay > TimeSpan.Zero) await Task.Delay(Delay, ct);
+        return Enabled ? new[] { 1f, 0f, 0f } : null;
+    }
 }
 
 /// <summary>Stands in for Gemini and remembers the context it was handed, i.e. exactly the text a model would have been shown.</summary>
 public sealed class FakeChatCompletionService : IChatCompletionService
 {
     public string? LastContext { get; private set; }
+
+    public bool IsAvailable => true;
 
     public Task<string?> AskAsync(string systemInstruction, string context, string question, CancellationToken ct = default)
     {
@@ -28,7 +46,7 @@ public sealed class FakeChatCompletionService : IChatCompletionService
     }
 }
 
-/// <summary>Stands in for Brevo: sends nothing, remembers what it was asked to send, and answers as the test says.</summary>
+/// <summary>Stands in for the mail server: sends nothing, remembers what it was asked to send, and answers as the test says.</summary>
 public sealed class FakeEmailTransport : IEmailTransport
 {
     private readonly object _gate = new();

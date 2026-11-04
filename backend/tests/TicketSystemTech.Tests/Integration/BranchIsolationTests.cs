@@ -168,8 +168,14 @@ public class BranchIsolationTests
     {
         var response = await _world.Post(_world.EmpA1, "/api/tickets/on-behalf", new
         {
-            clientEmail = _world.CliZ.Email, title = "Phone call", description = "<p>x</p>", source = "Phone",
-            helpTopicId = Guid.NewGuid(), departmentId = _world.BranchB, slaPlanId = Guid.NewGuid(), priority = "Medium",
+            clientEmail = _world.CliZ.Email,
+            title = "Phone call",
+            description = "<p>x</p>",
+            source = "Phone",
+            helpTopicId = Guid.NewGuid(),
+            departmentId = _world.BranchB,
+            slaPlanId = Guid.NewGuid(),
+            priority = "Medium",
             assignedToUserId = _world.EmpB1.Id
         });
 

@@ -10,7 +10,8 @@ public interface IFileStorage
     Task<string> SaveAsync(string fileName, string contentType, Stream content, CancellationToken ct = default);
 
     /// <summary>Saves a raster image that is meant to be shown to every signed-in user (profile pictures)
-    /// and returns its public URL.</summary>
+    /// and returns its stored reference (<c>/avatars/{file}</c>), to be turned into a URL with
+    /// <see cref="IFileLinkService.ToPublicUrl"/>.</summary>
     Task<string> SavePublicImageAsync(string fileName, string contentType, Stream content, CancellationToken ct = default);
 
     /// <summary>Opens a privately stored file by its key, or returns null when it does not exist.</summary>

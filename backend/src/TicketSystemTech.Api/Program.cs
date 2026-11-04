@@ -19,31 +19,39 @@ using TicketSystemTech.Api.Configuration;
 using TicketSystemTech.Api.Realtime;
 
 // Disable appsettings.json hot-reload watching: it uses inotify under the hood, and long-lived containers
-// (Render, Docker) can exhaust the host's inotify instance limit, crashing WebApplication.CreateBuilder
+// (Docker) can exhaust the host's inotify instance limit, crashing WebApplication.CreateBuilder
 // before any of our own startup code even runs. Production config never changes without a redeploy anyway.
 Environment.SetEnvironmentVariable("DOTNET_hostBuilder__reloadConfigOnChange", "false");
 
-var builder = WebApplication.CreateBuilder(args);
-
-// Render (and most PaaS hosts) inject the port to bind to via $PORT.
-var renderPort = Environment.GetEnvironmentVariable("PORT");
-if (!string.IsNullOrEmpty(renderPort))
+// Commands that do their one job and exit, without starting the web host:
+//   --healthcheck                                   asks the application in this container if it is alive (Docker HEALTHCHECK)
+//   --create-key-certificate <file.pfx> <password>  makes the certificate that protects the key ring (see DataProtection in the README)
+if (args.Contains("--healthcheck"))
 {
-    builder.WebHost.UseUrls($"http://+:{renderPort}");
+    Environment.ExitCode = await TicketSystemTech.Api.Startup.ContainerHealthProbe.RunAsync();
+    return;
+}
+if (args.Length >= 1 && args[0] == "--create-key-certificate")
+{
+    if (args.Length != 3)
+    {
+        Console.Error.WriteLine("Usage: --create-key-certificate <file.pfx> <password>");
+        Environment.ExitCode = 2;
+        return;
+    }
+    TicketSystemTech.Api.Configuration.KeyRingProtection.CreateSelfSigned(args[1], args[2]);
+    Console.WriteLine($"Created {args[1]}. Set DataProtection:CertificatePath and DataProtection:CertificatePassword, and keep the file and the password OUT of the database backups.");
+    return;
 }
 
-Log.Logger = new LoggerConfiguration()
-    .ReadFrom.Configuration(builder.Configuration)
-    .Enrich.FromLogContext()
-    // Added after FromLogContext so a request's own reference wins; lines written outside a request show "-".
-    .Enrich.WithProperty(TicketSystemTech.Api.Middleware.CorrelationIdMiddleware.LogProperty, "-")
-    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{CorrelationId}] {Message:lj}{NewLine}{Exception}")
-    .CreateLogger();
+var builder = WebApplication.CreateBuilder(args);
+
+Log.Logger = LoggingSetup.Configure(new LoggerConfiguration(), builder.Configuration, builder.Environment.ContentRootPath).CreateLogger();
 builder.Host.UseSerilog();
 
 // Fail fast, listing everything that is missing, instead of dying later inside token validation.
 TicketSystemTech.Api.Configuration.StartupConfigurationValidator.ThrowIfInvalid(
-    builder.Configuration, builder.Environment.IsDevelopment());
+    builder.Configuration, builder.Environment.IsDevelopment(), builder.Environment.IsProduction());
 
 // ---- Options ----
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
@@ -137,12 +145,15 @@ builder.Services.AddAuthorization();
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    // Sign-in and the other account endpoints, per network address (RateLimits:AuthPerMinute). Sign-in has a second ceiling per
+    // account, see LoginAttemptLimiter.
+    var authPerMinute = builder.Configuration.GetValue("RateLimits:AuthPerMinute", 15);
     options.AddPolicy("auth", context =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             factory: _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = 15,
+                PermitLimit = authPerMinute,
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0
             }));
@@ -190,6 +201,7 @@ builder.Services.AddSingleton<ISlaCalculator>(sp =>
 builder.Services.AddScoped<ITicketNumberGenerator, TicketNumberGenerator>();
 builder.Services.AddScoped<IDateTimeProvider, DateTimeProvider>();
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
+builder.Services.AddSingleton<TicketSystemTech.Api.Security.LoginAttemptLimiter>();
 builder.Services.AddScoped<ITemporaryPasswordGenerator, TemporaryPasswordGenerator>();
 builder.Services.AddScoped<IFileStorage, LocalFileStorage>();
 builder.Services.AddScoped<IFileLinkService, FileLinkService>();
@@ -197,13 +209,18 @@ builder.Services.AddScoped<ITicketAssignmentService, TicketAssignmentService>();
 builder.Services.AddSingleton<TicketSystemTech.Api.BackgroundJobs.BackgroundEmailSender>();
 builder.Services.AddSingleton<IBackgroundEmailQueue>(sp => sp.GetRequiredService<TicketSystemTech.Api.BackgroundJobs.BackgroundEmailSender>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<TicketSystemTech.Api.BackgroundJobs.BackgroundEmailSender>());
-// E-mail goes through a durable outbox: callers file a message (IEmailSender), the dispatcher delivers it through Brevo
-// (IEmailTransport, registered with the other outbound clients) and tries again when the provider is down.
+// E-mail goes through a durable outbox: callers file a message (IEmailSender), the dispatcher delivers it through SMTP
+// (IEmailTransport) and tries again when the mail server is down.
 builder.Services.AddSingleton<IEmailSender, OutboxEmailSender>();
+builder.Services.AddSingleton<IEmailTransport, SmtpEmailTransport>();
 builder.Services.Configure<EmailOutboxOptions>(builder.Configuration.GetSection("Email:Outbox"));
 builder.Services.AddSingleton<TicketSystemTech.Api.BackgroundJobs.EmailOutboxDispatcher>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<TicketSystemTech.Api.BackgroundJobs.EmailOutboxDispatcher>());
 builder.Services.AddScoped<IKnowledgeBaseIndexer, KnowledgeBaseIndexer>();
+// Closing a ticket or adding a note asks for indexing; a background worker does it, so the answer does not wait for the AI provider.
+builder.Services.AddSingleton<TicketSystemTech.Api.BackgroundJobs.KnowledgeBaseIndexQueue>();
+builder.Services.AddSingleton<IKnowledgeBaseIndexQueue>(sp => sp.GetRequiredService<TicketSystemTech.Api.BackgroundJobs.KnowledgeBaseIndexQueue>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<TicketSystemTech.Api.BackgroundJobs.KnowledgeBaseIndexQueue>());
 builder.Services.AddSingleton<IVectorIndex, VectorIndex>();
 builder.Services.AddSingleton<TicketSystemTech.Api.BackgroundJobs.KnowledgeBaseReindexService>();
 builder.Services.AddSingleton<IKnowledgeBaseReindexJob>(sp => sp.GetRequiredService<TicketSystemTech.Api.BackgroundJobs.KnowledgeBaseReindexService>());
@@ -214,15 +231,25 @@ builder.Services.Configure<MicrosoftGraphOptions>(builder.Configuration.GetSecti
 builder.Services.AddSingleton<INotificationPublisher, SignalRNotificationPublisher>();
 builder.Services.AddHostedService<TicketSystemTech.Api.BackgroundJobs.OverdueTicketNotifier>();
 builder.Services.AddHttpContextAccessor();
-// Brevo, Gemini, embeddings and Microsoft Graph: one typed client each, with its own timeouts, retries and circuit breaker.
+// Gemini, embeddings and Microsoft Graph: one typed client each, with its own timeouts, retries and circuit breaker.
 builder.Services.AddOutboundHttpClients();
 builder.Services.AddMemoryCache();
 builder.Services.AddHealthChecks().AddCheck<TicketSystemTech.Api.Health.DatabaseHealthCheck>("database", tags: new[] { "ready" });
 builder.Services.AddScoped<TicketSystemTech.Api.Middleware.UserStatusValidationMiddleware>();
 // Key ring persisted to the database (not local disk) so encrypted OAuth tokens survive redeploys.
-builder.Services.AddDataProtection()
+var keyRing = builder.Services.AddDataProtection()
     .PersistKeysToDbContext<AppDbContext>()
     .SetApplicationName("TicketSystemTech");
+
+// With a certificate (DataProtection:CertificatePath / CertificateThumbprint) the keys are stored encrypted, and the certificate,
+// which is not in the database or its backups, is what opens them. Without one the keys sit in the database in the clear: allowed
+// on a developer's machine, refused on a server unless that is accepted explicitly (see StartupConfigurationValidator).
+var keyRingCertificate = KeyRingProtection.Load(builder.Configuration, builder.Environment.ContentRootPath);
+if (keyRingCertificate is not null)
+    keyRing.ProtectKeysWithCertificate(keyRingCertificate).UnprotectKeysWithAnyCertificate(keyRingCertificate);
+else
+    Log.Warning("The Data Protection key ring is stored in the database WITHOUT encryption (DataProtection:CertificatePath is not set). " +
+                "Anyone who gets a copy of the database gets the keys with it.");
 
 builder.Services.AddMediatR(cfg =>
     cfg.RegisterServicesFromAssembly(typeof(TicketSystemTech.Application.AssemblyReference).Assembly));
@@ -308,23 +335,25 @@ if (args.Contains("--migrate-only"))
     return;
 }
 
+// `--reset-admin-password <email>` gives that Admin a new temporary password (printed once, to this terminal only) and exits.
+var resetAt = Array.IndexOf(args, "--reset-admin-password");
+if (resetAt >= 0)
+{
+    using var resetScope = app.Services.CreateScope();
+    Environment.ExitCode = await TicketSystemTech.Api.Startup.AdminPasswordReset.RunAsync(
+        resetScope.ServiceProvider, resetAt + 1 < args.Length ? args[resetAt + 1] : null, Console.Out);
+    await Log.CloseAndFlushAsync();
+    return;
+}
+
 // First, so that everything after it (forwarded headers, CORS, authentication, the endpoints) logs under the request's reference.
 app.UseMiddleware<TicketSystemTech.Api.Middleware.CorrelationIdMiddleware>();
 
-// X-Forwarded-For / X-Forwarded-Proto are believed ONLY when they come from a proxy that is listed. By default that is just
-// the machine itself, so a request that claims "I was forwarded" from anywhere else cannot lie about its address. Behind a
-// reverse proxy, list it: ForwardedHeaders:KnownProxies (addresses) and/or ForwardedHeaders:KnownNetworks (e.g. "10.0.0.0/8").
-// Without that every request appears to come from the proxy.
-var forwardedHeaders = new ForwardedHeadersOptions
-{
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
-    ForwardLimit = 1
-};
-foreach (var proxy in builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? Array.Empty<string>())
-    forwardedHeaders.KnownProxies.Add(System.Net.IPAddress.Parse(proxy));
-foreach (var network in builder.Configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>() ?? Array.Empty<string>())
-    forwardedHeaders.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(network));
-app.UseForwardedHeaders(forwardedHeaders);
+// X-Forwarded-For / X-Forwarded-Proto are believed ONLY when they come from a proxy that is listed, and no proxy is listed by
+// default (not even this machine): a request cannot lie about its address. Behind a reverse proxy, list it:
+// ForwardedHeaders:KnownProxies (addresses) and/or ForwardedHeaders:KnownNetworks (e.g. "10.0.0.0/8"). Without that every request
+// appears to come from the proxy. See ForwardedHeadersSetup.
+app.UseForwardedHeaders(ForwardedHeadersSetup.Create(builder.Configuration));
 
 if (app.Environment.IsDevelopment())
 {
@@ -366,8 +395,7 @@ app.UseAuthorization();
 // unauthenticated or forbidden never reaches an endpoint, so there is nothing for the limiter to protect there.
 app.UseRateLimiter();
 
-// Render's health check hits the service root by default — without this it 404s and Render kills the
-// instance in an endless restart loop, even though the app itself started up fine.
+// The service root answers too, for monitors and hosts whose default check hits "/".
 app.MapGet("/", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 
 // /health/live: the process is up (no dependencies checked, so a database outage does not get a healthy instance killed

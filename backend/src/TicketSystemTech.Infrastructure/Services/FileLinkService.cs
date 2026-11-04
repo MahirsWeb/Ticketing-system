@@ -38,6 +38,18 @@ public class FileLinkService : IFileLinkService
         return $"{baseUrl}/api/files/{key}?t={Uri.EscapeDataString(token)}";
     }
 
+    public string? ToPublicUrl(string? storedReference)
+    {
+        if (string.IsNullOrWhiteSpace(storedReference)) return storedReference;
+
+        var key = StoredFileKey.FromReference(storedReference);
+        if (key is null || !storedReference.Contains("/avatars/", StringComparison.Ordinal)) return null;
+
+        var request = _httpContextAccessor.HttpContext?.Request;
+        var baseUrl = request is not null ? $"{request.Scheme}://{request.Host}" : "";
+        return $"{baseUrl}/avatars/{key}";
+    }
+
     public bool IsValid(string key, string? token)
     {
         if (!StoredFileKey.IsSafe(key) || string.IsNullOrEmpty(token)) return false;

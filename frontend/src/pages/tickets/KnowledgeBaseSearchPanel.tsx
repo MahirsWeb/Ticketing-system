@@ -40,6 +40,7 @@ export function KnowledgeBaseSearchPanel({ initialQuery = '', alwaysOpen = false
   const [query, setQuery] = useState(initialQuery);
   const [askedQuery, setAskedQuery] = useState('');
   const [answer, setAnswer] = useState<string | null>(null);
+  const [aiAvailable, setAiAvailable] = useState(true);
   const [sources, setSources] = useState<KnowledgeBaseSearchResultDto[]>([]);
   const [similarCount, setSimilarCount] = useState(0);
   const [totalEligible, setTotalEligible] = useState(0);
@@ -63,6 +64,7 @@ export function KnowledgeBaseSearchPanel({ initialQuery = '', alwaysOpen = false
     try {
       const res = await knowledgeBaseApi.ask(query, controller.signal);
       setAnswer(res.answer);
+      setAiAvailable(res.aiAvailable !== false);
       setSources(res.sources);
       setSimilarCount(res.similarTicketCount);
       setTotalEligible(res.totalEligibleTicketCount);
@@ -88,7 +90,7 @@ export function KnowledgeBaseSearchPanel({ initialQuery = '', alwaysOpen = false
   if (!open) {
     return (
       <Button variant="secondary" onClick={() => setOpen(true)}>
-        🤖 Ask the AI assistant about this ticket
+        <span aria-hidden>🤖</span> Ask the AI assistant about this ticket
       </Button>
     );
   }
@@ -136,7 +138,7 @@ export function KnowledgeBaseSearchPanel({ initialQuery = '', alwaysOpen = false
 
       {!loading && asked && answer && (
         <div className="mb-4 rounded-md border border-blue-100 bg-blue-50 p-4 text-sm text-slate-800">
-          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-blue-700">AI answer</div>
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-blue-700">{aiAvailable ? 'AI answer' : 'AI unavailable'}</div>
           <p className="whitespace-pre-wrap">{answer}</p>
           <p className="mt-3 border-t border-blue-100 pt-3 text-xs text-red-600">
             <span className="font-bold">WARNING!</span> This answer is suggested based on tickets and documentation in

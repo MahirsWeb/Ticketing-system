@@ -17,6 +17,8 @@ export function NotificationBell() {
     const refresh = () => notificationsApi.list().then(setItems).catch(() => {});
     const events = ['newTicket', 'ticketOpened', 'ticketAssigned', 'ticketClosed', 'newResponse', 'userActivatedViaInvite', 'ticketTransferred', 'ticketOverdue', 'taskAssigned', 'ticketUnassigned'];
     events.forEach((e) => hub.on(e, refresh));
+    // Whatever was pushed while the connection was down was missed: ask again once it is back.
+    hub.onreconnected(refresh);
     return () => {
       events.forEach((e) => hub.off(e, refresh));
     };
@@ -42,13 +44,17 @@ export function NotificationBell() {
   return (
     <div className="relative" ref={boxRef}>
       <button
+        type="button"
         onClick={() => setOpen((o) => !o)}
+        aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+        aria-expanded={open}
+        aria-haspopup="true"
         className="relative rounded-full p-2 text-slate-600 hover:bg-slate-100"
         title="Notifications"
       >
-        🔔
+        <span aria-hidden>🔔</span>
         {unreadCount > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white">
+          <span aria-hidden className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}

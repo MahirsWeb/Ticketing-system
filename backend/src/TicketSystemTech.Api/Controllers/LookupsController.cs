@@ -98,6 +98,7 @@ public class LookupsController : ControllerBase
 
         var entity = new Department { Name = request.Name, Email = request.Email };
         _db.Departments.Add(entity);
+        _db.Audit(_currentUser.UserId, "DepartmentCreated", nameof(Department), entity.Id, $"Branch '{entity.Name}'");
         await _db.SaveChangesAsync();
 
         var creatorEmail = await _db.Users.Where(u => u.Id == _currentUser.UserId).Select(u => u.Email).FirstOrDefaultAsync();
@@ -117,6 +118,8 @@ public class LookupsController : ControllerBase
         var emailTaken = await _db.Departments.AnyAsync(d => d.Email == request.Email && d.Id != id);
         if (emailTaken) return Conflict(new { message = "A branch with this email already exists." });
 
+        _db.Audit(_currentUser.UserId, "DepartmentUpdated", nameof(Department), entity.Id,
+            $"Active: {entity.IsActive} -> {request.IsActive}; name changed: {entity.Name != request.Name}; e-mail changed: {entity.Email != request.Email}");
         entity.Name = request.Name;
         entity.Email = request.Email;
         entity.IsActive = request.IsActive;
@@ -157,6 +160,7 @@ public class LookupsController : ControllerBase
             return BadRequest(new { message = $"This branch still owns {ticketCount} ticket(s). Transfer them to another branch first." });
 
         _db.Departments.Remove(entity);
+        _db.Audit(_currentUser.UserId, "DepartmentDeleted", nameof(Department), entity.Id, $"Branch '{entity.Name}'");
         await _db.SaveChangesAsync();
         return NoContent();
     }

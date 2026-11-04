@@ -89,7 +89,7 @@ export default function NewTicketPage() {
               <ul className="mt-2 flex flex-wrap gap-2">
                 {files.map((f, i) => (
                   <li key={`${f.name}-${i}`} className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">
-                    📎 {f.name}
+                    <span aria-hidden>📎</span> {f.name}
                     <button type="button" onClick={() => removeFile(i)} className="ml-1 font-bold text-slate-500 hover:text-red-600">
                       ×
                     </button>

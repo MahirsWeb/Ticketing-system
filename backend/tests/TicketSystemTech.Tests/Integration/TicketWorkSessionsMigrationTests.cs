@@ -110,7 +110,7 @@ public class TicketWorkSessionsMigrationTests
             // ---- forward ----
             await migrator.MigrateAsync();
 
-            Assert.Equal(new (Guid, DateTime, DateTime?)?(( Worker, Start, End )), SessionOf(connection, "FULL"));
+            Assert.Equal(new (Guid, DateTime, DateTime?)?((Worker, Start, End)), SessionOf(connection, "FULL"));
             Assert.Equal(new (Guid, DateTime, DateTime?)?((Worker, Start, null)), SessionOf(connection, "NO-END-OPEN"));
             Assert.Equal(new (Guid, DateTime, DateTime?)?((Worker, Start, Closed)), SessionOf(connection, "NO-END-CLOSED"));
             Assert.Equal(new (Guid, DateTime, DateTime?)?((Opener, Start, End)), SessionOf(connection, "NO-ASSIGNEE"));
