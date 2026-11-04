@@ -5,7 +5,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="FluentValidation" Version="11.12.0" />
+    <PackageReference Include="FluentValidation" Version="12.2.0" />
     <PackageReference Include="MediatR" Version="12.5.0" />
     <PackageReference Include="NPOI" Version="2.8.1" />
     <!-- NPOI/DataProtection pull these in transitively at versions with known advisories; pinned to patched releases. -->
