@@ -16,8 +16,8 @@
 ## Šta napušta sistem kad je AI uključen
 
 Samo ako je davalac vani (Gemini): tekst pitanja i dijelovi tiketa i dokumentacije potrebni za odgovor, uz gornje granice
-(pitanje 2.000 znakova, jedan izvor 6.000, kontekst 60.000, odgovor `Ai:MaxOutputTokens`). **Email adrese i brojevi telefona se
-maskiraju** (`Ai:RedactPersonalData`, uključeno). Imena i slobodan tekst iz tiketa se ne maskiraju. Ključ ide u zaglavlje, ne u
+(pitanje 2.000 znakova, jedan izvor 6.000, kontekst 60.000, odgovor `Ai:MaxOutputTokens`). **Email adrese, brojevi telefona i lozinke ili tokeni
+napisani uz riječ koja ih imenuje** (`lozinka: …`, `password=…`, `Bearer …`) **se maskiraju** (`Ai:RedactPersonalData`, uključeno). Imena i slobodan tekst iz tiketa se ne maskiraju. Ključ ide u zaglavlje, ne u
 adresu. Lokalni model (`OpenAiCompatible` na `localhost`) ne šalje ništa. `Ai:Enabled=false` ili `Provider=None` je potpuna
 zabrana: ništa se ne šalje, a ekrani to kažu (`aiAvailable=false` u odgovoru).
 

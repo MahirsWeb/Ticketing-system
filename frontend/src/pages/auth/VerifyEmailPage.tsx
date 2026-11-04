@@ -27,7 +27,7 @@ export default function VerifyEmailPage() {
         setStatus('error');
         setMessage(err?.response?.data?.message ?? 'This verification link is invalid or has expired.');
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the link is verified once when the page opens; its token comes from the address and does not change
   }, []);
 
   return (

@@ -42,6 +42,8 @@ export default function UserDetailPage() {
   const [result, setResult] = useState<CreatedUserResponse | null>(null);
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
   const [confirmDeactivate, setConfirmDeactivate] = useState(false);
+  const [confirmAnonymize, setConfirmAnonymize] = useState(false);
+  const [dataError, setDataError] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
 
@@ -70,14 +72,14 @@ export default function UserDetailPage() {
     loadUser();
     lookupsApi.companies().then(setCompanies);
     lookupsApi.departments().then(setDepartments);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the user and the lookups are loaded when the id in the address changes
   }, [id]);
 
   useEffect(() => {
     if (needsBranch && departmentId && !subBranchesByDept[departmentId]) {
       lookupsApi.subBranches(departmentId).then((items) => setSubBranchesByDept((prev) => ({ ...prev, [departmentId]: items })));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sub-branches are fetched when the branch or role changes; the cache object is read here, not a trigger
   }, [departmentId, needsBranch]);
 
   useEffect(() => {
@@ -160,6 +162,34 @@ export default function UserDetailPage() {
     setConfirmDeactivate(false);
     await usersApi.setActive(target.id, false);
     loadUser();
+  }
+
+  async function handleExportData() {
+    if (!target) return;
+    setDataError(null);
+    try {
+      const blob = await usersApi.exportData(target.id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `user-${target.id}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setDataError('The data could not be exported.');
+    }
+  }
+
+  async function handleConfirmAnonymize() {
+    if (!target) return;
+    setConfirmAnonymize(false);
+    setDataError(null);
+    try {
+      await usersApi.anonymize(target.id);
+      loadUser();
+    } catch {
+      setDataError('The account could not be anonymized.');
+    }
   }
 
   async function handleAvatarUpload(file: File) {
@@ -341,8 +371,17 @@ export default function UserDetailPage() {
             <button className="font-medium text-blue-700 hover:underline" onClick={() => setConfirmRegenerate(true)}>
               Regenerate temp password
             </button>
+            <button className="font-medium text-slate-500 hover:underline" onClick={handleExportData}>
+              Export personal data
+            </button>
+            {currentUser?.id !== target.id && !target.email.endsWith('@anonymized.invalid') && (
+              <button className="font-medium text-red-700 hover:underline" onClick={() => setConfirmAnonymize(true)}>
+                Anonymize…
+              </button>
+            )}
           </div>
         )}
+        {dataError && <ErrorText>{dataError}</ErrorText>}
       </Card>
 
       <div>
@@ -414,6 +453,16 @@ export default function UserDetailPage() {
           danger
           onConfirm={handleRegenerateConfirmed}
           onCancel={() => setConfirmRegenerate(false)}
+        />
+      )}
+      {confirmAnonymize && (
+        <ConfirmDialog
+          title="Anonymize this person?"
+          message={`The name, e-mail address, telephone number and picture of ${target.firstName} ${target.lastName} will be removed for good and the account locked. Their tickets, messages and work time stay, under the name "Obrisan korisnik". This cannot be undone.`}
+          confirmLabel="Anonymize"
+          danger
+          onConfirm={handleConfirmAnonymize}
+          onCancel={() => setConfirmAnonymize(false)}
         />
       )}
       {confirmDeactivate && (

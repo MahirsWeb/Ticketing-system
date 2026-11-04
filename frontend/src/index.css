@@ -12,6 +12,15 @@ body {
   color: #1f2430;
 }
 
+/* One visible keyboard-focus indicator for everything that has none of its own (WCAG 2.4.7). It sits in the base layer with
+   zero specificity (:where), so a component's own focus ring, or its deliberate focus:outline-none, still wins. */
+@layer base {
+  :where(a, button, summary, select, input, textarea, [role='button'], [role='link'], [tabindex]):focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+  }
+}
+
 .tiptap {
   min-height: 160px;
   outline: none;

@@ -47,6 +47,13 @@ export const usersApi = {
       })
       .then((r) => r.data),
 
+  /** Everything the system holds about one person, as a JSON file (Admin only). */
+  exportData: (userId: string) =>
+    apiClient.get<Blob>(`/api/users/${userId}/export`, { responseType: 'blob' }).then((r) => r.data),
+
+  /** Removes what identifies the person and keeps the history of the work. Cannot be undone (Admin only). */
+  anonymize: (userId: string) => apiClient.post(`/api/users/${userId}/anonymize`).then((r) => r.data),
+
   setActive: (userId: string, isActive: boolean) =>
     apiClient.patch(`/api/users/${userId}/active`, { isActive }).then((r) => r.data),
 

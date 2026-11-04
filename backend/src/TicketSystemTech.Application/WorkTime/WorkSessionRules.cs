@@ -41,6 +41,25 @@ public static class WorkSessionRules
         return null;
     }
 
+    /// <summary>
+    /// A person works on one thing at a time: a session may not overlap any other session of the same person on ANOTHER ticket or
+    /// task (the ones on the same ticket or task are held to <see cref="Validate"/>). Otherwise the same hour is counted for two
+    /// pieces of work, in the timeline and in the Excel export. <paramref name="otherWork"/> are those other sessions.
+    /// </summary>
+    public static string? ValidateAgainstOtherWork(DateTime startedAtUtc, DateTime? endedAtUtc, IEnumerable<Span> otherWork)
+    {
+        var newEnd = endedAtUtc ?? DateTime.MaxValue;
+        foreach (var other in otherWork)
+        {
+            var otherEnd = other.EndedAtUtc ?? DateTime.MaxValue;
+            if (startedAtUtc < otherEnd && other.StartedAtUtc < newEnd)
+                return other.EndedAtUtc is null
+                    ? "A work session is still running on another ticket or task. End it first."
+                    : "This overlaps your work on another ticket or task.";
+        }
+        return null;
+    }
+
     /// <summary>Total time of the finished sessions plus, for a running one, the time up to <paramref name="nowUtc"/>.</summary>
     public static TimeSpan Total(IEnumerable<Span> sessions, DateTime nowUtc) =>
         sessions.Aggregate(TimeSpan.Zero, (sum, s) =>

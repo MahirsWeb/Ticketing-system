@@ -30,6 +30,13 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
     node.setAttribute('target', '_blank');
     node.setAttribute('rel', 'noopener noreferrer');
   }
+
+  // A picture on somebody else's server is fetched the moment a ticket is opened, which tells whoever wrote it when and from where it was
+  // read. Pictures that belong to the message are embedded (data:) or stored here (a relative address) and stay.
+  if (node.tagName === 'IMG' && /^\s*(https?:)?\/\//i.test(node.getAttribute('src') ?? '')) {
+    node.removeAttribute('src');
+    node.removeAttribute('srcset');
+  }
 });
 
 /**

@@ -42,12 +42,30 @@ public class HtmlSanitizerService : IHtmlSanitizerService
         _sanitizer.AllowedSchemes.Add("data");
         _sanitizer.FilterUrl += (_, e) =>
         {
+            // An image on somebody else's server is fetched as soon as a ticket is opened, which tells whoever wrote it when and from
+            // where it was read (and lets them swap the picture later). Pictures that belong to the message are embedded (data:) or
+            // stored here (a relative address); a link the person clicks is still an ordinary link.
+            var isImage = string.Equals(e.Tag.LocalName, "img", StringComparison.OrdinalIgnoreCase);
+            if (isImage && IsOtherServer(e.OriginalUrl))
+            {
+                e.SanitizedUrl = null;
+                return;
+            }
+
             if (!e.OriginalUrl.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) return;
 
-            var isImage = string.Equals(e.Tag.LocalName, "img", StringComparison.OrdinalIgnoreCase);
             var isAllowedRaster = AllowedImageDataPrefixes.Any(p => e.OriginalUrl.StartsWith(p, StringComparison.OrdinalIgnoreCase));
             if (!(isImage && isAllowedRaster)) e.SanitizedUrl = null;
         };
+    }
+
+    /// <summary>An absolute address (http, https, or protocol-relative "//host") points at a server other than this one.</summary>
+    private static bool IsOtherServer(string url)
+    {
+        var trimmed = url.TrimStart();
+        return trimmed.StartsWith("http:", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("https:", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("//", StringComparison.Ordinal);
     }
 
     public string Sanitize(string? html) =>

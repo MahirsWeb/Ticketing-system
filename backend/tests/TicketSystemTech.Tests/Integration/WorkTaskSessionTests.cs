@@ -291,6 +291,111 @@ public class WorkTaskSessionTests : IAsyncLifetime
         Assert.False(entry.GetProperty("isLogged").GetBoolean());
     }
 
+    // ======================= one person, one thing at a time (NOVO-DOM-01) =======================
+
+    private static DateTime Yesterday(int hour, int minute = 0) => DateTime.UtcNow.Date.AddDays(-1).AddHours(hour).AddMinutes(minute);
+
+    private async Task<Guid> NewTicketWorkedByAsync(Actor worker)
+    {
+        var ticket = new Ticket
+        {
+            TicketNumber = "OW-" + Guid.NewGuid().ToString("N")[..8],
+            Title = "overlap test",
+            Description = "<p>x</p>",
+            ClientId = _world.CliX.Id,
+            CompanyId = _world.CompanyId,
+            Status = TicketStatus.InProgress,
+            DepartmentId = _world.BranchA,
+            Priority = TicketPriority.Medium,
+            Source = TicketSource.TicketSystem,
+            AssignedToUserId = worker.Id,
+            OpenedAtUtc = DateTime.UtcNow.AddDays(-3)
+        };
+        ticket.Assignees.Add(new TicketAssignee { UserId = worker.Id });
+        await _world.Db(async db => { db.Tickets.Add(ticket); return await db.SaveChangesAsync(); });
+        _tickets.Add(ticket.Id);
+        return ticket.Id;
+    }
+
+    private Task<ApiResponse> TicketSession(Actor who, Guid ticket, DateTime start, DateTime? end) =>
+        _world.Post(who, $"/api/tickets/{ticket}/work-sessions", new { startedAtUtc = start, endedAtUtc = end });
+
+    private Task<Guid> LatestSessionIdOfTicketAsync(Guid ticket) =>
+        _world.Db(db => db.TicketWorkSessions.AsNoTracking().Where(s => s.TicketId == ticket).OrderByDescending(s => s.StartedAtUtc).Select(s => s.Id).FirstAsync());
+
+    [SqlFact]
+    public async Task One_person_cannot_work_two_tickets_at_the_same_time()
+    {
+        var first = await NewTicketWorkedByAsync(_world.EmpA1);
+        var second = await NewTicketWorkedByAsync(_world.EmpA1);
+
+        var a = await TicketSession(_world.EmpA1, first, Yesterday(9), Yesterday(11));
+        var overlapping = await TicketSession(_world.EmpA1, second, Yesterday(10), Yesterday(12));
+        var after = await TicketSession(_world.EmpA1, second, Yesterday(11), Yesterday(12));
+        var moved = await _world.Send(_world.EmpA1, HttpMethod.Put, $"/api/tickets/{second}/work-sessions/{await LatestSessionIdOfTicketAsync(second)}",
+            new { startedAtUtc = Yesterday(10, 30), endedAtUtc = Yesterday(12) });
+
+        Assert.Equal(200, a.Code);
+        Assert.Equal(400, overlapping.Code);
+        Assert.Contains("another ticket or task", overlapping.Text);
+        Assert.Equal(200, after.Code);             // starting the minute the other one ended is fine
+        Assert.Equal(400, moved.Code);             // and so is correcting a session until it runs into the other
+    }
+
+    [SqlFact]
+    public async Task Somebody_elses_work_never_gets_in_the_way()
+    {
+        var mine = await NewTicketWorkedByAsync(_world.EmpA1);
+        var theirs = await NewTicketWorkedByAsync(_world.EmpA2);
+
+        var first = await TicketSession(_world.EmpA1, mine, Yesterday(9), Yesterday(11));
+        var second = await TicketSession(_world.EmpA2, theirs, Yesterday(9), Yesterday(11));
+
+        Assert.Equal(200, first.Code);
+        Assert.Equal(200, second.Code);
+    }
+
+    [SqlFact]
+    public async Task A_task_and_a_ticket_of_the_same_person_cannot_overlap_either_way()
+    {
+        var task = await NewTaskAsync(_world.EmpA1);
+        await AddSessionAsync(task, _world.EmpA1, Yesterday(9), Yesterday(10));
+        var ticket = await NewTicketWorkedByAsync(_world.EmpA1);
+
+        var overlappingTicket = await TicketSession(_world.EmpA1, ticket, Yesterday(9, 30), Yesterday(10, 30));
+        var afterTask = await TicketSession(_world.EmpA1, ticket, Yesterday(10), Yesterday(11));
+        var otherTask = await NewTaskAsync(_world.EmpA1);
+        var overlappingTask = await _world.Send(_world.EmpA1, HttpMethod.Patch, $"/api/work-tasks/{otherTask}/time", Time(Yesterday(10, 30), Yesterday(11, 30)));
+        var cleanTask = await _world.Send(_world.EmpA1, HttpMethod.Patch, $"/api/work-tasks/{otherTask}/time", Time(Yesterday(11), Yesterday(12)));
+
+        Assert.Equal(400, overlappingTicket.Code);
+        Assert.Equal(200, afterTask.Code);
+        Assert.Equal(400, overlappingTask.Code);
+        Assert.Contains("another ticket or task", overlappingTask.Text);
+        Assert.Equal(200, cleanTask.Code);
+    }
+
+    [SqlFact]
+    public async Task A_timer_that_is_still_running_blocks_starting_another_one_and_ending_it_frees_the_person()
+    {
+        var ticket = await NewTicketWorkedByAsync(_world.EmpA1);
+        var task = await NewTaskAsync(_world.EmpA1);
+
+        var running = await TicketSession(_world.EmpA1, ticket, DateTime.UtcNow.AddMinutes(-2), null);
+        var blocked = await _world.Post(_world.EmpA1, $"/api/work-tasks/{task}/start", new { });
+
+        Assert.Equal(200, running.Code);
+        Assert.Equal(400, blocked.Code);
+        Assert.Contains("still running on another", blocked.Text);
+
+        await _world.Db(db => db.TicketWorkSessions.Where(s => s.TicketId == ticket).ExecuteUpdateAsync(s => s.SetProperty(x => x.EndedAtUtc, DateTime.UtcNow.AddMinutes(-1))));
+        var started = await _world.Post(_world.EmpA1, $"/api/work-tasks/{task}/start", new { });
+        var back = await TicketSession(_world.EmpA1, ticket, DateTime.UtcNow.AddSeconds(-30), null);
+
+        Assert.Equal(200, started.Code);
+        Assert.Equal(400, back.Code); // and now the task timer is the one that is running
+    }
+
     // ======================= the concurrency token =======================
 
     [SqlFact]

@@ -1,0 +1,31 @@
+# EXAMPLE, not tested in this repository's CI. nginx serving the built frontend (frontend/dist) with the two things the application
+# needs from a web server: every address that is not a file answers index.html (the application has its own routes), and the
+# security headers (the API sets its own, but only for its own answers).
+#
+# Build the frontend with the address of the API:   VITE_API_BASE_URL=https://api.firma.ba npm run build
+# Start with the Content-Security-Policy-Report-Only header, watch the browser console until nothing is reported, then rename it.
+
+server {
+    listen 443 ssl;
+    server_name tickets.firma.ba;
+    # ssl_certificate / ssl_certificate_key ...
+
+    root /var/www/tickets;           # the contents of frontend/dist
+    index index.html;
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+    add_header Strict-Transport-Security "max-age=15552000" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://api.firma.ba wss://api.firma.ba; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
+
+    # Files with a hash in the name never change. "expires" (unlike add_header) leaves the headers set above in place.
+    location /assets/ {
+        expires 1y;
+        try_files $uri =404;
+    }
+
+    location / {
+        try_files $uri /index.html;
+    }
+}

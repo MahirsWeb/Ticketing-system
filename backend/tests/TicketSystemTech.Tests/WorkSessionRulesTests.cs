@@ -13,6 +13,28 @@ public class WorkSessionRulesTests
 
     private static DateTime At(int hour, int minute = 0) => new(2026, 10, 19, hour, minute, 0, DateTimeKind.Utc);
 
+    // ---------------- one person, one thing at a time (NOVO-DOM-01) ----------------
+
+    [Fact]
+    public void Work_on_another_ticket_or_task_that_overlaps_is_refused() =>
+        Assert.Contains("overlaps your work on another", WorkSessionRules.ValidateAgainstOtherWork(At(9, 30), At(10, 30), new[] { Span(9, 10) }));
+
+    [Fact]
+    public void Work_on_another_ticket_or_task_that_is_still_running_blocks_everything_after_its_start() =>
+        Assert.Contains("still running on another", WorkSessionRules.ValidateAgainstOtherWork(At(11), null, new[] { Span(9, null) }));
+
+    [Fact]
+    public void Back_to_back_and_separate_work_is_fine()
+    {
+        Assert.Null(WorkSessionRules.ValidateAgainstOtherWork(At(10), At(11), new[] { Span(9, 10) }));   // starts the minute the other ends
+        Assert.Null(WorkSessionRules.ValidateAgainstOtherWork(At(7), At(9), new[] { Span(9, 10) }));    // ends the minute the other starts
+        Assert.Null(WorkSessionRules.ValidateAgainstOtherWork(At(9), At(10), Array.Empty<WorkSessionRules.Span>()));
+    }
+
+    [Fact]
+    public void A_session_that_ends_before_a_running_one_started_is_fine() =>
+        Assert.Null(WorkSessionRules.ValidateAgainstOtherWork(At(7), At(8), new[] { Span(9, null) }));
+
     [Fact]
     public void A_finished_session_with_no_neighbours_is_fine() =>
         Assert.Null(WorkSessionRules.Validate(At(9), At(10), Now, Array.Empty<WorkSessionRules.Span>()));

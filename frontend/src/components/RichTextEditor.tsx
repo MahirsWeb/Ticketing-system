@@ -139,7 +139,7 @@ export function RichTextEditor({ value, onChange, placeholder, onFilesSelected, 
     if (editor && !editor.isDestroyed && value === '' && editor.getHTML() !== '<p></p>') {
       editor.commands.clearContent();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the parent empties value (after a send); the editor instance is stable and must not trigger a clear
   }, [value]);
 
   if (!editor) return null;

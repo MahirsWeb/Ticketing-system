@@ -77,7 +77,7 @@ export default function TasksPage() {
 
   useEffect(() => {
     refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh is recreated every render; the list reloads only when the filters change
   }, [departmentFilter, mineOnly]);
 
   useEffect(() => {

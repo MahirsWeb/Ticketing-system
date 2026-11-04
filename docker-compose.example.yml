@@ -1,0 +1,57 @@
+# EXAMPLE, not tested in this repository's CI: a starting point for one installation (API + SQL Server) on one machine.
+# Copy to docker-compose.yml, copy docker-compose.env.example to .env next to it and fill the values in, then:
+#   docker compose up -d --build
+#
+# The frontend is NOT part of this file: it is static files (frontend/dist) that a web server serves; see frontend/deploy/ for
+# nginx and IIS examples (they also set the security headers, which the API cannot set for pages it does not serve).
+# For a real installation use your own SQL Server (Standard for more than a few hundred people) and drop the "db" service.
+
+services:
+  api:
+    build: ./backend
+    image: ticketsystemtech-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"                      # put a reverse proxy with TLS in front of this
+    environment:
+      ConnectionStrings__DefaultConnection: "Server=db;Database=TicketSystemTech;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True"
+      Jwt__Secret: ${JWT_SECRET}                    # 32+ random characters; changing it signs everybody out
+      Pii__HashKey: ${PII_HASH_KEY}                 # 32+ random characters, a DIFFERENT value; never change it once there is data
+      SeedAdmin__Email: ${ADMIN_EMAIL}
+      Frontend__BaseUrl: ${PUBLIC_URL}              # where people open the application, e.g. https://tickets.firma.ba
+      AllowedHosts: ${PUBLIC_HOST}                  # the host name only, e.g. tickets.firma.ba (the API is reached by this name)
+      Cors__AllowedOrigins__0: ${PUBLIC_URL}
+      DataProtection__CertificatePath: /certs/keyring.pfx
+      DataProtection__CertificatePassword: ${KEYRING_PASSWORD}
+      # Optional: e-mail (without these nothing is sent) and AI (without these there is no AI).
+      # Smtp__Host: smtp.firma.ba
+      # Smtp__FromAddress: tickets@firma.ba
+      # Ai__Provider: OpenAiCompatible
+      # Ai__Endpoint: http://ollama:11434/v1
+    volumes:
+      - tickets-data:/data                          # attachments and log files
+      - tickets-avatars:/app/wwwroot/avatars        # profile pictures
+      - ./certs:/certs:ro                           # keyring.pfx, made once with: dotnet TicketSystemTech.Api.dll --create-key-certificate
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${SA_PASSWORD}
+    volumes:
+      - sql-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  tickets-data:
+  tickets-avatars:
+  sql-data:

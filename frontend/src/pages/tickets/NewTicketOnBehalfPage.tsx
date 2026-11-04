@@ -71,7 +71,7 @@ export default function NewTicketOnBehalfPage() {
       if (isAdmin && depts[0]) setDepartmentId(depts[0].id);
       if (slas[0]) setSlaPlanId(slas[0].id);
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the lists are loaded once when the page opens and the first entries become the defaults
   }, []);
 
   // Refreshes the sub-branch list whenever the branch changes. If the currently assigned employee
@@ -92,7 +92,7 @@ export default function NewTicketOnBehalfPage() {
         setSubBranchId('');
       }
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sub-branches are loaded when the branch changes; picking an assignee must not reload them
   }, [departmentId]);
 
   // Picking an assignee is the primary flow: their branch (and sub-branch) is adopted automatically.

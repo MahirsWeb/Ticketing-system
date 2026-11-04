@@ -36,6 +36,26 @@ public class AiGuardrailsTests
     public void Ordinary_text_is_left_alone(string text) =>
         Assert.Equal(text, PiiRedactor.Redact(text));
 
+    // TS-11.2: a password written into a note must not travel to the provider.
+    [Theory]
+    [InlineData("kontakt Test, lozinka: Proba123. Hvala", "kontakt Test, lozinka: [secret] Hvala")]
+    [InlineData("Lozinka = Proba123", "Lozinka = [secret]")]
+    [InlineData("šifra:abc-9", "šifra:[secret]")]
+    [InlineData("password: hunter2 i token=abc.def", "password: [secret] i token=[secret]")]
+    [InlineData("API key: AIzaSyD-EXAMPLE", "API key: [secret]")]
+    [InlineData("Authorization: Bearer abcdefghijklmnop1234567890", "Authorization: [secret]")]
+    [InlineData("jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl istekao", "jwt [secret] istekao")]
+    public void Credentials_written_next_to_a_word_that_names_them_are_masked(string text, string expected) =>
+        Assert.Equal(expected, PiiRedactor.Redact(text));
+
+    [Theory]
+    [InlineData("Lozinka je istekla, korisnik traži reset.")]
+    [InlineData("The password has expired and a pin pad is broken.")]
+    [InlineData("Token za štampač nije dostupan, pass kroz proxy radi.")]
+    [InlineData("Tajna služba nije povezana s ovim tiketom.")]
+    public void Ordinary_sentences_that_only_mention_those_words_are_left_alone(string text) =>
+        Assert.Equal(text, PiiRedactor.Redact(text));
+
     [Fact]
     public void Digits_inside_an_email_address_are_not_read_as_a_phone_number() =>
         Assert.Equal("[email]", PiiRedactor.Redact("0612345678@sms.firma.ba"));

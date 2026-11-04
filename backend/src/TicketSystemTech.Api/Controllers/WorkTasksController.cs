@@ -11,6 +11,7 @@ using TicketSystemTech.Application.WorkTime;
 using TicketSystemTech.Domain.Entities;
 using TicketSystemTech.Domain.Enums;
 using TicketSystemTech.Infrastructure.Persistence;
+using TicketSystemTech.Infrastructure.Services;
 
 namespace TicketSystemTech.Api.Controllers;
 
@@ -196,7 +197,8 @@ public class WorkTasksController : ControllerBase
             DateTime? ended = request.EndedAtUtc is { } end ? BusinessTimeZone.AsUtc(end) : null;
 
             var others = task.Sessions.Where(s => s != latest).Select(s => new WorkSessionRules.Span(s.Id, s.StartedAtUtc, s.EndedAtUtc));
-            var problem = WorkSessionRules.Validate(started, ended, DateTime.UtcNow, others, LongestSession, subject: "task");
+            var problem = WorkSessionRules.Validate(started, ended, DateTime.UtcNow, others, LongestSession, subject: "task")
+                ?? WorkSessionRules.ValidateAgainstOtherWork(started, ended, await _db.OtherWorkOfAsync(task.AssignedToUserId, null, task.Id));
             if (problem is not null) return BadRequest(new { message = problem });
 
             if (latest is null)
@@ -231,7 +233,11 @@ public class WorkTasksController : ControllerBase
         if (await _db.WorkTaskSessions.AnyAsync(s => s.WorkTaskId == id && s.EndedAtUtc == null))
             return BadRequest(new { message = "Timer is already running." });
 
-        _db.WorkTaskSessions.Add(new WorkTaskSession { WorkTaskId = id, UserId = task.AssignedToUserId, StartedAtUtc = DateTime.UtcNow });
+        var now = DateTime.UtcNow;
+        var busy = WorkSessionRules.ValidateAgainstOtherWork(now, null, await _db.OtherWorkOfAsync(task.AssignedToUserId, null, id));
+        if (busy is not null) return BadRequest(new { message = busy });
+
+        _db.WorkTaskSessions.Add(new WorkTaskSession { WorkTaskId = id, UserId = task.AssignedToUserId, StartedAtUtc = now });
         task.Status = WorkTaskStatus.InProgress;
         await _db.SaveChangesAsync();
 

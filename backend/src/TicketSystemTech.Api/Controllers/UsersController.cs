@@ -256,6 +256,124 @@ public class UsersController : ControllerBase
         return Ok();
     }
 
+    /// <summary>
+    /// Admin-only: everything the system holds about one person, as a single JSON file (the right of access and portability). The
+    /// text of the messages they wrote is included, because it is theirs; what other people wrote about them is not.
+    /// </summary>
+    [HttpGet("{id:guid}/export")]
+    [Authorize(Roles = nameof(UserRole.Admin))]
+    public async Task<IActionResult> ExportUserData(Guid id)
+    {
+        var user = await _userManager.FindByIdAsync(id.ToString());
+        if (user is null) return NotFound();
+
+        var company = user.CompanyId is { } companyId ? await _db.Companies.AsNoTracking().Where(c => c.Id == companyId).Select(c => c.Name).FirstOrDefaultAsync() : null;
+        var branch = user.DepartmentId is { } branchId ? await _db.Departments.AsNoTracking().Where(d => d.Id == branchId).Select(d => d.Name).FirstOrDefaultAsync() : null;
+
+        var export = new
+        {
+            generatedAtUtc = DateTime.UtcNow,
+            profile = new
+            {
+                user.Id,
+                user.FirstName,
+                user.LastName,
+                user.Email,
+                user.PhoneNumber,
+                role = user.Role.ToString(),
+                company,
+                branch,
+                user.IsActive,
+                user.CreatedAtUtc,
+                user.LastLoginAtUtc
+            },
+            ticketsOpened = await _db.Tickets.AsNoTracking().Where(t => t.ClientId == id).OrderBy(t => t.CreatedAt)
+                .Select(t => new { t.TicketNumber, t.Title, status = t.Status.ToString(), t.CreatedAt, t.ClosedAtUtc }).ToListAsync(),
+            ticketsAssigned = await (from a in _db.TicketAssignees.AsNoTracking()
+                                     join t in _db.Tickets.AsNoTracking() on a.TicketId equals t.Id
+                                     where a.UserId == id
+                                     orderby t.CreatedAt
+                                     select new { t.TicketNumber, t.Title, status = t.Status.ToString(), t.CreatedAt }).ToListAsync(),
+            messagesWritten = await (from m in _db.TicketMessages.AsNoTracking()
+                                     join t in _db.Tickets.AsNoTracking() on m.TicketId equals t.Id
+                                     where m.AuthorId == id
+                                     orderby m.CreatedAt
+                                     select new { t.TicketNumber, type = m.Type.ToString(), m.CreatedAt, m.BodyHtml }).ToListAsync(),
+            workOnTickets = await (from w in _db.TicketWorkSessions.AsNoTracking()
+                                   join t in _db.Tickets.AsNoTracking() on w.TicketId equals t.Id
+                                   where w.UserId == id
+                                   orderby w.StartedAtUtc
+                                   select new { t.TicketNumber, w.StartedAtUtc, w.EndedAtUtc }).ToListAsync(),
+            workOnTasks = await (from w in _db.WorkTaskSessions.AsNoTracking()
+                                 join t in _db.WorkTasks.AsNoTracking() on w.WorkTaskId equals t.Id
+                                 where w.UserId == id
+                                 orderby w.StartedAtUtc
+                                 select new { task = t.Title, w.StartedAtUtc, w.EndedAtUtc }).ToListAsync(),
+            notifications = await _db.Notifications.AsNoTracking().Where(n => n.UserId == id).OrderBy(n => n.CreatedAt)
+                .Select(n => new { type = n.Type.ToString(), n.Message, n.IsRead, n.CreatedAt }).ToListAsync(),
+            actionsRecordedInTheAuditLog = await _db.AuditLogs.AsNoTracking().Where(a => a.UserId == id).OrderBy(a => a.CreatedAt)
+                .Select(a => new { a.Action, a.EntityType, a.CreatedAt, a.IpAddress }).ToListAsync()
+        };
+
+        _db.Audit(_currentUser.UserId, "UserDataExported", nameof(ApplicationUser), user.Id, $"Role of target: {user.Role}");
+        await _db.SaveChangesAsync();
+
+        Response.Headers.ContentDisposition = $"attachment; filename=\"user-{user.Id}.json\"";
+        return Ok(export);
+    }
+
+    /// <summary>
+    /// Admin-only: removes what identifies a person and keeps what the work needs. The name becomes "Obrisan korisnik", the e-mail
+    /// address a placeholder nobody can receive mail at, the telephone number and the picture are deleted, the password is
+    /// removed, the account is locked for good and every session ends. Tickets, messages and work time stay, so the history of
+    /// the work is still true; they now carry the placeholder name. It cannot be undone. The audit log keeps that it happened,
+    /// without any of the personal data. Not possible for yourself, so there is always an Admin left to do it.
+    /// What it does not reach: names that other people typed into the text of their own messages, and copies in backups.
+    /// </summary>
+    [HttpPost("{id:guid}/anonymize")]
+    [Authorize(Roles = nameof(UserRole.Admin))]
+    public async Task<IActionResult> AnonymizeUser(Guid id)
+    {
+        var user = await _userManager.FindByIdAsync(id.ToString());
+        if (user is null) return NotFound();
+        if (user.Id == _currentUser.UserId) return BadRequest(new { message = "You cannot anonymize your own account." });
+        if (user.UserName?.EndsWith(AnonymizedDomain, StringComparison.OrdinalIgnoreCase) == true) return Ok(); // already done
+
+        var avatar = user.ProfilePictureUrl;
+        var wasEmployee = user.Role == UserRole.Employee;
+        var placeholder = $"anonymized-{Guid.NewGuid():N}{AnonymizedDomain}";
+
+        _db.Audit(_currentUser.UserId, "UserAnonymized", nameof(ApplicationUser), user.Id, $"Role of target: {user.Role}");
+
+        user.FirstName = "Obrisan";
+        user.LastName = "korisnik";
+        user.PhoneNumber = null;
+        user.PhoneNumberConfirmed = false;
+        user.ProfilePictureUrl = null;
+        user.IsActive = false;
+        user.MustChangePassword = false;
+        user.TemporaryPasswordExpiresAtUtc = null;
+        user.PasswordHash = null;
+        user.LockoutEnabled = true;
+        user.LockoutEnd = DateTimeOffset.MaxValue;
+        // Each of these saves, so the changes above go in with the first one.
+        await _userManager.SetUserNameAsync(user, placeholder);
+        await _userManager.SetEmailAsync(user, placeholder);
+        await _userManager.UpdateSecurityStampAsync(user);
+        _cache.Remove(UserStatusCache.Key(user.Id));
+
+        await _db.Notifications.Where(n => n.UserId == id).ExecuteDeleteAsync();
+        await _db.SaveChangesAsync();
+        _fileStorage.DeletePublicImage(avatar);
+
+        if (wasEmployee)
+            await _assignments.ReleaseLiveTicketsAsync(user.Id, "account anonymized", _currentUser.UserId);
+
+        return Ok();
+    }
+
+    private const string AnonymizedDomain = "@anonymized.invalid";
+
     [HttpGet]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
     public async Task<ActionResult<List<UserListItem>>> List([FromQuery] UserRole? role, [FromQuery] Guid? companyId, [FromQuery] Guid? departmentId, [FromQuery] Guid? subBranchId)

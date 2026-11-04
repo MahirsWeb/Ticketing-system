@@ -72,7 +72,7 @@ export function DateRangePicker({
     setPendingEnd(to);
     setViewMonth(startOfMonth(from ?? new Date()));
     setView('days');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the pending choice is reset only when the popup opens; a changed from/to while it is open must not wipe what the person picked
   }, [open]);
 
   function closeAndCommitPending() {
@@ -87,7 +87,7 @@ export function DateRangePicker({
     }
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- closeAndCommitPending is recreated every render and reads the latest pending values; listing it would re-subscribe every render
   }, [open, pendingStart, pendingEnd]);
 
   function pickDay(day: Date) {

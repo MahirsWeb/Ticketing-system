@@ -27,6 +27,30 @@ public class HtmlSanitizerServiceTests
         Assert.DoesNotContain(forbidden, result, StringComparison.OrdinalIgnoreCase);
     }
 
+    // NOVO-SEC-07: a picture on somebody else's server tells its owner when and from where a ticket was opened.
+    [Theory]
+    [InlineData("<img src=\"https://tracker.example/pixel.gif\">")]
+    [InlineData("<img src=\"http://tracker.example/pixel.gif\">")]
+    [InlineData("<img src=\"//tracker.example/pixel.gif\">")]
+    [InlineData("<IMG SRC=\" HTTPS://tracker.example/pixel.gif\">")]
+    public void Removes_the_source_of_an_image_that_lives_on_another_server(string input)
+    {
+        var result = Sanitize("<p>hello</p>" + input);
+
+        Assert.DoesNotContain("tracker.example", result, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("hello", result);
+    }
+
+    [Fact]
+    public void Keeps_pictures_that_belong_to_the_message_and_links_to_other_servers()
+    {
+        var result = Sanitize("<img src=\"data:image/png;base64,iVBORw0KGgo=\"><img src=\"/uploads/abc.png\"><a href=\"https://example.com\">link</a>");
+
+        Assert.Contains("data:image/png", result);
+        Assert.Contains("/uploads/abc.png", result);
+        Assert.Contains("https://example.com", result);
+    }
+
     [Fact]
     public void Keeps_ordinary_formatting()
     {

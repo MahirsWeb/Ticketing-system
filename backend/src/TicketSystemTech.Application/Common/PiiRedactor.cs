@@ -3,19 +3,21 @@ using System.Text.RegularExpressions;
 namespace TicketSystemTech.Application.Common;
 
 /// <summary>
-/// Masks e-mail addresses and phone numbers in text that is about to leave the system for an outside AI provider.
+/// Masks e-mail addresses, phone numbers and credentials in text that is about to leave the system for an outside AI provider.
 /// Tickets are written by people, and people paste signatures and phone numbers into them; the model does not need those
 /// to find a similar problem, so they stay home.
 ///
-/// This is deliberately narrow. It recognises e-mail addresses and the usual shapes of phone numbers (international,
-/// and national numbers starting with 0). It does NOT recognise names, addresses or free-form identifiers, and it is not a
-/// substitute for a data-processing agreement with the provider. It errs on the side of leaving ordinary text alone:
+/// This is deliberately narrow. It recognises e-mail addresses, the usual shapes of phone numbers (international, and
+/// national numbers starting with 0) and credentials that are written down next to a word that says what they are
+/// ("lozinka: ...", "password=...", "token: ...", a bearer token, a JWT). It does NOT recognise names, addresses or free-form
+/// identifiers, and a secret that is pasted with no word next to it is not found. It is not a substitute for a data-processing agreement with the provider. It errs on the side of leaving ordinary text alone:
 /// dates, times, ticket numbers and IP addresses are not touched.
 /// </summary>
 public static partial class PiiRedactor
 {
     public const string EmailMask = "[email]";
     public const string PhoneMask = "[phone]";
+    public const string SecretMask = "[secret]";
 
     [GeneratedRegex(@"[\w.+\-]+@[\w\-]+(?:\.[\w\-]+)+", RegexOptions.CultureInvariant)]
     private static partial Regex Email();
@@ -27,12 +29,25 @@ public static partial class PiiRedactor
         RegexOptions.CultureInvariant)]
     private static partial Regex Phone();
 
+    // "lozinka: Proba123", "Password = abc", "token:abc" (the word stays, the value goes). Only ':' and '=' count as the link between the
+    // word and the value, so "the password has expired" is left alone.
+    [GeneratedRegex(
+        @"(?<![\w])(?<label>lozink\w*|šifr\w*|sifr\w*|passw\w*|passwd|pwd|pass|pin|tajn\w*|secret|token|api[ _\-]?key|client[ _\-]?secret)(?<link>\s*[:=]\s*)(?<value>[^\s<>""']+)",
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex LabelledSecret();
+
+    // "Bearer eyJ..." and a bare JWT (three base64url parts, the first starting with eyJ).
+    [GeneratedRegex(@"\bBearer\s+[A-Za-z0-9._~+/\-]{16,}=*|\beyJ[\w\-]+\.[\w\-]+\.[\w\-]+", RegexOptions.CultureInvariant)]
+    private static partial Regex BearerOrJwt();
+
     public static string Redact(string? text)
     {
         if (string.IsNullOrEmpty(text)) return text ?? string.Empty;
 
         // E-mail first, so that the digits in an address are not read as a phone number.
         var result = Email().Replace(text, EmailMask);
-        return Phone().Replace(result, PhoneMask);
+        result = Phone().Replace(result, PhoneMask);
+        result = BearerOrJwt().Replace(result, SecretMask);
+        return LabelledSecret().Replace(result, m => m.Groups["label"].Value + m.Groups["link"].Value + SecretMask);
     }
 }

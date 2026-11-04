@@ -46,7 +46,7 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
         if (slas[0]) setSlaPlanId(slas[0].id);
       }
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the lists are loaded once when the form opens; isAdmin and departmentId only matter at that moment
   }, []);
 
   useEffect(() => {

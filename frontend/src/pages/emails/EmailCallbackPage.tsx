@@ -50,7 +50,7 @@ export default function EmailCallbackPage() {
         setStatus('error');
         setMessage(err?.response?.data?.message ?? 'Could not connect your mailbox.');
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the authorisation code can be exchanged only once, so this must run on arrival and never again
   }, []);
 
   return (

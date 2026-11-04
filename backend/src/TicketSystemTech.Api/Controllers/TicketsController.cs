@@ -827,7 +827,8 @@ public class TicketsController : ControllerBase
 
         var started = AsUtc(request.StartedAtUtc!.Value);
         var ended = request.EndedAtUtc.HasValue ? AsUtc(request.EndedAtUtc.Value) : (DateTime?)null;
-        var error = WorkSessionRules.Validate(started, ended, DateTime.UtcNow, await OtherSessionsAsync(id, null));
+        var error = WorkSessionRules.Validate(started, ended, DateTime.UtcNow, await OtherSessionsAsync(id, null))
+            ?? WorkSessionRules.ValidateAgainstOtherWork(started, ended, await _db.OtherWorkOfAsync(ticket.AssignedToUserId.Value, id, null));
         if (error is not null) return BadRequest(new { message = error });
 
         var session = new TicketWorkSession { TicketId = id, UserId = ticket.AssignedToUserId.Value, StartedAtUtc = started, EndedAtUtc = ended };
@@ -852,7 +853,8 @@ public class TicketsController : ControllerBase
 
         var started = AsUtc(request.StartedAtUtc!.Value);
         var ended = request.EndedAtUtc.HasValue ? AsUtc(request.EndedAtUtc.Value) : (DateTime?)null;
-        var error = WorkSessionRules.Validate(started, ended, DateTime.UtcNow, await OtherSessionsAsync(id, sessionId));
+        var error = WorkSessionRules.Validate(started, ended, DateTime.UtcNow, await OtherSessionsAsync(id, sessionId))
+            ?? WorkSessionRules.ValidateAgainstOtherWork(started, ended, await _db.OtherWorkOfAsync(session.UserId, id, null));
         if (error is not null) return BadRequest(new { message = error });
 
         session.StartedAtUtc = started;

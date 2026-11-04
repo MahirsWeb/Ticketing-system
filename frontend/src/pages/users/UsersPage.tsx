@@ -91,7 +91,7 @@ export default function UsersPage() {
 
   useEffect(() => {
     if (needsBranch && departmentId) getSubBranches(departmentId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sub-branches are fetched when the branch or role changes; getSubBranches reads the current cache
   }, [departmentId, needsBranch]);
 
   async function handleCreate(e: React.FormEvent) {

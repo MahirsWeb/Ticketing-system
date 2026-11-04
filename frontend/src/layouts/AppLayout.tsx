@@ -1,5 +1,6 @@
 import { Suspense, useEffect, useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { useAuthStore } from '../store/authStore';
 import { NotificationBell } from '../components/NotificationBell';
 import { PhoneNumberBanner } from '../components/PhoneNumberBanner';
@@ -125,6 +126,7 @@ export default function AppLayout() {
   const user = useAuthStore((s) => s.user);
   const signOut = useAuthStore((s) => s.signOut);
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useLanguage();
   const navByRole = useNavByRole();
 
@@ -174,9 +176,11 @@ export default function AppLayout() {
 
       <main className="mx-auto max-w-5xl px-4 py-6">
         {/* Only the page area waits for a screen's code; the header and navigation stay put. */}
-        <Suspense fallback={<div role="status" className="py-16 text-center text-sm text-slate-500">{t('common_loading')}</div>}>
-          <Outlet />
-        </Suspense>
+        <ErrorBoundary inline resetKey={location.pathname}>
+          <Suspense fallback={<div role="status" className="py-16 text-center text-sm text-slate-500">{t('common_loading')}</div>}>
+            <Outlet />
+          </Suspense>
+        </ErrorBoundary>
       </main>
     </div>
   );

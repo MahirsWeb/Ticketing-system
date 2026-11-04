@@ -327,7 +327,7 @@ AI je podešavanje, ne ugrađena stavka. `Ai:Provider` bira davaoca:
 
 **Šta napušta sistem kad je AI uključen i davalac je vani (Gemini):** tekst pitanja i dijelovi tiketa i dokumentacije
 koji su potrebni za odgovor, uz ograničenja: pitanje najviše 2.000 znakova, jedan izvor 6.000, cijeli kontekst 60.000, a
-odgovor ima gornju granicu. **Email adrese i brojevi telefona se maskiraju** prije slanja (`Ai:RedactPersonalData`); imena
+odgovor ima gornju granicu. **Email adrese, brojevi telefona i lozinke ili tokeni napisani uz riječ koja ih imenuje** (`lozinka: …`, `password=…`, `token: …`, `Bearer …`) **se maskiraju** prije slanja (`Ai:RedactPersonalData`); imena
 i slobodan tekst iz tiketa ne. Ključ ide u zaglavlje, nikad u adresu. Besplatni nivo Google AI Studija može koristiti
 poslani tekst za poboljšanje modela; za pravu upotrebu treba plaćeni nivo ili Vertex AI uz ugovor o obradi podataka, ili
 lokalni model, od kojeg ništa ne izlazi. Odluku o tome donosi vlasnik instalacije.
@@ -369,6 +369,11 @@ Ostalo što vrijedi znati:
   prijave izgledaju kao da dolaze s proxyja i dijele jedno ograničenje. Ni proxy na istom računaru nije povjeren dok se ne navede.
 - **Log**: konzola i dnevni fajl (`Logging:File`). U Docker slici fajlovi idu u `/data/logs`. Svaki zahtjev ima oznaku
   (`X-Correlation-Id`) koja je u svakoj liniji loga i u svakom audit zapisu tog zahtjeva.
+- **Lični podaci na zahtjev:** Admin na stranici osobe (Users) ima dugmad **Export personal data** (JSON sa svim što sistem
+  drži o osobi: profil, tiketi, napisane poruke, radno vrijeme, obavijesti) i **Anonymize…** (ime postaje „Obrisan korisnik“,
+  email zamjenski, telefon i slika se brišu, nalog se trajno zaključava; tiketi, poruke i radno vrijeme ostaju). Anonimizacija se
+  ne može poništiti, ne važi za sebe, a ne dira imena koja su drugi ukucali u tekst svojih poruka niti kopije u backupima. API:
+  `GET /api/users/{id}/export` i `POST /api/users/{id}/anonymize`.
 - **Audit log** (`AuditLogs`) bilježi osjetljive radnje: ko, šta, nad čim, kada, s koje adrese i kojeg zahtjeva (kreiranje,
   izmjena i deaktivacija naloga, otvaranje, zatvaranje, ponovno otvaranje i prenos tiketa, promjena izvršilaca, izmjene
   poslovnica, resetovanje lozinke, spajanje mailboxa, radno vrijeme). Da bude samo za dodavanje, korisniku baze kojim radi
@@ -399,7 +404,7 @@ Ostalo što vrijedi znati:
   `vercel.json`, ali **primijenjeno**, ne samo prijavljivano):
 
   ```
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://api.firma.ba wss://api.firma.ba; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://api.firma.ba wss://api.firma.ba; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
@@ -407,9 +412,11 @@ Ostalo što vrijedi znati:
   ```
 
   Isprobajte ga najprije kao `Content-Security-Policy-Report-Only` dok konzola preglednika ne prestane prijavljivati
-  prekršaje. `img-src ... https:` dopušta slike s bilo koje adrese, uključujući one u tuđem sadržaju tiketa i email-ova
-  (takva slika javlja pošiljaocu da je tiket otvoren); suzite ga ako to ne želite. Zaglavlja za sam API se ne podešavaju.
-  U `Cors:AllowedOrigins` mora biti adresa na kojoj se frontend otvara.
+  prekršaje. Slike s tuđih adresa u sadržaju tiketa i email-ova se ionako uklanjaju (server ih čisti pri upisu, a preglednik
+  pri prikazu), pa `img-src` ne treba `https:`. Zaglavlja za sam API se ne podešavaju. U `Cors:AllowedOrigins` mora biti
+  adresa na kojoj se frontend otvara. Gotovi primjeri (nisu isprobani u CI-ju): `frontend/deploy/nginx.conf.example` i
+  `frontend/deploy/web.config.example` (IIS), oba s zamjenom na `index.html`, zaglavljima i keširanjem; i
+  `docker-compose.example.yml` (API + SQL Server, uz `docker-compose.env.example`).
 - **Zaštita grane `main`** na GitHubu (Settings → Branches → Add rule): zahtijevaj pull request i da prođu provjere
   *Backend (Windows)*, *Backend (Linux, with SQL Server)* i *Frontend*. To se ne može podesiti iz koda.
 
@@ -568,6 +575,7 @@ se ignoriše). Bez ikakvog SQL Servera ovi testovi se **preskaču** (prikažu se
 - [`docs/kriteriji-prihvatanja.md`](docs/kriteriji-prihvatanja.md): šta znači „prošlo“, šta je dokazano i čime, šta nije moguće
   dokazati na jednom računaru, šta je svjesno ostalo otvoreno, i kako ponoviti samo razliku nakon nove izmjene.
 - [`IZVJESTAJ_ISPRAVKI.md`](IZVJESTAJ_ISPRAVKI.md): izvještaj o ispravkama po stavkama analize i po krugovima testiranja.
+- [`docs/OTVORENE-STAVKE.md`](docs/OTVORENE-STAVKE.md): šta nije ispravljeno ili je ispravljeno samo djelimično, sa razlogom i prijedlogom šta dalje.
 
 ---
 
