@@ -156,11 +156,9 @@ public class TicketsController : ControllerBase
 
         var assignee = await _db.Users.FirstOrDefaultAsync(u => u.Id == request.AssignedToUserId
             && u.Role == UserRole.Employee && u.IsActive);
-        if (assignee is null) return BadRequest(new { message = "Assignee must be a support agent or consultant." });
-        if (assignee.DepartmentId != request.DepartmentId)
-            return BadRequest(new { message = "Assignee must belong to the selected branch." });
-        if (request.SubBranchId.HasValue && assignee.SubBranchId != request.SubBranchId)
-            return BadRequest(new { message = "Assignee must belong to the selected sub-branch." });
+        if (assignee is null) return BadRequest(new { message = TicketAssignment.NotAnAgent });
+        var assigneeError = TicketAssignment.Check(assignee.DepartmentId, assignee.SubBranchId, request.DepartmentId, request.SubBranchId);
+        if (assigneeError is not null) return BadRequest(new { message = assigneeError });
 
         var openedAtUtc = DateTime.UtcNow;
         var (dueDateUtc, slaError) = await ResolveDueDateAsync(request.SlaPlanId, request.DueDateUtc, openedAtUtc);
@@ -457,11 +455,9 @@ public class TicketsController : ControllerBase
 
         var assignee = await _db.Users.FirstOrDefaultAsync(u => u.Id == request.AssignedToUserId
             && u.Role == UserRole.Employee && u.IsActive);
-        if (assignee is null) return BadRequest(new { message = "Assignee must be a support agent or consultant." });
-        if (assignee.DepartmentId != request.DepartmentId)
-            return BadRequest(new { message = "Assignee must belong to the selected branch." });
-        if (request.SubBranchId.HasValue && assignee.SubBranchId != request.SubBranchId)
-            return BadRequest(new { message = "Assignee must belong to the selected sub-branch." });
+        if (assignee is null) return BadRequest(new { message = TicketAssignment.NotAnAgent });
+        var assigneeError = TicketAssignment.Check(assignee.DepartmentId, assignee.SubBranchId, request.DepartmentId, request.SubBranchId);
+        if (assigneeError is not null) return BadRequest(new { message = assigneeError });
 
         var openedAtUtc = DateTime.UtcNow;
         var (dueDateUtc, slaError) = await ResolveDueDateAsync(request.SlaPlanId, request.DueDateUtc, openedAtUtc);
@@ -721,10 +717,9 @@ public class TicketsController : ControllerBase
             return BadRequest(new { message = "The ticket must be open to change its assignees." });
 
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == request.UserId && u.Role == UserRole.Employee && u.IsActive);
-        if (user is null) return BadRequest(new { message = "Assignee must be a support agent or consultant." });
-        if (user.DepartmentId != ticket.DepartmentId) return BadRequest(new { message = "Assignee must belong to this ticket's branch." });
-        if (ticket.SubBranchId.HasValue && user.SubBranchId != ticket.SubBranchId)
-            return BadRequest(new { message = "Assignee must belong to this ticket's sub-branch." });
+        if (user is null) return BadRequest(new { message = TicketAssignment.NotAnAgent });
+        var assigneeError = TicketAssignment.Check(user.DepartmentId, user.SubBranchId, ticket.DepartmentId, ticket.SubBranchId);
+        if (assigneeError is not null) return BadRequest(new { message = assigneeError });
 
         var alreadyAssigned = await _db.TicketAssignees.AnyAsync(a => a.TicketId == id && a.UserId == request.UserId);
         if (alreadyAssigned) return BadRequest(new { message = "This person is already assigned to the ticket." });

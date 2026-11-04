@@ -17,9 +17,9 @@ public class WorkSessionTests : IAsyncLifetime
 
     public WorkSessionTests(ApiWorld world) => _world = world;
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         if (_created.Count == 0) return;
         // Sessions, assignees, messages and knowledge-base chunks go with the ticket (cascade).

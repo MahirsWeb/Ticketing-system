@@ -27,9 +27,9 @@ public class RetestDefectTests : IAsyncLifetime
 
     public RetestDefectTests(ApiWorld world) => _world = world;
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         if (!_world.Available) return;
         await _world.Db(async db =>
@@ -448,6 +448,83 @@ public class RetestDefectTests : IAsyncLifetime
         {
             await _world.Db(db => db.Users.Where(u => u.Id == one.Id || u.Id == two.Id).ExecuteDeleteAsync());
         }
+    }
+
+    // ======================= TS-15.3: one rule for who may be put on a ticket =======================
+
+    [SqlFact]
+    public async Task Every_way_of_putting_someone_on_a_ticket_refuses_an_agent_of_another_branch()
+    {
+        var (topic, plan) = await LookupsAsync();
+        var fresh = await NewTicketAsync(TicketStatus.New);
+        var running = await NewTicketAsync(TicketStatus.InProgress);
+
+        var open = await _world.Post(_world.Admin, $"/api/tickets/{fresh}/open", new
+        {
+            source = "TicketSystem",
+            helpTopicId = topic,
+            departmentId = _world.BranchA,
+            subBranchId = (Guid?)null,
+            slaPlanId = plan,
+            priority = "Medium",
+            dueDateUtc = (DateTime?)null,
+            assignedToUserId = _world.EmpB1.Id,
+            categoryId = (Guid?)null
+        });
+        var onBehalf = await _world.Post(_world.Admin, "/api/tickets/on-behalf", new
+        {
+            clientEmail = _world.CliZ.Email,
+            title = "Phone call",
+            description = "<p>x</p>",
+            source = "Phone",
+            helpTopicId = topic,
+            departmentId = _world.BranchA,
+            slaPlanId = plan,
+            priority = "Medium",
+            assignedToUserId = _world.EmpB1.Id
+        });
+        var added = await _world.Post(_world.EmpA1, $"/api/tickets/{running}/assignees", new { userId = _world.EmpB1.Id });
+
+        Assert.All(new[] { open, onBehalf, added }, r =>
+        {
+            Assert.Equal(400, r.Code);
+            Assert.Contains("branch", r.Text);
+        });
+        Assert.Equal(TicketStatus.New, await _world.Db(db => db.Tickets.Where(t => t.Id == fresh).Select(t => t.Status).SingleAsync()));
+        Assert.False(await _world.Db(db => db.Tickets.AnyAsync(t => t.ClientId == _world.CliZ.Id)));
+        Assert.False(await _world.Db(db => db.TicketAssignees.AnyAsync(a => a.TicketId == running && a.UserId == _world.EmpB1.Id)));
+    }
+
+    // ======================= TS-ONP-02.3: the same key ring and a different Pii:HashKey =======================
+
+    [SqlFact]
+    public async Task Starting_over_existing_accounts_with_a_different_Pii_HashKey_is_refused()
+    {
+        var protector = _world.Factory.Services.GetRequiredService<IPiiProtector>();
+        var userId = _world.EmpA1.Id;
+        var stored = await _world.Db(db => db.Database.SqlQuery<string>($"SELECT [NormalizedEmail] AS [Value] FROM [AspNetUsers] WHERE [Id] = {userId}").SingleAsync());
+        Task<int> Run() => _world.Db(async db =>
+        {
+            await PiiBackfillMigration.RunAsync(db, protector, NullLogger.Instance);
+            return 0;
+        });
+
+        await Run(); // the hashes in the database are what the key in use produces: nothing to say
+        try
+        {
+            // What a different Pii:HashKey looks like from here: the stored lookup hash is not the one the current key makes.
+            await _world.Db(db => db.Database.ExecuteSqlAsync($"UPDATE [AspNetUsers] SET [NormalizedEmail] = {new string('A', 64)} WHERE [Id] = {userId}"));
+
+            var refused = await Assert.ThrowsAsync<InvalidOperationException>(Run);
+
+            Assert.Contains("Pii:HashKey", refused.Message);
+            Assert.Contains("1 user(s)", refused.Message);
+        }
+        finally
+        {
+            await _world.Db(db => db.Database.ExecuteSqlAsync($"UPDATE [AspNetUsers] SET [NormalizedEmail] = {stored} WHERE [Id] = {userId}"));
+        }
+        await Run(); // and it was put back
     }
 
     private sealed class HostEnvironmentStub : IHostEnvironment

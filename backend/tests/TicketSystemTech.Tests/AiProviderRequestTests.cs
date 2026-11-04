@@ -104,7 +104,7 @@ public class AiProviderRequestTests
         var handler = new CapturingHandler("""{"embedding":{"values":[0.1,0.2,0.3]}}""");
         var service = new AiEmbeddingService(new HttpClient(handler), Config(), NullLogger<AiEmbeddingService>.Instance);
 
-        var vector = await service.EmbedAsync("javio se ana@firma.ba, 061 123 456, ne radi štampa");
+        var vector = await service.EmbedAsync("javio se ana@firma.ba, 061 123 456, ne radi štampa", TestContext.Current.CancellationToken);
 
         Assert.Equal(new[] { 0.1f, 0.2f, 0.3f }, vector);
         Assert.DoesNotContain("ana@firma.ba", handler.RequestBody);

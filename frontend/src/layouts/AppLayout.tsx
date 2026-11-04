@@ -1,5 +1,5 @@
-import { Suspense, useEffect, useState } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Suspense, useEffect, useId, useRef, useState } from 'react';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { useAuthStore } from '../store/authStore';
 import { NotificationBell } from '../components/NotificationBell';
@@ -43,10 +43,31 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   );
 
 function TicketsNavItem({ to, label }: { to: string; label: string }) {
-  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const { t } = useLanguage();
   const [counts, setCounts] = useState<TicketCountsDto | null>(null);
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+
+  // Escape closes the shortcuts from wherever the focus is, and so does moving the focus or clicking somewhere else.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const escape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    const away = (e: Event) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('keydown', escape);
+    document.addEventListener('focusin', away);
+    document.addEventListener('mousedown', away);
+    return () => {
+      document.removeEventListener('keydown', escape);
+      document.removeEventListener('focusin', away);
+      document.removeEventListener('mousedown', away);
+    };
+  }, [open]);
 
   function load() {
     ticketsApi.counts().then(setCounts).catch(() => {});
@@ -64,61 +85,65 @@ function TicketsNavItem({ to, label }: { to: string; label: string }) {
     { label: t('nav_new'), value: counts?.new, status: 'New' },
   ];
 
-  // Rendered as a plain sibling of the other nav items — same tag, same classes — so it lines up
-  // pixel-for-pixel with them. The dropdown panel nests inside this same <a>, so its rows are plain
-  // clickable divs (not <Link>/<a>) to avoid invalid nested anchors.
-  function openRow(r: (typeof rows)[number]) {
+  function hrefFor(r: (typeof rows)[number]) {
     const params = new URLSearchParams();
     if (r.status) params.set('status', r.status);
     if (r.mine) params.set('mine', '1');
     const qs = params.toString();
-    navigate(qs ? `/tickets?${qs}` : '/tickets');
+    return qs ? `/tickets?${qs}` : '/tickets';
   }
 
+  // A disclosure: the label is an ordinary link to the list, and a separate button opens the shortcuts under it. The panel is
+  // not in the tab order while it is closed (it is invisible, not just transparent), its items are real links, and Escape closes
+  // it. The mouse opens it by hovering (CSS), as before; the state is for the keyboard and for screen readers.
   return (
-    <NavLink
-      to={to}
-      end
-      className={(p) => clsx(navLinkClass(p), 'group relative flex items-center gap-1')}
-      onMouseEnter={load}
-      onFocus={load}
+    <div
+      role="group"
+      aria-label={label}
+      ref={rootRef}
+      className="group relative flex items-stretch"
     >
-      {label}
-      <span className="text-[10px] opacity-60">▾</span>
+      <NavLink to={to} end className={(p) => clsx(navLinkClass(p), 'pr-1')} onMouseEnter={load}>
+        {label}
+      </NavLink>
+      <button
+        type="button"
+        aria-label={`${label}: ${t('nav_ticketMenu')}`}
+        aria-haspopup="true"
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={() => {
+          load();
+          setOpen((o) => !o);
+        }}
+        className="shrink-0 border-b-2 border-transparent px-2 text-[10px] text-slate-300 transition hover:bg-white/10 hover:text-white"
+      >
+        <span aria-hidden>▾</span>
+      </button>
       <div
+        id={panelId}
         className={clsx(
-          'absolute left-0 top-full z-30 w-48 -translate-y-1 opacity-0 pointer-events-none',
-          'transition-all duration-200 ease-out group-hover:translate-y-0 group-hover:opacity-100 group-hover:pointer-events-auto',
-          'group-focus-within:translate-y-0 group-focus-within:opacity-100 group-focus-within:pointer-events-auto'
+          'absolute left-0 top-full z-30 w-48 transition-all duration-200 ease-out',
+          open
+            ? 'visible translate-y-0 opacity-100'
+            : 'invisible -translate-y-1 opacity-0 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100'
         )}
       >
         <div className="mt-1 overflow-hidden rounded-md border border-slate-200 bg-white py-1 text-left shadow-lg">
           {rows.map((r) => (
-            <div
+            <Link
               key={r.label}
-              role="link"
-              tabIndex={0}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                openRow(r);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  openRow(r);
-                }
-              }}
-              className="flex cursor-pointer items-center justify-between px-4 py-2 text-sm font-normal text-slate-700 hover:bg-slate-50"
+              to={hrefFor(r)}
+              onClick={() => setOpen(false)}
+              className="flex items-center justify-between px-4 py-2 text-sm font-normal text-slate-700 hover:bg-slate-50 focus-visible:bg-slate-50"
             >
               <span>{r.label}</span>
               <span className="font-semibold text-slate-500">{r.value ?? '—'}</span>
-            </div>
+            </Link>
           ))}
         </div>
       </div>
-    </NavLink>
+    </div>
   );
 }
 

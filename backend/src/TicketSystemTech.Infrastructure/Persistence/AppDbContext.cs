@@ -116,8 +116,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
             // "Active employees of branch X" is the fan-out behind every new-ticket and transfer notification.
             e.HasIndex(u => new { u.DepartmentId, u.Role, u.IsActive });
             e.HasIndex(u => u.SubBranchId);
-            e.HasOne<Department>().WithMany().HasForeignKey(u => u.DepartmentId).OnDelete(DeleteBehavior.SetNull);
-            e.HasOne<SubBranch>().WithMany().HasForeignKey(u => u.SubBranchId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne<Department>().WithMany().HasForeignKey(u => u.DepartmentId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<SubBranch>().WithMany().HasForeignKey(u => u.SubBranchId).OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<Company>(e =>
@@ -176,8 +176,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
             e.HasOne(t => t.Company).WithMany().HasForeignKey(t => t.CompanyId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(t => t.HelpTopic).WithMany().HasForeignKey(t => t.HelpTopicId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(t => t.Category).WithMany().HasForeignKey(t => t.CategoryId).OnDelete(DeleteBehavior.Restrict);
-            e.HasOne(t => t.Department).WithMany().HasForeignKey(t => t.DepartmentId).OnDelete(DeleteBehavior.SetNull);
-            e.HasOne(t => t.SubBranch).WithMany().HasForeignKey(t => t.SubBranchId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(t => t.Department).WithMany().HasForeignKey(t => t.DepartmentId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(t => t.SubBranch).WithMany().HasForeignKey(t => t.SubBranchId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(t => t.SlaPlan).WithMany().HasForeignKey(t => t.SlaPlanId).OnDelete(DeleteBehavior.Restrict);
 
             e.HasMany(t => t.Messages).WithOne(m => m.Ticket).HasForeignKey(m => m.TicketId).OnDelete(DeleteBehavior.Cascade);

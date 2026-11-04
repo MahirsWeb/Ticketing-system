@@ -81,7 +81,7 @@ public sealed class ApiWorld : IAsyncLifetime
     public const string PhoneX = "+38761000001";
     public const string PhoneY = "+38761000002";
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         if (!Available) return;
 
@@ -105,7 +105,7 @@ public sealed class ApiWorld : IAsyncLifetime
         await SeedAsync();
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         if (!Available) return;
 

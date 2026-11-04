@@ -11,9 +11,16 @@ services:
     build: ./backend
     image: ticketsystemtech-api
     restart: unless-stopped
+    logging:                             # the application also writes a rotated log file under /data; this keeps docker's own copy from growing forever
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     ports:
       - "8080:8080"                      # put a reverse proxy with TLS in front of this
     environment:
+      # TrustServerCertificate=True is acceptable here only because "db" is in the same private Docker network. For a database on
+      # another server use Encrypt=True;TrustServerCertificate=False and a real certificate on the SQL Server.
       ConnectionStrings__DefaultConnection: "Server=db;Database=TicketSystemTech;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True"
       Jwt__Secret: ${JWT_SECRET}                    # 32+ random characters; changing it signs everybody out
       Pii__HashKey: ${PII_HASH_KEY}                 # 32+ random characters, a DIFFERENT value; never change it once there is data

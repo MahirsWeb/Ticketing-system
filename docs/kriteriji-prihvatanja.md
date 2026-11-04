@@ -4,7 +4,7 @@ Ovaj dokument kaže **šta znači „prošlo“**, šta je u drugom krugu testir
 i čime, šta nije moguće dokazati na ovom računaru i šta je svjesno ostalo otvoreno. Cilj je da se pri sljedećem krugu ponovo
 provjerava **samo razlika**, a ne cijeli skup.
 
-Stanje opisano ovdje: serija izmjena nakon commita `1a9072c` („last test“), još neobjavljena u trenutku pisanja.
+Stanje opisano ovdje: poslije četvrtog kruga (2026-11-04), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 582 backend i 120 frontend testova.
 
 ## 1. Statusi
 
@@ -48,6 +48,13 @@ Svaki red je jedan scenario testera. „Test“ je klasa u `backend/tests/Ticket
 | TS-19.1 | Polja bez programske labele | `Field` povezuje labelu i polje; izbor veličine fonta i skriveni birač priloga u uređivaču imaju `aria-label`. Provjereno i u pregledniku (upit iz scenarija vraća prazan niz) | `ui.test.tsx`, `RichTextEditor.test.tsx` |
 | TS-46.5 | Kontrole bez pristupačnog naziva | Imenovana dugmad (zvonce, strelice kalendara), emoji sakriven od čitača, fokus i kontrast | `NotificationBell.test.tsx`, `DateRangePicker.test.tsx`, `ui.test.tsx` |
 | T-46 (naslov, `lang`) | Naslov stranice i `lang` | Naslov po ruti, `<html lang>` prati izabrani jezik | `DocumentMeta.test.tsx` |
+| TS-ONP-02.3 | Isti key ring, drugi `Pii:HashKey`: podaci se čitaju, niko se ne može prijaviti | Pri startu se uz svaki šifrovani email provjerava i sačuvani hash; ne poklapa li se, start se odbija uz jasnu poruku (isprobano i uživo na instanci) | `RetestDefectTests` (`Starting_over_existing_accounts_with_a_different_Pii_HashKey_is_refused`), mutacije 3 od 3 |
+| TS-05.4 | Prilog se može okačiti na poruku tiketa druge poslovnice | `messageId` mora pripadati tiketu (`400`) | `BranchIsolationTests` (`A_file_cannot_be_hung_on_a_message_of_another_ticket`), mutacije 2 od 2 |
+| TS-15.3 | Pravilo dodjele zaduženog ispisano tri puta | Jedno pravilo (`TicketAssignment`), tri poziva | `TicketAssignmentTests`, `RetestDefectTests`, mutacije 5 od 5 |
+| DOM-05 (nađeno ponovnim izvođenjem) | Poslovnica se mogla obrisati dok ima osoblje i tikete | Brisanje odbijeno; strani ključevi `Restrict` | `BranchDeletionTests` (3) |
+| TS-19.4 | Meni "Tiketi" i redovi zadataka samo mišem | Disclosure dugme s `aria-expanded` i pravim linkovima; zaglavlja su dugmad s `aria-sort` | `AppLayout.test.tsx`, mutacije 4 od 4 |
+| TS-59.2 | NuGet: ranjivi, zastarjeli i *Legacy* paketi | 0 ranjivih, 0 zastarjelih, 0 deprecated; `xunit.v3.mtp-off`; verzije u `Directory.Packages.props` | CI (`dotnet list package`) i postupak iz odjeljka 7 |
+| TS-ONP-04.3 | Express bez backupa i upozorenja na 10 GB | `backend/ops/backup-database.ps1` | postupak iz odjeljka 7 (isprobano na probnoj bazi) |
 
 Slanje email-ova (SMTP): `SmtpEmailTransportTests` (stvaran MailKit prema malom SMTP serveru na `localhost`), `EmailOutboxTests`,
 `EmailRetryPolicyTests`. Format koda: provjerava CI (`dotnet format --verify-no-changes`).
@@ -62,6 +69,7 @@ Slanje email-ova (SMTP): `SmtpEmailTransportTests` (stvaran MailKit prema malom 
 | Pravi reverse proxy | Nema ga | Ručno: `ForwardedHeaders:KnownProxies`; test pokazuje oba smjera |
 | SQL Server 2017 | Odlučeno da je minimum 2019 (ADR 0001, D4); CI koristi 2022 | — |
 | Čitač ekrana, kontrast mjeren alatom | Popravljeno i lintovano, nije slušano | Ručno |
+| Čišćenje starih backupa skriptom, pravi mailbox s HTML-om (TS-01.3) | Folder instance nije čitljiv računu kojim je skripta isprobana; nema Graph integracije | Ručno |
 | Opterećenje | Mjereni su pojedinačni zahtjevi | — |
 
 ## 4. Prihvaćeno uz obrazloženje (predlog; čeka potvrdu vlasnika)
@@ -75,20 +83,18 @@ Slanje email-ova (SMTP): `SmtpEmailTransportTests` (stvaran MailKit prema malom 
 | IMAP (D7) | Graph pokriva postojeće potrebe. | Kad kupac nema Microsoft 365. |
 | OpenTelemetry (D13) | Korelacioni ID, file log i health provjere pokrivaju potrebe jedne instance. | Kad postoji centralni monitoring. |
 | SQL Server 2017 (D4) | Izvan Microsoftove glavne podrške; ne može se testirati. | — |
-| xunit 2.9.3 (T-59) | `xunit.v3` na .NET 10 traži novi izvršitelj testova (Microsoft Testing Platform); probano i vraćeno. Paket nema ranjivosti. | Kad se odluči preći na MTP. |
-| GDPR izvoz i brisanje (T-10), licenca (T-51, T-52) | Traži pravnu stranu. | Prije prvog kupca. |
+| Period čuvanja i automatsko brisanje (ostatak T-10), licenca (T-51, T-52) | Traži pravnu stranu. Izvoz i anonimizacija na zahtjev postoje. | Prije prvog kupca. |
 | JWT u `localStorage` (T-18.1), React Query (T-17), generisani tipovi (T-41) | Veći preustroj, nije povezan s nalazima testera. | Prije v2. |
 
 ## 5. Otvoreno (nije rađeno)
 
 Navodim samo ono što sam provjerio u kodu:
 
-- **Preklapanje vremena iste osobe na različitim tiketima** (NOVO-DOM-01): provjera preklapanja gleda samo sesije istog tiketa.
-- **Slike s udaljenih adresa u sadržaju tiketa i email-ova** (NOVO-FE-06, NOVO-SEC-07): sanitizacija ih dopušta; takva slika
-  javlja pošiljaocu da je tiket otvoren. Može se suziti `img-src` u CSP-u (README) ili filtrirati u sanitizaciji.
 - **CSP za SPA** (NOVO-SEC-03): repozitorij ga više ne postavlja jer nema `vercel.json`; mora ga postaviti web server koji služi
   `frontend/dist` (README, „Frontend na serveru“).
-- **Akcije u CI-ju vezane za tag, ne za commit** (NOVO-OPS-16): Dependabot prati novosti, ali tagovi nisu zakucani.
+- **Poslovna logika u kontrolerima** (T-15, TS-15.1) i 53 direktna `DateTime.UtcNow` (TS-15.2): veliki, odvojen refaktor.
+- **Povezivanje odgovora u niti i atomska konverzija emaila** (T-31, TS-31.1, TS-31.2).
+- **Preostali scenariji označeni "nije ispravljeno" u `IZVJESTAJ_ISPRAVKI.md` 9.10:** TS-17.1 (React Query), TS-18.1 (JWT u `localStorage`), TS-20.2 i TS-20.3 (više instanci), TS-47.1 (notifikacije), TS-51.1 i TS-52.1 (licence), TS-OPS-04.2 i TS-12.1 (zaštita grane `main`).
 - **Ostalih ~60 statičkih nalaza testera (NOVO-\*)** nisu sistematski obrađeni u ovom krugu. Tester ih je označio kao „nije ponovo
   provjereno“; spisak je u `PREGLED-SVIH-NALAZA.md`. Pri sljedećem krugu svaki se rješava istim postupkom: test koji pada, pa
   popravka, pa mutacija.
@@ -110,7 +116,7 @@ cd backend && dotnet list package --vulnerable --include-transitive
 cd frontend && npm run lint && npx tsc -b && npm test && npm run build && npm audit --audit-level=high
 ```
 
-Ručno, na čistoj bazi i pokrenutoj aplikaciji:
+Ručno, na čistoj bazi i pokrenutoj aplikaciji (backup: `powershell -File backend/ops/backup-database.ps1 -ConnectionString "..."`, izlaz 0, a pri `-LimitGb` manjem od veličine baze izlaz 2):
 
 | Scenario | Postupak | Očekivano |
 |---|---|---|
@@ -125,3 +131,7 @@ Ručno, na čistoj bazi i pokrenutoj aplikaciji:
 ## 8. Ponovljeno izvođenje scenarija (2026-11-04)
 
 Tester-ovi scenariji su izvedeni na izoliranoj kopiji (vlastita baza, objavljen API, kopije njegovih skripti); rezultati po scenariju su u `IZVJESTAJ_ISPRAVKI.md`, odjeljak 9.8. Pri tome je u pravom pregledniku nađena greška koju testovi nisu hvatali: stranica "Submit a Ticket" se rušila u razvojnom načinu (`editor.getHTML()` nad uništenim uređivačem). Popravljeno je i provjereno u pregledniku; automatski regresijski test za rušenje ne postoji jer ga jsdom ne reproducira. Pri sljedećem krugu ovaj korak (stranica `/tickets/new` u `npm run dev`) treba ponoviti ručno.
+
+## 9. Četvrti krug (2026-11-04)
+
+Svih 151 scenarija iz paketa testera ponovo je obrađeno; pregled po scenariju je u `IZVJESTAJ_ISPRAVKI.md`, odjeljak 9.10. Uživo ili u pregledniku izvedeni su, između ostalih, TS-14.4 (dvije instance nad praznom bazom), TS-ONP-02.3 (drugi `Pii:HashKey`), TS-17.2, 17.3, 17.4 (zastarjeli odgovori), TS-09.2 (vremena prema zoni), TS-01.1 (XSS proba) i GDPR dugmad. Pri tome su nađene i ispravljene dvije greške u aplikaciji (brisanje poslovnice sa osobljem; `Pii:HashKey` koji se tiho promijeni) i jedna rupa u testovima (prilog na poruci tuđeg tiketa), a testiranje skripte za backup je našlo dvije greške u samoj skripti. Scenariji koji nisu izvedeni uživo vezani su za kod i postojeće testove, što je slabiji dokaz i označeno je uz svaki.

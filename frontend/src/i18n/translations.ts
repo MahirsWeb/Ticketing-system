@@ -17,6 +17,7 @@ export const translations = {
     nav_myTicketsCount: 'My tickets',
     nav_opened: 'Opened',
     nav_closed: 'Closed',
+    nav_ticketMenu: 'shortcuts',
     nav_new: 'New',
 
     login_welcomeBack: 'Welcome',
@@ -85,6 +86,7 @@ export const translations = {
     nav_myTicketsCount: 'Moji tiketi',
     nav_opened: 'Otvoreni',
     nav_closed: 'Zatvoreni',
+    nav_ticketMenu: 'prečice',
     nav_new: 'Novi',
 
     login_welcomeBack: 'Dobrodošli',

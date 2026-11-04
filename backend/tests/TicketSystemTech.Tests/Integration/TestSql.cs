@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.Data.SqlClient;
 
@@ -62,7 +63,8 @@ internal static class TestSql
 /// <summary>A test that needs a real SQL Server. Without one (no <c>TST_SQL</c>, no developer settings) it is reported as skipped.</summary>
 public sealed class SqlFactAttribute : FactAttribute
 {
-    public SqlFactAttribute()
+    public SqlFactAttribute([CallerFilePath] string? sourceFilePath = null, [CallerLineNumber] int sourceLineNumber = -1)
+        : base(sourceFilePath, sourceLineNumber)
     {
         if (TestSql.ServerConnectionString is null)
             Skip = "No SQL Server for integration tests. Set the TST_SQL environment variable to a connection string (see README).";
@@ -72,7 +74,8 @@ public sealed class SqlFactAttribute : FactAttribute
 /// <inheritdoc cref="SqlFactAttribute"/>
 public sealed class SqlTheoryAttribute : TheoryAttribute
 {
-    public SqlTheoryAttribute()
+    public SqlTheoryAttribute([CallerFilePath] string? sourceFilePath = null, [CallerLineNumber] int sourceLineNumber = -1)
+        : base(sourceFilePath, sourceLineNumber)
     {
         if (TestSql.ServerConnectionString is null)
             Skip = "No SQL Server for integration tests. Set the TST_SQL environment variable to a connection string (see README).";

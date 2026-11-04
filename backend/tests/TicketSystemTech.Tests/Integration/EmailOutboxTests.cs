@@ -25,14 +25,14 @@ public class EmailOutboxTests : IAsyncLifetime
 
     public EmailOutboxTests(ApiWorld world) => _world = world;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         if (!_world.Available) return;
         Transport.Reset();
         await ClearOutboxAsync();
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         if (!_world.Available) return;
         Transport.Reset();

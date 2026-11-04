@@ -16,6 +16,9 @@ namespace TicketSystemTech.Infrastructure.Persistence;
 /// It also doubles as a key-ring canary: every row that IS ciphertext must still decrypt. If it does not (the
 /// DataProtectionKeys table was lost, restored from another environment, or the key ring changed), startup is
 /// aborted with a clear message instead of letting the app run and overwrite undecryptable values with garbage.
+/// The same goes for Pii:HashKey: the e-mail lookup hash stored next to each ciphertext must be what the current key produces.
+/// With a different key the data still reads fine but nobody can sign in, and every new account would be created next to the
+/// one that is already there, so that too stops the start.
 /// </summary>
 public static class PiiBackfillMigration
 {
@@ -27,7 +30,7 @@ public static class PiiBackfillMigration
 
         try
         {
-            var undecryptable = await BackfillUsersAsync(connection, piiProtector, logger, ct);
+            var (undecryptable, hashMismatch) = await BackfillUsersAsync(connection, piiProtector, logger, ct);
             undecryptable += await BackfillCompanyAddressesAsync(connection, piiProtector, logger, ct);
 
             if (undecryptable > 0)
@@ -36,6 +39,13 @@ public static class PiiBackfillMigration
                     "The DataProtectionKeys table is missing, was replaced, or does not belong to this database. " +
                     "Restore the matching DataProtectionKeys rows before starting the application; " +
                     "continuing would corrupt personal data.");
+
+            if (hashMismatch > 0)
+                throw new InvalidOperationException(
+                    $"{hashMismatch} user(s) have an e-mail lookup hash that the current Pii:HashKey does not produce. " +
+                    "Pii:HashKey was changed, or does not belong to this database: those people could not sign in, and signing up " +
+                    "would create duplicates of accounts that already exist. " +
+                    "Set Pii__HashKey back to the value this database was created with before starting the application.");
         }
         finally
         {
@@ -43,14 +53,15 @@ public static class PiiBackfillMigration
         }
     }
 
-    private static async Task<int> BackfillUsersAsync(SqlConnection connection, IPiiProtector piiProtector, ILogger logger, CancellationToken ct)
+    private static async Task<(int Undecryptable, int HashMismatch)> BackfillUsersAsync(SqlConnection connection, IPiiProtector piiProtector, ILogger logger, CancellationToken ct)
     {
         var toMigrate = new List<(Guid Id, string? Email, string? UserName, string? PhoneNumber)>();
         var undecryptable = 0;
+        var hashMismatch = 0;
 
         await using (var cmd = connection.CreateCommand())
         {
-            cmd.CommandText = "SELECT [Id], [Email], [UserName], [PhoneNumber] FROM [AspNetUsers]";
+            cmd.CommandText = "SELECT [Id], [Email], [UserName], [PhoneNumber], [NormalizedEmail] FROM [AspNetUsers]";
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
             {
@@ -58,6 +69,7 @@ public static class PiiBackfillMigration
                 var email = reader.IsDBNull(1) ? null : reader.GetString(1);
                 var userName = reader.IsDBNull(2) ? null : reader.GetString(2);
                 var phone = reader.IsDBNull(3) ? null : reader.GetString(3);
+                var storedHash = reader.IsDBNull(4) ? null : reader.GetString(4);
 
                 if (email is null) continue;
 
@@ -70,13 +82,18 @@ public static class PiiBackfillMigration
                     undecryptable++;
                     logger.LogError("PII backfill: AspNetUsers row {UserId} holds ciphertext that the current key ring cannot decrypt.", id);
                 }
+                else if (storedHash is not null && !string.Equals(piiProtector.Hash(piiProtector.Decrypt(email)), storedHash, StringComparison.Ordinal))
+                {
+                    hashMismatch++;
+                    logger.LogError("PII backfill: AspNetUsers row {UserId} has an e-mail lookup hash that the current Pii:HashKey does not produce.", id);
+                }
             }
         }
 
         if (toMigrate.Count == 0)
         {
             logger.LogInformation("PII backfill: AspNetUsers already fully encrypted, nothing to do.");
-            return undecryptable;
+            return (undecryptable, hashMismatch);
         }
 
         logger.LogWarning("PII backfill: encrypting Email/UserName/PhoneNumber for {Count} AspNetUsers row(s)...", toMigrate.Count);
@@ -106,7 +123,7 @@ public static class PiiBackfillMigration
             }
         }
         logger.LogWarning("PII backfill: AspNetUsers encryption complete ({Count} row(s), {Failures} failed).", toMigrate.Count - failures, failures);
-        return undecryptable;
+        return (undecryptable, hashMismatch);
     }
 
     private static bool CanDecrypt(IPiiProtector piiProtector, string value)

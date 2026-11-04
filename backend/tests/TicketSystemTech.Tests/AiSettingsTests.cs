@@ -132,8 +132,8 @@ public class AiSettingsTests
         var handler = new RecordingHandler(r => r.RequestUri!.AbsolutePath.EndsWith("/embeddings") ? Json(OpenAiVector) : Json(OpenAiAnswer));
         var config = Config(Local);
 
-        var vector = await Embedding(handler, config).EmbedAsync("printer ne radi");
-        var answer = await Chat(handler, config).AskAsync("be brief", "context", "question");
+        var vector = await Embedding(handler, config).EmbedAsync("printer ne radi", TestContext.Current.CancellationToken);
+        var answer = await Chat(handler, config).AskAsync("be brief", "context", "question", TestContext.Current.CancellationToken);
 
         Assert.Equal(new[] { 0.5f, 0.25f, 0.125f }, vector);
         Assert.Equal("from the local model", answer);
@@ -151,9 +151,9 @@ public class AiSettingsTests
     public async Task A_key_for_a_local_model_is_sent_as_a_bearer_token_and_no_key_means_no_header()
     {
         var withKey = new RecordingHandler(_ => Json(OpenAiVector));
-        await Embedding(withKey, Config(Local.Append(("Ai:ApiKey", "secret")).ToArray())).EmbedAsync("x y z");
+        await Embedding(withKey, Config(Local.Append(("Ai:ApiKey", "secret")).ToArray())).EmbedAsync("x y z", TestContext.Current.CancellationToken);
         var withoutKey = new RecordingHandler(_ => Json(OpenAiVector));
-        await Embedding(withoutKey, Config(Local)).EmbedAsync("x y z");
+        await Embedding(withoutKey, Config(Local)).EmbedAsync("x y z", TestContext.Current.CancellationToken);
 
         Assert.Equal("Bearer secret", withKey.Requests.Single().Authorization);
         Assert.Null(withoutKey.Requests.Single().Authorization);
@@ -166,8 +166,8 @@ public class AiSettingsTests
         var config = Config(("Ai:Endpoint", "https://gateway.example/v1beta/"), ("Ai:ApiKey", "g-key"),
             ("Ai:EmbeddingModel", "my-embedder"), ("Ai:ChatModel", "my-chat"), ("Ai:EmbeddingDimensions", "768"));
 
-        await Embedding(handler, config).EmbedAsync("hello there");
-        await Chat(handler, config).AskAsync("s", "c", "q");
+        await Embedding(handler, config).EmbedAsync("hello there", TestContext.Current.CancellationToken);
+        await Chat(handler, config).AskAsync("s", "c", "q", TestContext.Current.CancellationToken);
 
         Assert.Equal("https://gateway.example/v1beta/models/my-embedder:embedContent", handler.Requests[0].Url);
         Assert.Equal("https://gateway.example/v1beta/models/my-chat:generateContent", handler.Requests[1].Url);
@@ -184,8 +184,8 @@ public class AiSettingsTests
         var embedding = Embedding(handler, config);
         var chat = Chat(handler, config);
 
-        Assert.Null(await embedding.EmbedAsync("anything"));
-        Assert.Null(await chat.AskAsync("s", "c", "q"));
+        Assert.Null(await embedding.EmbedAsync("anything", TestContext.Current.CancellationToken));
+        Assert.Null(await chat.AskAsync("s", "c", "q", TestContext.Current.CancellationToken));
         Assert.False(embedding.IsAvailable);
         Assert.False(chat.IsAvailable);
         Assert.Empty(handler.Requests);
@@ -197,7 +197,7 @@ public class AiSettingsTests
         var handler = new RecordingHandler(_ => Json(OpenAiVector));
         var config = Config(("Ai:Provider", "OpenAiCompatible"), ("Ai:Endpoint", "http://127.0.0.1:11434/v1"));
 
-        Assert.Null(await Embedding(handler, config).EmbedAsync("anything"));
+        Assert.Null(await Embedding(handler, config).EmbedAsync("anything", TestContext.Current.CancellationToken));
         Assert.Empty(handler.Requests);
     }
 
@@ -209,9 +209,9 @@ public class AiSettingsTests
         var config = new ConfigurationBuilder().Add(new Microsoft.Extensions.Configuration.Memory.MemoryConfigurationSource { InitialData = source }).Build();
         var service = Embedding(handler, config);
 
-        Assert.NotNull(await service.EmbedAsync("first"));
+        Assert.NotNull(await service.EmbedAsync("first", TestContext.Current.CancellationToken));
         config["Ai:Enabled"] = "false";
-        Assert.Null(await service.EmbedAsync("second"));
+        Assert.Null(await service.EmbedAsync("second", TestContext.Current.CancellationToken));
 
         Assert.Single(handler.Requests);
     }
@@ -225,10 +225,10 @@ public class AiSettingsTests
         var service = Embedding(handler, Config(("GoogleAi:ApiKey", "k"), ("Ai:BackgroundMinIntervalSeconds", "1.5")));
 
         // Warm the spacing up with one background call, then ask interactively right after.
-        await service.EmbedAsync("indexing one", EmbeddingPriority.Background);
+        await service.EmbedAsync("indexing one", EmbeddingPriority.Background, TestContext.Current.CancellationToken);
         var started = DateTime.UtcNow;
-        await service.EmbedAsync("a search", EmbeddingPriority.Interactive);
-        await service.EmbedAsync("another search", EmbeddingPriority.Interactive);
+        await service.EmbedAsync("a search", EmbeddingPriority.Interactive, TestContext.Current.CancellationToken);
+        await service.EmbedAsync("another search", EmbeddingPriority.Interactive, TestContext.Current.CancellationToken);
         var interactive = DateTime.UtcNow - started;
 
         Assert.True(interactive < TimeSpan.FromSeconds(1), $"interactive calls took {interactive.TotalSeconds:0.0}s: they must not wait for the background spacing");
@@ -241,10 +241,10 @@ public class AiSettingsTests
         var handler = new RecordingHandler(_ => Json(GeminiVector));
         var service = Embedding(handler, Config(("GoogleAi:ApiKey", "k"), ("Ai:BackgroundMinIntervalSeconds", "0.6")));
 
-        await service.EmbedAsync("one", EmbeddingPriority.Background);
+        await service.EmbedAsync("one", EmbeddingPriority.Background, TestContext.Current.CancellationToken);
         var started = DateTime.UtcNow;
-        await service.EmbedAsync("two", EmbeddingPriority.Background);
-        await service.EmbedAsync("three", EmbeddingPriority.Background);
+        await service.EmbedAsync("two", EmbeddingPriority.Background, TestContext.Current.CancellationToken);
+        await service.EmbedAsync("three", EmbeddingPriority.Background, TestContext.Current.CancellationToken);
 
         Assert.True(DateTime.UtcNow - started >= TimeSpan.FromSeconds(1), "two more calls need two gaps of 0.6 s");
     }
@@ -261,7 +261,7 @@ public class AiSettingsTests
         var service = Embedding(handler, Config(("GoogleAi:ApiKey", "k")));
         var started = DateTime.UtcNow;
 
-        var vector = await service.EmbedAsync("a search", EmbeddingPriority.Interactive);
+        var vector = await service.EmbedAsync("a search", EmbeddingPriority.Interactive, TestContext.Current.CancellationToken);
 
         Assert.Null(vector);
         Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(20), "the wait is capped");

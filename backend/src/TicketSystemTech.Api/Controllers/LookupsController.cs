@@ -152,9 +152,13 @@ public class LookupsController : ControllerBase
         if (await _db.EmailConnections.AnyAsync(c => c.DepartmentId == id))
             return BadRequest(new { message = "This branch still has a connected mailbox. Disconnect it first." });
 
-        // Tickets.DepartmentId is ON DELETE SET NULL, and a ticket without a branch is treated as "unrouted" and is
-        // visible to every employee. Deleting a branch that still owns tickets would therefore silently expose
-        // all of them across branches, so it is refused: transfer the tickets elsewhere first.
+        // A ticket without a branch is treated as "unrouted" and is visible to every employee, and a staff member without a
+        // branch is lost to every list. Both used to be what the database did when the branch was deleted (ON DELETE SET NULL);
+        // now it refuses (RESTRICT), and these checks say why in words.
+        var staffCount = await _db.Users.CountAsync(u => u.DepartmentId == id);
+        if (staffCount > 0)
+            return BadRequest(new { message = $"This branch still has {staffCount} staff member(s). Move or remove them first." });
+
         var ticketCount = await _db.Tickets.CountAsync(t => t.DepartmentId == id);
         if (ticketCount > 0)
             return BadRequest(new { message = $"This branch still owns {ticketCount} ticket(s). Transfer them to another branch first." });

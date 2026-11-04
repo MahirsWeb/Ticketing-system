@@ -392,7 +392,8 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
         var expired = status == System.Net.HttpStatusCode.Unauthorized
             || (body is not null && body.Contains("invalid_grant", StringComparison.OrdinalIgnoreCase));
         return expired
-            ? new ExternalServiceException("Microsoft 365", "The mailbox connection has expired or was revoked. Disconnect the mailbox and connect it again.", unavailable: false)
+            ? new ExternalServiceException("Microsoft 365", "The mailbox connection has expired or was revoked. Disconnect the mailbox and connect it again.", unavailable: false,
+                code: ExternalServiceException.MailboxReconnectRequired)
             : new ExternalServiceException("Microsoft 365", "Microsoft 365 did not accept the request. If this keeps happening, reconnect the mailbox.", unavailable: false);
     }
 }

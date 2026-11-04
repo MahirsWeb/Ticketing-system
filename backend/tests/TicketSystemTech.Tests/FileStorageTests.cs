@@ -116,7 +116,7 @@ public class FileStorageTests : IDisposable
     {
         var storage = NewStorage();
 
-        var reference = await storage.SaveAsync("report.pdf", "application/pdf", new MemoryStream(new byte[] { 1, 2, 3 }));
+        var reference = await storage.SaveAsync("report.pdf", "application/pdf", new MemoryStream(new byte[] { 1, 2, 3 }), TestContext.Current.CancellationToken);
         var key = reference["/uploads/".Length..];
 
         Assert.StartsWith("/uploads/", reference);
@@ -130,7 +130,7 @@ public class FileStorageTests : IDisposable
     [Fact]
     public async Task A_hostile_file_name_cannot_choose_the_stored_name()
     {
-        var reference = await NewStorage().SaveAsync("..\\..\\evil.h tml", "text/html", new MemoryStream(new byte[] { 1 }));
+        var reference = await NewStorage().SaveAsync("..\\..\\evil.h tml", "text/html", new MemoryStream(new byte[] { 1 }), TestContext.Current.CancellationToken);
 
         Assert.Matches(@"^/uploads/[0-9a-f-]{36}(\.[a-z0-9]+)?$", reference);
     }
@@ -139,7 +139,7 @@ public class FileStorageTests : IDisposable
     public async Task Deleting_a_stored_file_removes_it_and_a_second_delete_is_harmless()
     {
         var storage = NewStorage();
-        var reference = await storage.SaveAsync("manual.pdf", "application/pdf", new MemoryStream(new byte[] { 1, 2, 3 }));
+        var reference = await storage.SaveAsync("manual.pdf", "application/pdf", new MemoryStream(new byte[] { 1, 2, 3 }), TestContext.Current.CancellationToken);
         var key = reference["/uploads/".Length..];
 
         Assert.True(storage.Delete(reference));
@@ -161,7 +161,7 @@ public class FileStorageTests : IDisposable
     public async Task A_replaced_profile_picture_is_deleted_but_only_from_the_avatars_folder()
     {
         var storage = NewStorage();
-        var url = await storage.SavePublicImageAsync("me.png", "image/png", new MemoryStream(new byte[] { 9 }));
+        var url = await storage.SavePublicImageAsync("me.png", "image/png", new MemoryStream(new byte[] { 9 }), TestContext.Current.CancellationToken);
         var key = url[(url.LastIndexOf('/') + 1)..];
         var avatarPath = Path.Combine(_root, "wwwroot", "avatars", key);
         Assert.True(File.Exists(avatarPath));

@@ -270,16 +270,20 @@ export default function TasksPage() {
           <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
             <tr>
               {SORTABLE_COLUMNS_BEFORE_STATUS.map((col) => (
-                <th key={col.key} className="cursor-pointer select-none px-4 py-2 hover:text-slate-700" onClick={() => handleSort(col.key)}>
-                  {col.label}
-                  {sortBy === col.key && <span className="ml-1">{sortDir === 'asc' ? '▲' : '▼'}</span>}
+                <th key={col.key} scope="col" className="px-4 py-2" aria-sort={sortBy === col.key ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                  <button type="button" className="cursor-pointer select-none uppercase hover:text-slate-700" onClick={() => handleSort(col.key)}>
+                    {col.label}
+                    {sortBy === col.key && <span aria-hidden className="ml-1">{sortDir === 'asc' ? '▲' : '▼'}</span>}
+                  </button>
                 </th>
               ))}
               <th className="px-4 py-2">Status</th>
               {SORTABLE_COLUMNS_AFTER_STATUS.filter((col) => !col.adminOnly || isAdmin).map((col) => (
-                <th key={col.key} className="cursor-pointer select-none px-4 py-2 hover:text-slate-700" onClick={() => handleSort(col.key)}>
-                  {col.label}
-                  {sortBy === col.key && <span className="ml-1">{sortDir === 'asc' ? '▲' : '▼'}</span>}
+                <th key={col.key} scope="col" className="px-4 py-2" aria-sort={sortBy === col.key ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                  <button type="button" className="cursor-pointer select-none uppercase hover:text-slate-700" onClick={() => handleSort(col.key)}>
+                    {col.label}
+                    {sortBy === col.key && <span aria-hidden className="ml-1">{sortDir === 'asc' ? '▲' : '▼'}</span>}
+                  </button>
                 </th>
               ))}
             </tr>
@@ -291,7 +295,20 @@ export default function TasksPage() {
                   className={clsx('cursor-pointer border-t border-slate-100 transition-colors hover:bg-slate-200', i % 2 === 1 && 'bg-slate-100')}
                   onClick={() => toggleExpand(t.id)}
                 >
-                  <td className="px-4 py-2 font-medium text-slate-800">{t.title}</td>
+                  <td className="px-4 py-2 font-medium text-slate-800">
+                    {/* The row can be clicked with a mouse; this button is the same thing for the keyboard and for a screen reader. */}
+                    <button
+                      type="button"
+                      aria-expanded={expandedId === t.id}
+                      className="text-left font-medium hover:underline"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleExpand(t.id);
+                      }}
+                    >
+                      {t.title}
+                    </button>
+                  </td>
                   <td className="px-4 py-2">
                     <TaskStatusBadge status={t.status} />
                   </td>

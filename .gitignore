@@ -7,6 +7,7 @@
 appsettings.Development.json
 appsettings.Local.json
 *.db
+TestResults/
 
 # ---- Node / Frontend ----
 node_modules/

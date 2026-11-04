@@ -26,6 +26,16 @@ public class ApiExceptionMiddlewareTests
         return (context, body);
     }
 
+    // TS-31.3: a revoked or expired mailbox token is a state of the branch, with a code the screen can act on.
+    [Fact]
+    public async Task A_mailbox_that_must_be_connected_again_is_a_409_with_its_own_code()
+    {
+        var (context, body) = await RunAsync(new ExternalServiceException("Microsoft 365", "expired", unavailable: false, code: ExternalServiceException.MailboxReconnectRequired));
+
+        Assert.Equal(StatusCodes.Status409Conflict, context.Response.StatusCode);
+        Assert.Equal("MAILBOX_RECONNECT_REQUIRED", body.GetProperty("code").GetString());
+    }
+
     [Fact]
     public async Task A_lost_update_is_a_409_the_screen_can_explain()
     {

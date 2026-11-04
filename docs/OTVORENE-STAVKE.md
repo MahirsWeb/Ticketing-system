@@ -1,7 +1,7 @@
 # Otvorene stavke: šta nije ispravljeno i šta je ispravljeno samo djelimično
 
-**Stanje:** poslije trećeg kruga ispravki (2026-11-04). Detalji i dokazi su u `IZVJESTAJ_ISPRAVKI.md` (odjeljci 9.8 i 9.9).
-**Testovi:** 571 backend i 117 frontend testova prolaze, bez preskočenih. Format, ranjivi paketi, migracije u odnosu na model, lint, `tsc`, build i `npm audit` (visoke) su čisti.
+**Stanje:** poslije četvrtog kruga ispravki (2026-11-04). Detalji i dokazi su u `IZVJESTAJ_ISPRAVKI.md` (odjeljci 9.8, 9.9 i 9.10).
+**Testovi:** 582 backend i 120 frontend testova prolaze, bez preskočenih. Format, ranjivi paketi, migracije u odnosu na model, lint, `tsc`, build i `npm audit` (visoke) su čisti.
 **Izvor:** analiza `ANALYSIS_1` (T-01 … T-64), ponovno testiranje commita `7af778a` (149 scenarija) i moje ponovno izvođenje scenarija na izoliranoj kopiji.
 
 ## 1. Sažetak
@@ -9,17 +9,16 @@
 | Stavke analize (64) | Broj |
 |---|---|
 | Riješeno | **41** |
-| Djelimično | **12** |
-| Nije rađeno | **10** |
+| Djelimično | **13** |
+| Nije rađeno | **9** |
 | Isključeno odlukom vlasnika (MFA) | **1** |
 
-U ovom krugu je riješeno ili značajno pomaknuto: preklapanje vremena iste osobe, slike s tuđih adresa, lozinke prema AI modelu, GDPR izvoz i anonimizacija, greška po ruti, jedinstven fokus, obrazloženja uz `eslint-disable`, `.mailmap`, `CONTRIBUTING.md`, zakucavanje CI akcija, primjeri za nginx, IIS i `docker-compose`. Ispod je **samo ono što je ostalo**.
+U četvrtom krugu su svi scenariji iz paketa testera ponovo izvedeni (uživo, u pregledniku ili kodom i testom), a nađene greške ispravljene: brisanje poslovnice sa osobljem, `Pii:HashKey` koji se tiho promijeni, nepokriven test za prilog na tuđoj poruci, trostruko pravilo dodjele, tastatura u meniju i tabeli zadataka, zastarjeli i nekorišteni paketi (uključujući xunit), skripta za backup s upozorenjem na limit Expressa. Ispod je **samo ono što je ostalo**.
 
-## 2. Nije ispravljeno (10 stavki)
+## 2. Nije ispravljeno (9 stavki)
 
 | Stavka | Šta je ostalo | Zašto | Šta treba |
 |---|---|---|---|
-| **T-15** (TS-15.1, 15.2) | Poslovna logika je u kontrolerima; MediatR i FluentValidation su registrovani bez ijednog handlera | Veliki refaktor. Novi dijelovi su pisani kao zasebne klase | Planiran refaktor, ili ukloniti nekorištene pakete |
 | **T-17** (TS-17.1) | Nema React Querya; podaci se učitavaju ručno | Veliki frontend refaktor. Zaštite od starih odgovora su ipak dodane | Planiran refaktor |
 | **T-20** | Aplikacija radi kao jedna instanca (prilozi na disku, SignalR i keš u memoriji) | Epic za skaliranje; README to navodi kao ograničenje | Samo ako zatreba više od jedne instance |
 | **T-31** (TS-31.1, 31.2) | Email → tiket nije atomski ni idempotentan; nema povezivanja odgovora u niti | Veća funkcionalnost | Posebna izrada |
@@ -32,11 +31,12 @@ U ovom krugu je riješeno ili značajno pomaknuto: preklapanje vremena iste osob
 
 Isključeno odlukom vlasnika: **T-28 MFA**.
 
-## 3. Djelimično (12 stavki)
+## 3. Djelimično (13 stavki)
 
 | Stavka | Šta je urađeno | Šta je ostalo |
 |---|---|---|
-| **T-10** GDPR | Admin izvozi sve podatke o osobi i anonimizira osobu (API i dugmad na stranici osobe); audit log za osjetljive radnje | Period čuvanja i automatsko brisanje; imena koja su drugi ukucali u tekst svojih poruka; kopije u backupima; dugmad nisu isprobana u pregledniku |
+| **T-15** poslovna logika | Nekorišteni MediatR i FluentValidation uklonjeni; pravilo dodjele je na jednom mjestu (`TicketAssignment`); novi dijelovi su zasebne klase | Poslovna logika i pristup podacima su i dalje u kontrolerima (TS-15.1); 53 direktna `DateTime.UtcNow` (TS-15.2, kriterij traži 0 izvan implementacije) |
+| **T-10** GDPR | Admin izvozi sve podatke o osobi i anonimizira osobu (API i dugmad na stranici osobe); audit log za osjetljive radnje | Period čuvanja i automatsko brisanje; imena koja su drugi ukucali u tekst svojih poruka; kopije u backupima |
 | **T-11** AI i lični podaci | Davalac je podešavanje; maskiraju se email, telefon i lozinke/tokeni uz riječ koja ih imenuje; ograničenja dužine | Ugovor o obradi podataka s davaocem (vlasnik). Imena i slobodan tekst odlaze vanjskom davaocu. U bazi tekst stoji nemaskiran (TS-11.2) |
 | **T-18** sesije | Opoziv tokena, hub se gasi pri odjavi | JWT je u `localStorage`, nema refresh tokena (TS-18.1) |
 | **T-23** zaglavlja | API šalje zaglavlja; `AllowedHosts` ograničen; gotovi primjeri za nginx i IIS | Primjena na stvarnom serveru |
@@ -44,7 +44,7 @@ Isključeno odlukom vlasnika: **T-28 MFA**.
 | **T-38** RAG | Model i veličina vektora uz svaki vektor; reindeks pri promjeni modela | `taskType`; dimenzija 768 (traži ponovno računanje svih vektora); ograničenje veličine chunka (TS-ONP-04.1) |
 | **T-40** otkazivanje zahtjeva | Globalni handler, jedinstven oblik greške, otkazivanje u izvještajima i AI-ju | Prosljeđivanje u svih ~90 akcija |
 | **T-46** pristupačnost | Kontrast, nazivi, jedinstven fokus, greška po ruti, naslov i `lang` | Provjera čitačem ekrana |
-| **T-49** topologija | Render, Vercel, Brevo uklonjeni; README i ADR; primjeri za `docker-compose`, nginx, IIS | IIS paket (zip) za backend; više instanci; primjeri nisu isprobani |
+| **T-49** topologija | Render, Vercel, Brevo uklonjeni; README i ADR; primjeri za `docker-compose` (s rotacijom loga), nginx, IIS (uz opis prava pisanja); skripta za backup | IIS paket (zip) za backend; više instanci; primjeri nisu isprobani (YAML i XML su sintaksno provjereni) |
 | **T-52** licenca | `CONTRIBUTING.md`, `.mailmap` | **Odluka o licenci i vlasništvu (vlasnik, pravno)**; `THIRD-PARTY-NOTICES` |
 | **T-53** README | Prepisan prema stvarnom stanju | Nisam ga prošao od nule na čistom računaru |
 | **T-58** sitnice | Uklonjeni ostaci, brojevi tiketa se sortiraju kao brojevi | Upozorenja analizatora, magični stringovi, struktura foldera |
@@ -59,10 +59,12 @@ Provjereni u kodu i **riješeni** u ovom krugu: preklapanje vremena (NOVO-DOM-01
 
 ## 5. Nije provjereno
 
-- **Scenariji u pregledniku:** TS-17.3, 17.4, 19.2, 19.3, 19.4, 46.5 (pokriveni samo Vitest testovima). Dugmad za izvoz i anonimizaciju nisu isprobana u pregledniku.
-- **Živi servisi:** pravi SMTP server, pravi Google i Ollama, pravi reverse proxy (u testovima su zamijenjeni lažnim serverima).
-- **Primjeri za server:** `docker-compose.example.yml`, nginx i IIS primjeri nisu pokrenuti (nema Docker engine-a ni nginx-a lokalno); YAML i XML su sintaksno provjereni.
-- **SQL Server 2017** (minimum je 2019), čitač ekrana, opterećenje.
+- **Živi servisi:** pravi SMTP server, pravi Google i Ollama, pravi reverse proxy (u testovima su zamijenjeni lažnim serverima). Pravi mailbox s Graph integracijom (TS-01.3, TS-31.x).
+- **Docker i IIS:** nema Docker engine-a ni IIS-a na ovom računaru. Docker slika se provjerava u CI poslu "Docker image"; `docker-compose.example.yml`, nginx i IIS primjeri nisu pokrenuti.
+- **Skripta za backup:** isprobana na probnoj bazi (backup, verifikacija, upozorenje, greška), ali ne i čišćenje starih fajlova (folder instance nije čitljiv ovom nalogu). U zadanom folderu instance su ostala **5 probnih fajlova `TicketSystemTech_Retest_72f47b_*.bak`** (oko 55 MB) koje taj nalog ne može obrisati; obrišite ih ručno.
+- **Promjena poruke u formi "New ticket on behalf" (TS-07.2):** provjerena samo `tsc`-om i lintom, bez testa komponente i bez živog izvođenja.
+- **SQL Server 2017** (minimum je 2019), čitač ekrana, axe, opterećenje.
+- **Od tester-ovih scenarija** uživo ili u pregledniku izvedeni su oni navedeni u `IZVJESTAJ_ISPRAVKI.md` (9.8 i 9.10); ostali su provjereni kodom i postojećim testovima, što je slabiji dokaz i tako je označeno u zapisu uz svaki scenarij.
 
 ## 6. Odluke vlasnika koje čekaju
 
@@ -73,7 +75,7 @@ Provjereni u kodu i **riješeni** u ovom krugu: preklapanje vremena (NOVO-DOM-01
 
 ## 7. Šta bih uradio sljedeće
 
-1. **Odluke vlasnika** iz odjeljka 6; bez njih se T-51 i T-52 ne mogu zatvoriti.
-2. **Preostali statički nalazi testera** (~60), jedan po jedan: test koji pada, popravka, mutacijska provjera.
-3. **Srednji poslovi koji se mogu raditi odvojeno:** T-40 (otkazivanje u svim akcijama, mehanički), T-37 (izvještaji bez učitavanja cijelih tiketa), T-58 (analizator), TS-10.3 (strukturirani događaji umjesto imena u tekstu).
+1. **Odluke vlasnika** iz odjeljka 6; bez njih se T-51 i T-52 ne mogu zatvoriti. Zaštita grane `main` je pet minuta posla na GitHubu.
+2. **Preostali statički nalazi testera** (~60 `NOVO-*`), jedan po jedan: test koji pada, popravka, mutacijska provjera.
+3. **Srednji poslovi koji se mogu raditi odvojeno:** T-40 (otkazivanje u svim akcijama, mehanički), T-37 (izvještaji bez učitavanja cijelih tiketa), T-58 (analizator), TS-10.3 (strukturirani događaji umjesto imena u tekstu), TS-15.2 (`TimeProvider` umjesto 53 poziva `DateTime.UtcNow`, mehanički i uz testove s fiksnim vremenom).
 4. **Veliki refaktori** (T-15, T-17, T-31, T-47, T-45) tek poslije toga, svaki kao zaseban zadatak, jer svaki mijenja način rada cijele aplikacije.

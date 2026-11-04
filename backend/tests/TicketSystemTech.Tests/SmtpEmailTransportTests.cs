@@ -45,14 +45,14 @@ public class SmtpEmailTransportTests : IDisposable
     [Fact]
     public async Task A_message_is_delivered_with_sender_recipient_subject_and_both_text_and_html()
     {
-        var result = await SendAsync();
+        var result = await SendAsync(ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(EmailSendOutcome.Sent, result.Outcome);
         var mail = Assert.Single(_server.Mails);
         Assert.Equal("noreply@sender.test", mail.From);
         Assert.Equal(new[] { Recipient }, mail.To);
 
-        var parsed = MimeMessage.Load(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(mail.Data)));
+        var parsed = MimeMessage.Load(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(mail.Data)), TestContext.Current.CancellationToken);
         Assert.Equal("Subject line", parsed.Subject);
         Assert.Equal("Tester", parsed.From.Mailboxes.Single().Name);
         Assert.Equal("<p>Hello <b>there</b></p>", parsed.HtmlBody);
@@ -62,9 +62,9 @@ public class SmtpEmailTransportTests : IDisposable
     [Fact]
     public async Task A_reply_to_address_is_added_when_configured()
     {
-        await SendAsync(new() { ["Smtp:ReplyTo"] = "help@sender.test" });
+        await SendAsync(new() { ["Smtp:ReplyTo"] = "help@sender.test" }, ct: TestContext.Current.CancellationToken);
 
-        var parsed = MimeMessage.Load(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(Assert.Single(_server.Mails).Data)));
+        var parsed = MimeMessage.Load(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(Assert.Single(_server.Mails).Data)), TestContext.Current.CancellationToken);
         Assert.Equal("help@sender.test", parsed.ReplyTo.Mailboxes.Single().Address);
     }
 
@@ -73,10 +73,10 @@ public class SmtpEmailTransportTests : IDisposable
     {
         _server.RequiredLogin = ("mailer", "s3cret");
 
-        var good = await SendAsync(new() { ["Smtp:Username"] = "mailer", ["Smtp:Password"] = "s3cret" });
+        var good = await SendAsync(new() { ["Smtp:Username"] = "mailer", ["Smtp:Password"] = "s3cret" }, ct: TestContext.Current.CancellationToken);
         Assert.Equal(EmailSendOutcome.Sent, good.Outcome);
 
-        var wrong = await SendAsync(new() { ["Smtp:Username"] = "mailer", ["Smtp:Password"] = "nope" });
+        var wrong = await SendAsync(new() { ["Smtp:Username"] = "mailer", ["Smtp:Password"] = "nope" }, ct: TestContext.Current.CancellationToken);
         Assert.Equal(EmailSendOutcome.Retry, wrong.Outcome); // the operator fixes the setting; the mail then still goes out
         Assert.Contains("login", wrong.Detail, StringComparison.OrdinalIgnoreCase);
         Assert.Single(_server.Mails);
@@ -95,7 +95,7 @@ public class SmtpEmailTransportTests : IDisposable
     {
         if (stage == "rcpt") _server.RcptReply = reply; else _server.DataReply = reply;
 
-        var result = await SendAsync();
+        var result = await SendAsync(ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(expected, result.Outcome);
         Assert.Empty(_server.Mails);
@@ -104,7 +104,7 @@ public class SmtpEmailTransportTests : IDisposable
     [Fact]
     public async Task A_server_that_is_not_there_is_worth_another_try()
     {
-        var result = await SendAsync(port: FakeSmtpServer.UnusedPort());
+        var result = await SendAsync(port: FakeSmtpServer.UnusedPort(), ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(EmailSendOutcome.Retry, result.Outcome);
     }
@@ -114,7 +114,7 @@ public class SmtpEmailTransportTests : IDisposable
     {
         _server.HangUpAfterGreeting = true;
 
-        Assert.Equal(EmailSendOutcome.Retry, (await SendAsync()).Outcome);
+        Assert.Equal(EmailSendOutcome.Retry, (await SendAsync(ct: TestContext.Current.CancellationToken)).Outcome);
     }
 
     [Fact]
@@ -123,7 +123,7 @@ public class SmtpEmailTransportTests : IDisposable
         _server.StaySilent = true;
         var started = DateTime.UtcNow;
 
-        var result = await SendAsync(new() { ["Smtp:TimeoutSeconds"] = "1" });
+        var result = await SendAsync(new() { ["Smtp:TimeoutSeconds"] = "1" }, ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(EmailSendOutcome.Retry, result.Outcome);
         Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(15), "the timeout must apply");
@@ -132,7 +132,7 @@ public class SmtpEmailTransportTests : IDisposable
     [Fact]
     public async Task Required_encryption_that_the_server_does_not_offer_is_not_silently_skipped()
     {
-        var result = await SendAsync(new() { ["Smtp:Security"] = "StartTls" });
+        var result = await SendAsync(new() { ["Smtp:Security"] = "StartTls" }, ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(EmailSendOutcome.Retry, result.Outcome); // a setting problem: never downgraded to plain text
         Assert.Empty(_server.Mails);
@@ -152,7 +152,7 @@ public class SmtpEmailTransportTests : IDisposable
     [Fact]
     public async Task Without_a_host_nothing_is_sent_and_the_message_is_skipped()
     {
-        var result = await SendAsync(new() { ["Smtp:Host"] = "" });
+        var result = await SendAsync(new() { ["Smtp:Host"] = "" }, ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(EmailSendOutcome.Skipped, result.Outcome);
         Assert.Equal(0, _server.Connections);
@@ -161,7 +161,7 @@ public class SmtpEmailTransportTests : IDisposable
     [Fact]
     public async Task Without_a_sender_address_nothing_is_sent_and_the_message_is_skipped()
     {
-        var result = await SendAsync(new() { ["Smtp:FromAddress"] = "" });
+        var result = await SendAsync(new() { ["Smtp:FromAddress"] = "" }, ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(EmailSendOutcome.Skipped, result.Outcome);
         Assert.Equal(0, _server.Connections);
@@ -173,7 +173,7 @@ public class SmtpEmailTransportTests : IDisposable
     [InlineData("")]
     public async Task An_address_that_cannot_be_an_address_is_refused_without_calling_the_server(string recipient)
     {
-        var result = await SendAsync(to: recipient);
+        var result = await SendAsync(to: recipient, ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(EmailSendOutcome.Failed, result.Outcome);
         Assert.Equal(0, _server.Connections);
@@ -186,15 +186,15 @@ public class SmtpEmailTransportTests : IDisposable
     {
         var log = new CapturingLogger<SmtpEmailTransport>();
         _server.RcptReply = "450 busy";
-        await SendAsync(logger: log);
+        await SendAsync(logger: log, ct: TestContext.Current.CancellationToken);
         _server.RcptReply = "550 no such user";
-        await SendAsync(logger: log);
+        await SendAsync(logger: log, ct: TestContext.Current.CancellationToken);
         _server.RcptReply = "250 OK";
         _server.RequiredLogin = ("a", "b");
-        await SendAsync(new() { ["Smtp:Username"] = "a", ["Smtp:Password"] = "wrong" }, logger: log);
-        await SendAsync(port: FakeSmtpServer.UnusedPort(), logger: log);
-        await SendAsync(new() { ["Smtp:Host"] = "" }, logger: log);
-        await SendAsync(new() { ["Smtp:FromAddress"] = "" }, logger: log);
+        await SendAsync(new() { ["Smtp:Username"] = "a", ["Smtp:Password"] = "wrong" }, logger: log, ct: TestContext.Current.CancellationToken);
+        await SendAsync(port: FakeSmtpServer.UnusedPort(), logger: log, ct: TestContext.Current.CancellationToken);
+        await SendAsync(new() { ["Smtp:Host"] = "" }, logger: log, ct: TestContext.Current.CancellationToken);
+        await SendAsync(new() { ["Smtp:FromAddress"] = "" }, logger: log, ct: TestContext.Current.CancellationToken);
 
         Assert.True(log.Lines.Count >= 6, "every path should have logged something");
         Assert.All(log.Lines, line => Assert.DoesNotContain("smtp.test", line, StringComparison.OrdinalIgnoreCase));

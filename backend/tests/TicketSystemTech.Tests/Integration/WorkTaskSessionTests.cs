@@ -20,9 +20,9 @@ public class WorkTaskSessionTests : IAsyncLifetime
 
     public WorkTaskSessionTests(ApiWorld world) => _world = world;
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         if (!_world.Available) return;
         await _world.Db(async db =>

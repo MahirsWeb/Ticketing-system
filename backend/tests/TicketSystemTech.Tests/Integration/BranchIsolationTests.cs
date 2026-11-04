@@ -153,6 +153,41 @@ public class BranchIsolationTests
         return form;
     }
 
+    // TS-05.4: the message an attachment hangs on comes from the client. It must be a message of the ticket the file is uploaded to,
+    // or a person could attach a file to (and so read the existence of) an internal note of a ticket of another branch.
+    [SqlFact]
+    public async Task A_file_cannot_be_hung_on_a_message_of_another_ticket()
+    {
+        var foreignNote = await _world.Db(db => db.TicketMessages.Where(m => m.TicketId == _world.Tickets["B1"]).Select(m => m.Id).FirstAsync());
+        var ownNote = await _world.Db(db => db.TicketMessages.Where(m => m.TicketId == _world.Tickets["A1"]).Select(m => m.Id).FirstAsync());
+        MultipartFormDataContent Form(Guid messageId)
+        {
+            var form = UploadForm();
+            form.Add(new StringContent(messageId.ToString()), "messageId");
+            return form;
+        }
+        Task<int> Attachments() => _world.Db(db => db.TicketAttachments.CountAsync(a => a.TicketId == _world.Tickets["A1"] || a.MessageId == foreignNote));
+
+        var before = await Attachments();
+        try
+        {
+            var refused = await _world.Post(_world.EmpA1, $"/api/tickets/{_world.Tickets["A1"]}/attachments", Form(foreignNote));
+
+            Assert.Equal(400, refused.Code);
+            Assert.Contains("does not belong", refused.Text);
+            Assert.Equal(before, await Attachments());
+
+            // The same request with the ticket's own message goes through, so the 400 above is about the message and nothing else.
+            var accepted = await _world.Post(_world.EmpA1, $"/api/tickets/{_world.Tickets["A1"]}/attachments", Form(ownNote));
+
+            Assert.Equal(200, accepted.Code);
+        }
+        finally
+        {
+            await _world.Db(db => db.TicketAttachments.Where(a => a.MessageId == ownNote || a.MessageId == foreignNote).ExecuteDeleteAsync());
+        }
+    }
+
     [SqlFact]
     public async Task A_message_on_a_ticket_of_the_persons_own_branch_does_go_through()
     {

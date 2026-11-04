@@ -31,7 +31,7 @@ public class CancellationTests
         using var cts = new CancellationTokenSource();
 
         var pending = service.EmbedAsync("printer ne štampa", cts.Token);
-        while (handler.Calls == 0) await Task.Delay(10); // the request is now in flight
+        while (handler.Calls == 0) await Task.Delay(10, TestContext.Current.CancellationToken); // the request is now in flight
         cts.Cancel();
 
         // Before: the generic catch swallowed this, logged "[AI:UNEXPECTED_ERROR]" and returned null, so the caller
@@ -47,7 +47,7 @@ public class CancellationTests
         using var cts = new CancellationTokenSource();
 
         var pending = service.AskAsync("system", "context", "question", cts.Token);
-        while (handler.Calls == 0) await Task.Delay(10);
+        while (handler.Calls == 0) await Task.Delay(10, TestContext.Current.CancellationToken);
         cts.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
@@ -59,7 +59,7 @@ public class CancellationTests
         var service = new AiChatCompletionService(
             new HttpClient(new ThrowingHandler()), ConfigWithKey(), NullLogger<AiChatCompletionService>.Instance);
 
-        Assert.Null(await service.AskAsync("system", "context", "question"));
+        Assert.Null(await service.AskAsync("system", "context", "question", TestContext.Current.CancellationToken));
     }
 
     private sealed class ThrowingHandler : HttpMessageHandler

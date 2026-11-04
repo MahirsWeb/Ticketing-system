@@ -17,9 +17,9 @@ public class AiLimitsAndLookupTests : IAsyncLifetime
 
     public AiLimitsAndLookupTests(ApiWorld world) => _world = world;
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await _world.Db(async db =>
         {

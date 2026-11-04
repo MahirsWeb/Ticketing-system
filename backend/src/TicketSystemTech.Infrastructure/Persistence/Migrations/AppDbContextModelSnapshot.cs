@@ -1336,7 +1336,7 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                     b.HasOne("TicketSystemTech.Domain.Entities.Department", "Department")
                         .WithMany()
                         .HasForeignKey("DepartmentId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("TicketSystemTech.Domain.Entities.HelpTopic", "HelpTopic")
                         .WithMany()
@@ -1356,7 +1356,7 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                     b.HasOne("TicketSystemTech.Domain.Entities.SubBranch", "SubBranch")
                         .WithMany()
                         .HasForeignKey("SubBranchId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Category");
 
@@ -1525,12 +1525,12 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                     b.HasOne("TicketSystemTech.Domain.Entities.Department", null)
                         .WithMany()
                         .HasForeignKey("DepartmentId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("TicketSystemTech.Domain.Entities.SubBranch", null)
                         .WithMany()
                         .HasForeignKey("SubBranchId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("TicketSystemTech.Domain.Entities.KnowledgeBaseDocument", b =>

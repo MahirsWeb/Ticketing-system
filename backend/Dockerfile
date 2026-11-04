@@ -8,7 +8,7 @@ WORKDIR /src
 
 # Only the project files first, so that the packages are restored once and cached until a project file changes. The tests are not
 # part of the image (see .dockerignore), so only the application is restored, not the solution.
-COPY global.json nuget.config Directory.Build.props ./
+COPY global.json nuget.config Directory.Build.props Directory.Packages.props ./
 COPY src/TicketSystemTech.Api/TicketSystemTech.Api.csproj src/TicketSystemTech.Api/
 COPY src/TicketSystemTech.Application/TicketSystemTech.Application.csproj src/TicketSystemTech.Application/
 COPY src/TicketSystemTech.Domain/TicketSystemTech.Domain.csproj src/TicketSystemTech.Domain/

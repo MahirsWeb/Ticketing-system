@@ -251,9 +251,6 @@ else
     Log.Warning("The Data Protection key ring is stored in the database WITHOUT encryption (DataProtection:CertificatePath is not set). " +
                 "Anyone who gets a copy of the database gets the keys with it.");
 
-builder.Services.AddMediatR(cfg =>
-    cfg.RegisterServicesFromAssembly(typeof(TicketSystemTech.Application.AssemblyReference).Assembly));
-
 // ---- CORS ----
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
 builder.Services.AddCors(options =>

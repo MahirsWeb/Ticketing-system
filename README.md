@@ -34,7 +34,7 @@ Instaliraj sljedeće na svoj računar (sve je besplatno):
 | Alat | Za šta služi | Gdje preuzeti |
 |---|---|---|
 | **.NET 10 SDK** (LTS) | Pokreće backend (C#/.NET Web API) | [dotnet.microsoft.com/download/dotnet/10.0](https://dotnet.microsoft.com/download/dotnet/10.0) |
-| **Node.js 22 (LTS) ili novije** | Pokreće frontend (React) | [nodejs.org](https://nodejs.org) (uzmi LTS verziju) |
+| **Node.js 22.12 ili novije** (ili 20.19+) | Pokreće frontend (React) | [nodejs.org](https://nodejs.org) (uzmi LTS verziju) |
 | **SQL Server 2019 ili novije** (Express edition je dovoljna, besplatna) | Baza podataka | [Preuzmi SQL Server Express](https://www.microsoft.com/sql-server/sql-server-downloads) |
 | **SQL Server Management Studio (SSMS)** *(preporučeno, nije obavezno)* | Grafički alat da vidiš/pretražuješ bazu | [Preuzmi SSMS](https://learn.microsoft.com/sql/ssms/download-sql-server-management-studio-ssms) |
 | **Git** | Da preuzmeš/upravljaš kodom | [git-scm.com](https://git-scm.com) |
@@ -51,7 +51,8 @@ instalirana pored nove, ali .NET 8 više ne dobija sigurnosne ispravke od 10. no
 ```bash
 node --version
 ```
-Treba da ispiše `v22` ili novije (frontend traži najmanje Node 20.19).
+Frontend (Vite 8) traži Node `^20.19.0 || >=22.12.0` (`engines` u `frontend/package.json`): `v22.12` ili novije, ili `v20.19` do `v21`.
+Sa starijim izdanjem (npr. `v22.0` do `v22.11`) `npm install` upozori, a `npm run dev` se ne pokrene.
 
 ---
 
@@ -255,7 +256,7 @@ Posljedice koje treba znati:
 
 | Postavka | Obavezno? | Šta radi |
 |---|---|---|
-| `ConnectionStrings:DefaultConnection` | ✅ Da | Kaže backend-u gdje mu je SQL Server baza. |
+| `ConnectionStrings:DefaultConnection` | ✅ Da | Kaže backend-u gdje mu je SQL Server baza. `TrustServerCertificate=True` je u redu samo za bazu na istom računaru ili u istoj Docker mreži. Za bazu na drugom serveru koristi `Encrypt=True;TrustServerCertificate=False` i stvarni certifikat na SQL Serveru, inače se promet (i lozinka baze) može presresti. |
 | `Jwt:Secret` | ✅ Da | Tajni ključ kojim se potpisuju login sesije (tokeni). Mora ostati isti dok je aplikacija u upotrebi — ako ga promijeniš, svi su izlogovani. |
 | `Jwt:AccessTokenMinutes` | Ne (default 30, u primjeru 120) | Koliko dugo login sesija traje prije nego se mora ponovo ulogovati. |
 | `Pii:HashKey` | ✅ Da (obavezno izvan Development) | Ključ HMAC hasha kojim se nalozi traže po emailu. **Ne mijenjaj ga nakon što već postoje nalozi** — niko se više ne bi mogao ulogovati. Enkripcija sadržaja koristi ključeve iz tabele `DataProtectionKeys`, koja mora biti u svakom backupu. |
@@ -417,6 +418,12 @@ Ostalo što vrijedi znati:
   adresa na kojoj se frontend otvara. Gotovi primjeri (nisu isprobani u CI-ju): `frontend/deploy/nginx.conf.example` i
   `frontend/deploy/web.config.example` (IIS), oba s zamjenom na `index.html`, zaglavljima i keširanjem; i
   `docker-compose.example.yml` (API + SQL Server, uz `docker-compose.env.example`).
+- **Backend pod IIS-om (bez Dockera).** Identitet aplikacijskog poola (npr. `IIS AppPool\TicketSystemTech`) obično nema pravo
+  pisanja u folder sajta, a aplikacija piše na dva mjesta: `Storage:UploadsPath` (prilozi) i `Logging:File:Path` (log); certifikat
+  iz `DataProtection:CertificatePath` samo čita. Postavi sve to **izvan foldera sajta** (npr. `D:\TicketSystemTech\uploads` i
+  `D:\TicketSystemTech\logs`) i dodijeli poolu pravo *Modify* nad prva dva:
+  `icacls D:\TicketSystemTech /grant "IIS AppPool\TicketSystemTech:(OI)(CI)M"`. Folder s prilozima ulazi u backup, jer se prilozi
+  ne mogu povratiti iz baze. Tako zamjena (redeploy) sajta ne briše priloge ni logove.
 - **Zaštita grane `main`** na GitHubu (Settings → Branches → Add rule): zahtijevaj pull request i da prođu provjere
   *Backend (Windows)*, *Backend (Linux, with SQL Server)* i *Frontend*. To se ne može podesiti iz koda.
 
@@ -589,15 +596,26 @@ se ignoriše). Bez ikakvog SQL Servera ovi testovi se **preskaču** (prikažu se
   i Brevo su uklonjeni. Okruženja za pregled (preview deploy) ne postoje: svako okruženje (razvoj, test, produkcija) ima svoj
   API, svoju bazu i svoj `Cors:AllowedOrigins`.
 - **SQL Server Express** ima granicu od **10 GB** po bazi (vektori znanja i prilozi u bazi nisu, ali tiketi jesu) i nema SQL
-  Agent, pa backup ne može da se zakaže iz njega: koristi Task Scheduler + `sqlcmd -Q "BACKUP DATABASE ..."` ili punu
-  (Standard) edicija. Za više od nekoliko stotina korisnika preporučuje se Standard. Backup baze **mora** ići zajedno s
-  certifikatom za ključeve, ali odvojeno od njega.
+  Agent, pa backup ne može da se zakaže iz njega. Za to služi `backend/ops/backup-database.ps1` (pokreće se iz Windows Task
+  Schedulera): `BACKUP DATABASE ... WITH CHECKSUM`, zatim `RESTORE VERIFYONLY`, briše stare backupe (`-KeepDays`, zadano 14) i
+  **upozorava kad podaci dosegnu 70 % limita** (izlazni kod 2; 1 = backup nije uspio; 0 = sve u redu). Primjer, svaku noć u 02:00:
+
+  ```
+  schtasks /Create /TN "TicketSystemTech backup" /SC DAILY /ST 02:00 /RU SYSTEM /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\TicketSystemTech\ops\backup-database.ps1 -ConnectionString \"Server=localhost\SQLEXPRESS;Database=TicketSystemTech;Trusted_Connection=True;TrustServerCertificate=True\" -BackupFolder D:\Backups"
+  ```
+
+  Folder u koji se piše mora biti dostupan **nalogu servisa SQL Servera**, ne onom ko pokreće skriptu (bez `-BackupFolder` koristi se
+  zadani folder instance, koji uvijek radi). Skripta je isprobana na probnoj bazi: backup i provjera prolaze, upozorenje i izlazni
+  kodovi rade, a nepostojeća baza daje izlaz 1. Pod Dockerom isto radi `sqlcmd -Q "BACKUP DATABASE ..."` iz kontejnera s bazom.
+  Za više od nekoliko stotina korisnika preporučuje se Standard. Backup baze **mora** ići zajedno s certifikatom za ključeve i
+  folderom s prilozima, ali certifikat se čuva odvojeno od njega.
 - **Jedna instanca**: prilozi su na disku, SignalR i keš u memoriji. Više instanci iza balansera traži zajednički disk i Redis
   za SignalR; to nije urađeno.
-- **xunit**: testovi koriste xunit 2.9.3, koji NuGet označava kao *Legacy* (zamijenjen sa `xunit.v3`), ali bez ranjivosti.
-  Prelazak na v3 na .NET 10 traži novi izvršitelj testova (Microsoft Testing Platform), što mijenja komande (`dotnet test`
-  filteri, TRX izvještaj) i podršku u IDE-u, pa je svjesno odgođen.
-- Nije urađeno: izvoz i anonimizacija ličnih podataka na zahtjev (GDPR), OpenTelemetry (OTLP) izvoz, IIS paket i docker-compose
-  za kupce, više davalaca prijave od lokalnih naloga.
+- **xunit**: testovi koriste xunit v3 u izdanju `xunit.v3.mtp-off`. Običan paket `xunit.v3` na .NET 10 SDK-u traži novi
+  izvršitelj testova (Microsoft Testing Platform) i `dotnet test` ga odbija bez promjene `global.json`; izdanje `mtp-off`
+  ostaje na uobičajenom izvršitelju, pa `dotnet test`, filteri (`--filter`), TRX izvještaj (`--logger trx`) i IDE rade kao
+  prije. Paket je odabran i zato da `dotnet list package --deprecated` ne prijavljuje stari xunit 2 kao *Legacy*.
+- Nije urađeno: OpenTelemetry (OTLP) izvoz, IIS paket, produkcijski docker-compose za kupce (postoji samo primjer
+  `docker-compose.example.yml`), više davalaca prijave od lokalnih naloga.
 - JWT login tokeni se ne obnavljaju automatski (refresh token rotacija) — kad token istekne, korisnik se
   jednostavno ponovo uloguje.

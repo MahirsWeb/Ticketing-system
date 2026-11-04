@@ -78,8 +78,9 @@ public sealed class ApiExceptionMiddleware
                 // An outside provider is down, slow or refused us: the caller did nothing wrong, and the message was
                 // written to be shown. 503 = try again shortly, 502 = the provider rejected the request.
                 _logger.LogWarning(external, "{Service} call failed on {Path} (trace {TraceId})", external.Service, context.Request.Path, traceId);
-                context.Response.StatusCode = external.Unavailable ? StatusCodes.Status503ServiceUnavailable : StatusCodes.Status502BadGateway;
-                body = new ApiError(external.Message, traceId, Code: "EXTERNAL_SERVICE");
+                context.Response.StatusCode = external.Code == ExternalServiceException.MailboxReconnectRequired ? StatusCodes.Status409Conflict
+                    : external.Unavailable ? StatusCodes.Status503ServiceUnavailable : StatusCodes.Status502BadGateway;
+                body = new ApiError(external.Message, traceId, Code: external.Code ?? "EXTERNAL_SERVICE");
                 break;
 
             case BadHttpRequestException bad:

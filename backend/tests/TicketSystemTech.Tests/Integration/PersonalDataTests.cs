@@ -20,9 +20,9 @@ public class PersonalDataTests : IAsyncLifetime
 
     public PersonalDataTests(ApiWorld world) => _world = world;
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         if (!_world.Available || _people.Count == 0) return;
         var ids = _people.Select(p => p.Id).ToList();

@@ -183,8 +183,9 @@ export default function NewTicketOnBehalfPage() {
       return;
     }
     setLoading(true);
+    let ticket;
     try {
-      const ticket = await ticketsApi.createOnBehalf(
+      ticket = await ticketsApi.createOnBehalf(
         {
           clientEmail: client.email,
           title,
@@ -201,6 +202,13 @@ export default function NewTicketOnBehalfPage() {
         },
         idempotencyKey
       );
+    } catch (err: any) {
+      setError(err?.response?.data?.message ?? 'Could not create the ticket.');
+      setLoading(false);
+      return;
+    }
+
+    try {
       if (files.length > 0) {
         await ticketsApi.uploadAttachments(ticket.id, files);
       }
@@ -209,7 +217,12 @@ export default function NewTicketOnBehalfPage() {
       }
       navigate(`/tickets/${ticket.id}`);
     } catch (err: any) {
-      setError(err?.response?.data?.message ?? 'Could not create the ticket.');
+      // The ticket exists by now. Saying "could not create" here sent people to try again; the same idempotency key means that
+      // sending the form again does not make a second ticket, it only repeats the part that failed.
+      setError(
+        `Ticket #${ticket.ticketNumber} was created, but its files could not be added (${err?.response?.data?.message ?? 'the upload failed'}). ` +
+          'Press the button again to retry the files; the ticket will not be created twice.'
+      );
     } finally {
       setLoading(false);
     }

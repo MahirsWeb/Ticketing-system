@@ -332,8 +332,8 @@ public class OperationsHardeningTests : IDisposable
         }
         finally
         {
-            await live.StopAsync();
-            await sick.StopAsync();
+            await live.StopAsync(TestContext.Current.CancellationToken);
+            await sick.StopAsync(TestContext.Current.CancellationToken);
         }
     }
 
@@ -372,7 +372,7 @@ public class OperationsHardeningTests : IDisposable
         app.UseHostFiltering();
         app.MapGet("/health/live", () => Results.Ok());
         app.Urls.Add("http://127.0.0.1:0");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         var port = new Uri(app.Urls.First()).Port;
         try
         {
@@ -385,7 +385,7 @@ public class OperationsHardeningTests : IDisposable
         }
         finally
         {
-            await app.StopAsync();
+            await app.StopAsync(TestContext.Current.CancellationToken);
         }
     }
 }
