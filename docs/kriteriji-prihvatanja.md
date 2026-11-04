@@ -45,6 +45,7 @@ Svaki red je jedan scenario testera. „Test“ je klasa u `backend/tests/Ticket
 | TS-17.2 | Pretraga liste prikazuje stari upit | Jedan zahtjev po zastoju u kucanju; odgovor starijeg upita se odbacuje; isto za KPI i Gantt | `TicketsListPage.test.tsx` |
 | TS-18.5 | SignalR odustaje nakon 42 s | Beskonačno ponovno povezivanje s rastućim razmakom i razmicanjem; osvježavanje nakon povratka | `notificationsHub.test.ts`, `small-lib.test.ts` |
 | TS-18.6 | Istek sesije briše nacrt odgovora | Nacrt ostaje u kartici, vraća se nakon prijave; prijava kaže zašto je korisnik opet tu | `LoginPage.test.tsx`, `TicketActivityFeed.test.tsx`, `small-lib.test.ts` |
+| TS-19.1 | Polja bez programske labele | `Field` povezuje labelu i polje; izbor veličine fonta i skriveni birač priloga u uređivaču imaju `aria-label`. Provjereno i u pregledniku (upit iz scenarija vraća prazan niz) | `ui.test.tsx`, `RichTextEditor.test.tsx` |
 | TS-46.5 | Kontrole bez pristupačnog naziva | Imenovana dugmad (zvonce, strelice kalendara), emoji sakriven od čitača, fokus i kontrast | `NotificationBell.test.tsx`, `DateRangePicker.test.tsx`, `ui.test.tsx` |
 | T-46 (naslov, `lang`) | Naslov stranice i `lang` | Naslov po ruti, `<html lang>` prati izabrani jezik | `DocumentMeta.test.tsx` |
 
@@ -120,3 +121,7 @@ Ručno, na čistoj bazi i pokrenutoj aplikaciji:
 | Reset | zaustaviti aplikaciju; `dotnet run --project src/TicketSystemTech.Api -- --reset-admin-password <email>` | nova lozinka samo na terminalu; prijava traži promjenu |
 | TS-50.1 | `docker build`, `docker inspect`, `docker run` (koraci posla „Docker image“) | korisnik nije root, `HEALTHCHECK` postoji, pokretanje bez konfiguracije odbijeno uz spisak razloga |
 | TS-04.2 | `SELECT Xml FROM DataProtectionKeys` s certifikatom i bez | s certifikatom nema `<masterKey`, bez njega ga ima |
+
+## 8. Ponovljeno izvođenje scenarija (2026-11-04)
+
+Tester-ovi scenariji su izvedeni na izoliranoj kopiji (vlastita baza, objavljen API, kopije njegovih skripti); rezultati po scenariju su u `IZVJESTAJ_ISPRAVKI.md`, odjeljak 9.8. Pri tome je u pravom pregledniku nađena greška koju testovi nisu hvatali: stranica "Submit a Ticket" se rušila u razvojnom načinu (`editor.getHTML()` nad uništenim uređivačem). Popravljeno je i provjereno u pregledniku; automatski regresijski test za rušenje ne postoji jer ga jsdom ne reproducira. Pri sljedećem krugu ovaj korak (stranica `/tickets/new` u `npm run dev`) treba ponoviti ručno.

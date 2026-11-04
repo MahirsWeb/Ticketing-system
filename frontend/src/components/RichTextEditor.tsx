@@ -60,6 +60,7 @@ function Toolbar({ editor, onAttachClick }: { editor: Editor; onAttachClick?: ()
       <div className="mx-1 h-5 w-px bg-slate-300" />
       <select
         title="Font size"
+        aria-label="Font size"
         className="rounded border border-slate-300 bg-white px-1 py-1 text-xs"
         onChange={(e) => (editor.chain().focus() as any).setFontSize(e.target.value).run()}
         defaultValue="16px"
@@ -133,7 +134,9 @@ export function RichTextEditor({ value, onChange, placeholder, onFilesSelected, 
   });
 
   useEffect(() => {
-    if (editor && value === '' && editor.getHTML() !== '<p></p>') {
+    // A destroyed editor has no schema any more and getHTML() throws on it: in development React runs every effect twice (StrictMode)
+    // and the editor of the first run has already been torn down when the second one looks at it.
+    if (editor && !editor.isDestroyed && value === '' && editor.getHTML() !== '<p></p>') {
       editor.commands.clearContent();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -149,6 +152,7 @@ export function RichTextEditor({ value, onChange, placeholder, onFilesSelected, 
         <input
           ref={fileInputRef}
           type="file"
+          aria-label="Attach files"
           multiple
           accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.txt"
           className="hidden"
