@@ -30,11 +30,13 @@ public sealed class TicketRouting : ITicketRouting
 {
     private readonly AppDbContext _db;
     private readonly ISlaCalculator _sla;
+    private readonly IBranchRules _branches;
 
-    public TicketRouting(AppDbContext db, ISlaCalculator sla)
+    public TicketRouting(AppDbContext db, ISlaCalculator sla, IBranchRules branches)
     {
         _db = db;
         _sla = sla;
+        _branches = branches;
     }
 
     /// <summary>
@@ -50,17 +52,7 @@ public sealed class TicketRouting : ITicketRouting
         return null;
     }
 
-    /// <summary>A branch with sub-branches requires picking exactly one of them; a branch without any must not receive one.</summary>
-    public async Task<string?> ValidateSubBranchAsync(Guid departmentId, Guid? subBranchId)
-    {
-        var activeSubBranches = await _db.SubBranches.Where(s => s.DepartmentId == departmentId && s.IsActive).ToListAsync();
-        if (activeSubBranches.Count == 0)
-            return subBranchId.HasValue ? "This branch has no sub-branches." : null;
-
-        if (subBranchId is null) return "A sub-branch must be selected for this branch.";
-        if (!activeSubBranches.Any(s => s.Id == subBranchId.Value)) return "Sub-branch not found for this branch.";
-        return null;
-    }
+    public Task<string?> ValidateSubBranchAsync(Guid departmentId, Guid? subBranchId) => _branches.ValidateSubBranchAsync(departmentId, subBranchId);
 
     /// <summary>The ticket's due date: what staff typed if they typed one, otherwise the SLA plan's resolution time counted from <paramref name="startUtc"/>.</summary>
     public async Task<(DateTime? DueDateUtc, string? Error)> ResolveDueDateAsync(Guid slaPlanId, DateTime? requested, DateTime startUtc)

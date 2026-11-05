@@ -11,6 +11,9 @@ public enum Failure
     /// <summary>403.</summary>
     Forbidden,
 
+    /// <summary>401: there is no signed-in person behind the request.</summary>
+    Unauthorized,
+
     /// <summary>400 with <c>{ message }</c>: the request is not acceptable as it is.</summary>
     Invalid,
 
@@ -45,9 +48,17 @@ public sealed record Outcome<T>
 
     public static Outcome<T> Forbidden() => new(default, Services.Failure.Forbidden, null);
 
+    public static Outcome<T> Unauthorized() => new(default, Services.Failure.Unauthorized, null);
+
     public static Outcome<T> Invalid(string message) => new(default, Services.Failure.Invalid, message);
 
     public static Outcome<T> Conflict(string message) => new(default, Services.Failure.Conflict, message);
+}
+
+/// <summary>What an action that has nothing to say besides "done" returns.</summary>
+public readonly record struct Done
+{
+    public static Done Value => default;
 }
 
 public static class OutcomeExtensions
@@ -58,6 +69,23 @@ public static class OutcomeExtensions
         null => controller.Ok(outcome.Value),
         Failure.NotFound => outcome.Message is null ? controller.NotFound() : controller.NotFound(new { message = outcome.Message }),
         Failure.Forbidden => controller.Forbid(),
+        Failure.Unauthorized => controller.Unauthorized(),
+        Failure.Invalid => controller.BadRequest(new { message = outcome.Message }),
+        Failure.Conflict => controller.Conflict(new { message = outcome.Message, code = "CONFLICT" }),
+        _ => throw new InvalidOperationException($"Unknown failure {outcome.Failure}")
+    };
+
+    /// <summary>The same for an action that is declared as a plain <c>IActionResult</c>: <see cref="Done"/> becomes an empty 200, any other value is returned as it is.</summary>
+    public static IActionResult ToResult<T>(this ControllerBase controller, Outcome<T> outcome) =>
+        controller.ToResult(outcome, value => value);
+
+    /// <summary>As above, with a choice of what part of the value is returned.</summary>
+    public static IActionResult ToResult<T>(this ControllerBase controller, Outcome<T> outcome, Func<T, object?> select) => outcome.Failure switch
+    {
+        null => outcome.Value is Done ? controller.Ok() : controller.Ok(select(outcome.Value!)),
+        Failure.NotFound => outcome.Message is null ? controller.NotFound() : controller.NotFound(new { message = outcome.Message }),
+        Failure.Forbidden => controller.Forbid(),
+        Failure.Unauthorized => controller.Unauthorized(),
         Failure.Invalid => controller.BadRequest(new { message = outcome.Message }),
         Failure.Conflict => controller.Conflict(new { message = outcome.Message, code = "CONFLICT" }),
         _ => throw new InvalidOperationException($"Unknown failure {outcome.Failure}")
