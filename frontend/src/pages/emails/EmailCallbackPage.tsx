@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { emailIntegrationApi } from '../../api/emailIntegration';
 import { Card, Spinner } from '../../components/ui';
@@ -8,8 +8,13 @@ export default function EmailCallbackPage() {
   const navigate = useNavigate();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('');
+  const started = useRef(false);
 
   useEffect(() => {
+    // The code can be exchanged only once, and the one-time values are spent as soon as they are read. React runs an effect twice when the application is
+    // started in strict mode (as it is while it is being developed), and the second run would find them spent and report a failed security check.
+    if (started.current) return;
+    started.current = true;
     const code = params.get('code');
     const state = params.get('state');
     const expectedState = sessionStorage.getItem('ms_oauth_state');
@@ -44,7 +49,6 @@ export default function EmailCallbackPage() {
       .then((res) => {
         setStatus('success');
         setMessage(`Connected: ${res.connectedEmail}`);
-        setTimeout(() => navigate('/emails'), 1500);
       })
       .catch((err) => {
         setStatus('error');
@@ -53,13 +57,26 @@ export default function EmailCallbackPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the authorisation code can be exchanged only once, so this must run on arrival and never again
   }, []);
 
+  // Goes on to the emails after a moment, so that the person can read that it worked, unless they have gone elsewhere in the meantime.
+  useEffect(() => {
+    if (status !== 'success') return;
+    const timer = setTimeout(() => navigate('/emails'), 1500);
+    return () => clearTimeout(timer);
+  }, [status, navigate]);
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
       <Card className="w-full max-w-sm p-8 text-center">
         <h1 className="mb-4 text-xl font-bold text-slate-900">Connecting Outlook…</h1>
-        {status === 'loading' && <Spinner className="mx-auto h-8 w-8 text-blue-700" />}
+        {status === 'loading' && (
+          <div role="status" aria-label="Connecting the mailbox">
+            <Spinner className="mx-auto h-8 w-8 text-blue-700" />
+          </div>
+        )}
         {status !== 'loading' && (
-          <p className={status === 'success' ? 'text-green-700' : 'text-red-700'}>{message}</p>
+          <p role={status === 'success' ? 'status' : 'alert'} className={status === 'success' ? 'text-green-700' : 'text-red-700'}>
+            {message}
+          </p>
         )}
         {status === 'error' && (
           <Link to="/emails" className="mt-6 inline-block text-sm text-blue-700 hover:underline">
