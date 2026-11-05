@@ -1,15 +1,15 @@
 # Otvorene stavke: šta nije ispravljeno i šta je ispravljeno samo djelimično
 
 **Stanje:** poslije šestog kruga ispravki (2026-11-05). Detalji i dokazi su u `IZVJESTAJ_ISPRAVKI.md` (odjeljci 9.8 do 9.12).
-**Testovi:** 692 backend i 155 frontend testova prolaze, bez preskočenih. Format, ranjivi paketi, migracije u odnosu na model, lint, `tsc`, build i `npm audit` (visoke) su čisti.
+**Testovi:** 697 backend i 155 frontend testova prolaze, bez preskočenih. Format, ranjivi paketi, migracije u odnosu na model, lint, `tsc`, build i `npm audit` (visoke) su čisti.
 **Izvor:** analiza `ANALYSIS_1` (T-01 … T-64), ponovno testiranje commita `7af778a` (149 scenarija) i moje ponovno izvođenje scenarija na izoliranoj kopiji.
 
 ## 1. Sažetak
 
 | Stavke analize (64) | Broj |
 |---|---|
-| Riješeno | **43** |
-| Djelimično | **12** |
+| Riješeno | **44** |
+| Djelimično | **11** |
 | Nije rađeno | **8** |
 | Isključeno odlukom vlasnika (MFA) | **1** |
 
@@ -30,11 +30,10 @@ U četvrtom krugu su svi scenariji iz paketa testera ponovo izvedeni (uživo, u 
 
 Isključeno odlukom vlasnika: **T-28 MFA**.
 
-## 3. Djelimično (12 stavki)
+## 3. Djelimično (11 stavki)
 
 | Stavka | Šta je urađeno | Šta je ostalo |
 |---|---|---|
-| **T-15** poslovna logika | Nekorišteni MediatR i FluentValidation uklonjeni; pravilo dodjele je na jednom mjestu (`TicketAssignment`); sva vremena idu kroz `TimeProvider` (TS-15.2 zatvoren, uz test koji brani da se sistemski sat ne vrati); novi dijelovi su zasebne klase; **tiketi su izdvojeni iz kontrolera u servise** (vidi ispod) | EmailIntegrationController (144) i dalje sadrže poslovnu logiku (TS-15.1) |
 | **T-10** GDPR | Admin izvozi sve podatke o osobi i anonimizira osobu (API i dugmad na stranici osobe, isprobano u pregledniku); ime se uklanja i iz rečenica koje je aplikacija sama napisala (TS-10.3 zatvoren); audit log za osjetljive radnje | Period čuvanja i automatsko brisanje; imena koja su drugi ukucali u tekst svojih poruka; kopije u backupima |
 | **T-11** AI i lični podaci | Davalac je podešavanje; maskiraju se email, telefon i lozinke/tokeni uz riječ koja ih imenuje, prije slanja i već pri upisu u bazu znanja (TS-11.2 zatvoren; stari chunkovi se maskiraju pri pokretanju); ograničenja dužine | Ugovor o obradi podataka s davaocem (vlasnik). Imena i slobodan tekst odlaze vanjskom davaocu. U samim tiketima i porukama tekst stoji kako je kucan. Isključenje po kompaniji ne postoji |
 | **T-18** sesije | Opoziv tokena, hub se gasi pri odjavi | JWT je u `localStorage`, nema refresh tokena (TS-18.1) |
@@ -46,6 +45,10 @@ Isključeno odlukom vlasnika: **T-28 MFA**.
 | **T-52** licenca | `CONTRIBUTING.md`, `.mailmap` | **Odluka o licenci i vlasništvu (vlasnik, pravno)**; `THIRD-PARTY-NOTICES` |
 | **T-53** README | Prepisan prema stvarnom stanju | Nisam ga prošao od nule na čistom računaru |
 | **T-58** sitnice | Uklonjeni ostaci, brojevi tiketa se sortiraju kao brojevi; pravila analizatora CA2016 (token se prosljeđuje), te za `src` CA1305 (kultura pri formatiranju), CA1068 i CA1001 su upozorenja, a CI ih pretvara u greške | Ostala pravila analizatora (npr. CA1848 poruke loga preko `LoggerMessage`, CA1861 nizovi konstanti), magični stringovi, struktura foldera |
+
+**T-15 zatvoren.** Svih 12 kontrolera ima ukupno 1.022 linije (bilo je 4.212): kontroleri čitaju zahtjev i pretvaraju `Outcome<T>` u odgovor, a pravila su u servisima u `backend/src/TicketSystemTech.Api/*`. **Ograničenje koje ostaje:** servisi su u `Api` projektu i koriste `AppDbContext` izravno, a ne iza interfejsa u `Application` sloju. Taj sloj ostaje uzak (pravila koja ne trebaju bazu: `WorkSessionRules`, `TicketAssignment`, `TicketWorkflow`). Preseljenje servisa u `Application` uz repozitorije nije rađeno jer bi tražilo apstrakciju nad EF Coreom bez dobiti koju sada vidim.
+
+**Ostali kontroleri.** Prilozi tiketa (`TicketAttachmentService`), sanduče poslovnice (`Mailbox/MailboxService`: povezivanje, spisak, označavanje, završetak tiketa iz emaila), obavijesti (`Notifications/NotificationService`) i postavke (`Settings/OverdueSettingsService`) izdvojeni su iz kontrolera. `FilesController` je ostao kakav jest: u njemu je samo provjera potpisanog linka i čitanje datoteke. Mutacije koje su preživjele prije novih testova: čitanje svih obavijesti svih osoba, gornja i donja granica spiska, vrsta i veličina priloga, završetak emaila za tiket druge poslovnice ili nepostojeći tiket, zamjena povezanog sandučeta, osoblje bez poslovnice u sandučetu; svih 9 hvata `SmallControllerRulesTests` (5 testova).
 
 **T-15, sedmi komad (prijava i lozinke).** **Prijava i lozinke (AuthController).** Sa 301 na 38 linija. Pravila su u `backend/src/TicketSystemTech.Api/Auth/AuthService.cs` (prijava, nova lozinka umjesto privremene, potvrda emaila, zaboravljena lozinka, reset), uključujući pažljivu istost odgovora (nepoznat nalog, isključen, zaključan i pogrešna lozinka daju isti odgovor). `Outcome` zna sada i za proizvoljan status s vlastitim tijelom i zaglavljima (429 s `Retry-After`, 401 s kodom). **Najosjetljiviji dio imao je najmanje testova:** 10 od 12 mutacija (granica zaključavanja, istek privremene lozinke, potvrda emaila, brojanje pogrešnih pokušaja, reset koji ukida zaključavanje i stare sesije) preživjelo je cijeli skup; sada ih hvata 9 novih testova (`AuthRulesTests`).
 
@@ -112,4 +115,4 @@ ARC-13: reindeks staje poslije pet neuspjeha zaredom, ali prije toga davaocu po�
 1. **Odluke vlasnika** iz odjeljka 6 i dvije nove: minimum SQL Servera (HOST-07) i ko smije resetovati klijentsku lozinku (SEC-04). Zaštita grane `main` je pet minuta posla na GitHubu.
 2. **Mjerenje prije optimizacije:** ARC-07, ARC-08, OPS-05, 06, 11 su pretpostavke o opterećenju; treba ih izmjeriti na pravoj bazi (21.712 tiketa) prije bilo kakve izmjene. Ono što je mjereno na sintetičkoj bazi (odjeljak 7) ne ukazuje na problem osim Excel izvoza od oko 3 s.
 3. **Srednji poslovi:** T-37 (izvještaji bez učitavanja cijelih tiketa; mjerenje pokazuje da to sada nije hitno), ostatak T-58 (preostala pravila analizatora, magični stringovi).
-4. **Veliki refaktori** (T-15, T-17, T-31, T-47, T-45) tek poslije toga, svaki kao zaseban zadatak, jer svaki mijenja način rada cijele aplikacije.
+4. **Veliki refaktori** (T-17, T-31, T-47, T-45) tek poslije toga, svaki kao zaseban zadatak, jer svaki mijenja način rada cijele aplikacije.

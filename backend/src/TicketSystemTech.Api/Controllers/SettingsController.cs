@@ -1,53 +1,28 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using TicketSystemTech.Api.Contracts;
-using TicketSystemTech.Domain.Entities;
+using TicketSystemTech.Api.Settings;
 using TicketSystemTech.Domain.Enums;
-using TicketSystemTech.Infrastructure.Persistence;
 
 namespace TicketSystemTech.Api.Controllers;
 
+/// <summary>The HTTP face of the installation's settings (Admin only).</summary>
 [ApiController]
 [Route("api/settings")]
 [Authorize]
 public class SettingsController : ControllerBase
 {
-    private readonly AppDbContext _db;
+    private readonly IOverdueSettingsService _overdue;
 
-    public SettingsController(AppDbContext db)
-    {
-        _db = db;
-    }
+    public SettingsController(IOverdueSettingsService overdue) => _overdue = overdue;
 
     [HttpGet("overdue-notifications")]
     [Authorize(Roles = nameof(UserRole.Admin))]
-    public async Task<ActionResult<OverdueNotificationSettingsDto>> GetOverdueNotificationSettings(CancellationToken ct)
-    {
-        var settings = await GetOrCreateSettingsAsync(ct);
-        return Ok(new OverdueNotificationSettingsDto(settings.NotifyOnSlaBreach, settings.ManualOverdueDays));
-    }
+    public async Task<ActionResult<OverdueNotificationSettingsDto>> GetOverdueNotificationSettings(CancellationToken ct) =>
+        Ok(await _overdue.GetAsync(ct));
 
     [HttpPut("overdue-notifications")]
     [Authorize(Roles = nameof(UserRole.Admin))]
-    public async Task<ActionResult<OverdueNotificationSettingsDto>> UpdateOverdueNotificationSettings(UpdateOverdueNotificationSettingsRequest request)
-    {
-        var settings = await GetOrCreateSettingsAsync();
-        settings.NotifyOnSlaBreach = request.NotifyOnSlaBreach;
-        settings.ManualOverdueDays = request.ManualOverdueDays;
-        await _db.SaveChangesAsync();
-        return Ok(new OverdueNotificationSettingsDto(settings.NotifyOnSlaBreach, settings.ManualOverdueDays));
-    }
-
-    private async Task<OverdueNotificationSettings> GetOrCreateSettingsAsync(CancellationToken ct = default)
-    {
-        var settings = await _db.OverdueNotificationSettings.FirstOrDefaultAsync(ct);
-        if (settings is null)
-        {
-            settings = new OverdueNotificationSettings();
-            _db.OverdueNotificationSettings.Add(settings);
-            await _db.SaveChangesAsync(ct);
-        }
-        return settings;
-    }
+    public async Task<ActionResult<OverdueNotificationSettingsDto>> UpdateOverdueNotificationSettings(UpdateOverdueNotificationSettingsRequest request) =>
+        Ok(await _overdue.UpdateAsync(request));
 }

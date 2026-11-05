@@ -225,6 +225,10 @@ builder.Services.AddScoped<TicketSystemTech.Api.Tickets.ITicketWorkSessionServic
 builder.Services.AddScoped<TicketSystemTech.Api.Services.IBranchRules, TicketSystemTech.Api.Services.BranchRules>();
 builder.Services.AddScoped<TicketSystemTech.Api.Tickets.ITicketRouting, TicketSystemTech.Api.Tickets.TicketRouting>();
 builder.Services.AddScoped<TicketSystemTech.Api.Users.IUserQueries, TicketSystemTech.Api.Users.UserQueries>();
+builder.Services.AddScoped<TicketSystemTech.Api.Tickets.ITicketAttachmentService, TicketSystemTech.Api.Tickets.TicketAttachmentService>();
+builder.Services.AddScoped<TicketSystemTech.Api.Mailbox.IMailboxService, TicketSystemTech.Api.Mailbox.MailboxService>();
+builder.Services.AddScoped<TicketSystemTech.Api.Notifications.INotificationService, TicketSystemTech.Api.Notifications.NotificationService>();
+builder.Services.AddScoped<TicketSystemTech.Api.Settings.IOverdueSettingsService, TicketSystemTech.Api.Settings.OverdueSettingsService>();
 builder.Services.AddScoped<TicketSystemTech.Api.Auth.IAuthService, TicketSystemTech.Api.Auth.AuthService>();
 builder.Services.AddScoped<TicketSystemTech.Api.Reports.IReportService, TicketSystemTech.Api.Reports.ReportService>();
 builder.Services.AddScoped<TicketSystemTech.Api.WorkTasks.IWorkTaskQueries, TicketSystemTech.Api.WorkTasks.WorkTaskQueries>();
