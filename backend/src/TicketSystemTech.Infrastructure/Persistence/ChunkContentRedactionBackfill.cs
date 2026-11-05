@@ -12,7 +12,7 @@ namespace TicketSystemTech.Infrastructure.Persistence;
 /// </summary>
 public static class ChunkContentRedactionBackfill
 {
-    public static async Task<int> RunAsync(AppDbContext db, ILogger logger, CancellationToken ct = default, int page = 200)
+    public static async Task<int> RunAsync(AppDbContext db, ILogger logger, int page = 200, CancellationToken ct = default)
     {
         var changed = 0;
         var after = Guid.Empty;

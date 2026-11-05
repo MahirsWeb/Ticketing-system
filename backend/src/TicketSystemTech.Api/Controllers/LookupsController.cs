@@ -30,22 +30,22 @@ public class LookupsController : ControllerBase
 
     [HttpGet("companies")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    public async Task<ActionResult<List<CompanyItemFull>>> GetCompanies([FromQuery] bool includeInactive = false)
+    public async Task<ActionResult<List<CompanyItemFull>>> GetCompanies(CancellationToken ct, [FromQuery] bool includeInactive = false)
     {
         var isAdmin = User.IsInRole(nameof(UserRole.Admin));
         var query = _db.Companies.AsQueryable();
         if (!includeInactive || !isAdmin) query = query.Where(c => c.IsActive);
 
         var items = await query.OrderBy(c => c.Name)
-            .Select(c => new CompanyItemFull(c.Id, c.Name, c.Address, c.ContactInfo, c.IsActive)).ToListAsync();
+            .Select(c => new CompanyItemFull(c.Id, c.Name, c.Address, c.ContactInfo, c.IsActive)).ToListAsync(ct);
         return Ok(items);
     }
 
     [HttpGet("companies/{id:guid}")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    public async Task<ActionResult<CompanyItemFull>> GetCompany(Guid id)
+    public async Task<ActionResult<CompanyItemFull>> GetCompany(Guid id, CancellationToken ct)
     {
-        var c = await _db.Companies.FindAsync(id);
+        var c = await _db.Companies.FindAsync(new object[] { id }, ct);
         if (c is null) return NotFound();
         return Ok(new CompanyItemFull(c.Id, c.Name, c.Address, c.ContactInfo, c.IsActive));
     }
@@ -78,14 +78,14 @@ public class LookupsController : ControllerBase
     // ---------------- Departments ----------------
 
     [HttpGet("departments")]
-    public async Task<ActionResult<List<object>>> GetDepartments([FromQuery] bool includeInactive = false)
+    public async Task<ActionResult<List<object>>> GetDepartments(CancellationToken ct, [FromQuery] bool includeInactive = false)
     {
         var isAdmin = User.IsInRole(nameof(UserRole.Admin));
         var query = _db.Departments.AsQueryable();
         if (!includeInactive || !isAdmin) query = query.Where(d => d.IsActive);
 
         // Every authenticated user may see branch names + emails (needed to display "your branch", pick a transfer target, etc.).
-        var full = await query.OrderBy(d => d.Name).Select(d => new DepartmentItemFull(d.Id, d.Name, d.Email, d.IsActive)).ToListAsync();
+        var full = await query.OrderBy(d => d.Name).Select(d => new DepartmentItemFull(d.Id, d.Name, d.Email, d.IsActive)).ToListAsync(ct);
         return Ok(full);
     }
 
@@ -173,14 +173,14 @@ public class LookupsController : ControllerBase
 
     /// <summary>Every authenticated user may list a branch's sub-branches — needed to populate the required sub-branch picker when opening tickets or assigning employees.</summary>
     [HttpGet("departments/{departmentId:guid}/sub-branches")]
-    public async Task<ActionResult<List<SubBranchItemFull>>> GetSubBranches(Guid departmentId, [FromQuery] bool includeInactive = false)
+    public async Task<ActionResult<List<SubBranchItemFull>>> GetSubBranches(Guid departmentId, CancellationToken ct, [FromQuery] bool includeInactive = false)
     {
         var isAdmin = User.IsInRole(nameof(UserRole.Admin));
         var query = _db.SubBranches.Where(s => s.DepartmentId == departmentId);
         if (!includeInactive || !isAdmin) query = query.Where(s => s.IsActive);
 
         var items = await query.OrderBy(s => s.Name)
-            .Select(s => new SubBranchItemFull(s.Id, s.Name, s.IsActive, s.DepartmentId)).ToListAsync();
+            .Select(s => new SubBranchItemFull(s.Id, s.Name, s.IsActive, s.DepartmentId)).ToListAsync(ct);
         return Ok(items);
     }
 
@@ -219,7 +219,7 @@ public class LookupsController : ControllerBase
     // ---------------- Help Topics ----------------
 
     [HttpGet("help-topics")]
-    public async Task<ActionResult<List<object>>> GetHelpTopics([FromQuery] bool includeInactive = false)
+    public async Task<ActionResult<List<object>>> GetHelpTopics(CancellationToken ct, [FromQuery] bool includeInactive = false)
     {
         var isAdmin = User.IsInRole(nameof(UserRole.Admin));
         var query = _db.HelpTopics.AsQueryable();
@@ -227,10 +227,10 @@ public class LookupsController : ControllerBase
 
         if (isAdmin)
         {
-            var full = await query.OrderBy(h => h.Name).Select(h => new LookupItemFull(h.Id, h.Name, h.IsActive)).ToListAsync();
+            var full = await query.OrderBy(h => h.Name).Select(h => new LookupItemFull(h.Id, h.Name, h.IsActive)).ToListAsync(ct);
             return Ok(full);
         }
-        var items = await query.OrderBy(h => h.Name).Select(h => new LookupItem(h.Id, h.Name)).ToListAsync();
+        var items = await query.OrderBy(h => h.Name).Select(h => new LookupItem(h.Id, h.Name)).ToListAsync(ct);
         return Ok(items);
     }
 
@@ -276,7 +276,7 @@ public class LookupsController : ControllerBase
 
     [HttpGet("ticket-categories")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    public async Task<ActionResult<List<object>>> GetTicketCategories([FromQuery] bool includeInactive = false)
+    public async Task<ActionResult<List<object>>> GetTicketCategories(CancellationToken ct, [FromQuery] bool includeInactive = false)
     {
         var isAdmin = User.IsInRole(nameof(UserRole.Admin));
         var query = _db.TicketCategories.AsQueryable();
@@ -284,10 +284,10 @@ public class LookupsController : ControllerBase
 
         if (isAdmin)
         {
-            var full = await query.OrderBy(c => c.Name).Select(c => new LookupItemFull(c.Id, c.Name, c.IsActive)).ToListAsync();
+            var full = await query.OrderBy(c => c.Name).Select(c => new LookupItemFull(c.Id, c.Name, c.IsActive)).ToListAsync(ct);
             return Ok(full);
         }
-        var items = await query.OrderBy(c => c.Name).Select(c => new LookupItem(c.Id, c.Name)).ToListAsync();
+        var items = await query.OrderBy(c => c.Name).Select(c => new LookupItem(c.Id, c.Name)).ToListAsync(ct);
         return Ok(items);
     }
 
@@ -332,7 +332,7 @@ public class LookupsController : ControllerBase
 
     [HttpGet("sla-plans")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    public async Task<ActionResult<List<object>>> GetSlaPlans([FromQuery] bool includeInactive = false)
+    public async Task<ActionResult<List<object>>> GetSlaPlans(CancellationToken ct, [FromQuery] bool includeInactive = false)
     {
         var isAdmin = User.IsInRole(nameof(UserRole.Admin));
         var query = _db.SlaPlans.AsQueryable();
@@ -341,11 +341,11 @@ public class LookupsController : ControllerBase
         if (isAdmin)
         {
             var full = await query.OrderBy(s => s.ResolutionTimeHours)
-                .Select(s => new SlaPlanItemFull(s.Id, s.Name, s.ResolutionTimeHours, s.IsActive)).ToListAsync();
+                .Select(s => new SlaPlanItemFull(s.Id, s.Name, s.ResolutionTimeHours, s.IsActive)).ToListAsync(ct);
             return Ok(full);
         }
         var items = await query.OrderBy(s => s.ResolutionTimeHours)
-            .Select(s => new SlaPlanItem(s.Id, s.Name, s.ResolutionTimeHours)).ToListAsync();
+            .Select(s => new SlaPlanItem(s.Id, s.Name, s.ResolutionTimeHours)).ToListAsync(ct);
         return Ok(items);
     }
 

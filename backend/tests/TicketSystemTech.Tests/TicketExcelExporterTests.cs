@@ -1,3 +1,4 @@
+using System.Globalization;
 using NPOI.XSSF.UserModel;
 using TicketSystemTech.Application.Reporting;
 
@@ -43,6 +44,34 @@ public class TicketExcelExporterTests
 
         var summarySheet = workbook.GetSheet("Summary");
         Assert.NotNull(summarySheet);
+    }
+
+    [Fact]
+    public void The_month_labels_do_not_depend_on_the_language_of_the_server()
+    {
+        // The server's own language leaked into the sheet ("févr. 2026" on a French machine, "feb 2026" on a Bosnian one), while the
+        // chart labels of the reports page are always English.
+        var before = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("fr-FR");
+            var bytes = TicketExcelExporter.Build(SampleRows(), new DateTime(2026, 1, 1), new DateTime(2026, 2, 28));
+
+            using var ms = new MemoryStream(bytes);
+            using var workbook = new XSSFWorkbook(ms);
+            var summary = workbook.GetSheet("Summary");
+            var labels = Enumerable.Range(0, summary.LastRowNum + 1)
+                .Select(i => summary.GetRow(i)?.GetCell(0))
+                .Where(c => c is { CellType: NPOI.SS.UserModel.CellType.String } && System.Text.RegularExpressions.Regex.IsMatch(c.StringCellValue, @"\d{4}$"))
+                .Select(c => c!.StringCellValue)
+                .ToList();
+
+            Assert.Equal(["Jan 2026", "Feb 2026"], labels);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = before;
+        }
     }
 
     [Fact]

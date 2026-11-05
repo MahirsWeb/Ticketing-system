@@ -210,9 +210,9 @@ public class ReportsController : ControllerBase
         };
         string LabelFor(DateTime bucketStart) => groupBy.ToLowerInvariant() switch
         {
-            "week" => $"W{ISOWeek.GetWeekOfYear(bucketStart):00} {bucketStart:yyyy}",
-            "quarter" => $"Q{((bucketStart.Month - 1) / 3) + 1} {bucketStart:yyyy}",
-            "year" => bucketStart.ToString("yyyy"),
+            "week" => string.Create(CultureInfo.InvariantCulture, $"W{ISOWeek.GetWeekOfYear(bucketStart):00} {bucketStart:yyyy}"),
+            "quarter" => string.Create(CultureInfo.InvariantCulture, $"Q{((bucketStart.Month - 1) / 3) + 1} {bucketStart:yyyy}"),
+            "year" => bucketStart.ToString("yyyy", CultureInfo.InvariantCulture),
             _ => bucketStart.ToString("MMM yyyy", CultureInfo.InvariantCulture),
         };
 
@@ -272,9 +272,9 @@ public class ReportsController : ControllerBase
             .ToList();
 
         var context = new StringBuilder();
-        context.AppendLine($"Total tickets in period: {raw.Count} (period: {request.From:yyyy-MM-dd} to {request.To:yyyy-MM-dd})");
+        context.AppendLine(CultureInfo.InvariantCulture, $"Total tickets in period: {raw.Count} (period: {request.From:yyyy-MM-dd} to {request.To:yyyy-MM-dd})");
         foreach (var topic in byTopic)
-            context.AppendLine($"- {topic.Name}: {topic.Count} tickets. Example titles: {string.Join("; ", topic.Samples)}");
+            context.AppendLine(CultureInfo.InvariantCulture, $"- {topic.Name}: {topic.Count} tickets. Example titles: {string.Join("; ", topic.Samples)}");
 
         var answer = await _chatCompletionService.AskAsync(
             InsightsSystemInstruction, context.ToString(), "Which problems occurred most in this period and what should we do about them?", Ct);

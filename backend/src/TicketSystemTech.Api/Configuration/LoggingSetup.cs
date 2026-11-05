@@ -1,3 +1,4 @@
+using System.Globalization;
 using Serilog;
 
 namespace TicketSystemTech.Api.Configuration;
@@ -23,7 +24,7 @@ public static class LoggingSetup
             .Enrich.FromLogContext()
             // Added after FromLogContext so a request's own reference wins; lines written outside a request show "-".
             .Enrich.WithProperty(TicketSystemTech.Api.Middleware.CorrelationIdMiddleware.LogProperty, "-")
-            .WriteTo.Console(outputTemplate: Template);
+            .WriteTo.Console(outputTemplate: Template, formatProvider: CultureInfo.InvariantCulture);
 
         if (configuration.GetValue("Logging:File:Enabled", true))
         {
@@ -31,6 +32,7 @@ public static class LoggingSetup
             logger = logger.WriteTo.File(
                 path,
                 outputTemplate: FileTemplate,
+                formatProvider: CultureInfo.InvariantCulture,
                 rollingInterval: RollingInterval.Day,
                 retainedFileCountLimit: Math.Max(1, configuration.GetValue("Logging:File:RetainedFiles", 30)),
                 fileSizeLimitBytes: Math.Max(1, configuration.GetValue("Logging:File:MaxFileSizeMb", 100)) * 1024L * 1024L,

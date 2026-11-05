@@ -1,0 +1,16 @@
+root = true
+
+[*.cs]
+# A method that takes a CancellationToken has to hand it on to everything it awaits. Left at its default ("suggestion") the
+# build says nothing, and a forgotten token only shows when a user leaves a slow page and the query keeps running (T-40).
+dotnet_diagnostic.CA2016.severity = warning
+
+# The application's own code (not the tests) is held to a few more rules that decide what a user sees or what keeps running:
+[src/**.cs]
+# Text, numbers and dates are written the same whatever language the server is set to (a month name in an Excel sheet,
+# a decimal point in a log line).
+dotnet_diagnostic.CA1305.severity = warning
+# The cancellation token is the last parameter, so callers can leave it out and named arguments are not needed to pass it.
+dotnet_diagnostic.CA1068.severity = warning
+# A type that owns something disposable can be disposed.
+dotnet_diagnostic.CA1001.severity = warning

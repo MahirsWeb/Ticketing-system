@@ -25,7 +25,7 @@ public static class PiiBackfillMigration
     /// <param name="refuseToStartWithPlaintextLeft">When a row cannot be encrypted (usually two old accounts with the same user name) it stays in plain text
     /// and the application used to carry on regardless, with the e-mail address, telephone number or address of a person readable in the database. With this
     /// set (the application sets it in production) that stops the start, with the number of such rows, until somebody has dealt with them.</param>
-    public static async Task RunAsync(AppDbContext db, IPiiProtector piiProtector, ILogger logger, CancellationToken ct = default, bool refuseToStartWithPlaintextLeft = false)
+    public static async Task RunAsync(AppDbContext db, IPiiProtector piiProtector, ILogger logger, bool refuseToStartWithPlaintextLeft = false, CancellationToken ct = default)
     {
         var connection = (SqlConnection)db.Database.GetDbConnection();
         var ownsConnection = connection.State != System.Data.ConnectionState.Open;

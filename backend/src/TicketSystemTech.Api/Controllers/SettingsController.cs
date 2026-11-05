@@ -22,9 +22,9 @@ public class SettingsController : ControllerBase
 
     [HttpGet("overdue-notifications")]
     [Authorize(Roles = nameof(UserRole.Admin))]
-    public async Task<ActionResult<OverdueNotificationSettingsDto>> GetOverdueNotificationSettings()
+    public async Task<ActionResult<OverdueNotificationSettingsDto>> GetOverdueNotificationSettings(CancellationToken ct)
     {
-        var settings = await GetOrCreateSettingsAsync();
+        var settings = await GetOrCreateSettingsAsync(ct);
         return Ok(new OverdueNotificationSettingsDto(settings.NotifyOnSlaBreach, settings.ManualOverdueDays));
     }
 
@@ -39,14 +39,14 @@ public class SettingsController : ControllerBase
         return Ok(new OverdueNotificationSettingsDto(settings.NotifyOnSlaBreach, settings.ManualOverdueDays));
     }
 
-    private async Task<OverdueNotificationSettings> GetOrCreateSettingsAsync()
+    private async Task<OverdueNotificationSettings> GetOrCreateSettingsAsync(CancellationToken ct = default)
     {
-        var settings = await _db.OverdueNotificationSettings.FirstOrDefaultAsync();
+        var settings = await _db.OverdueNotificationSettings.FirstOrDefaultAsync(ct);
         if (settings is null)
         {
             settings = new OverdueNotificationSettings();
             _db.OverdueNotificationSettings.Add(settings);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(ct);
         }
         return settings;
     }

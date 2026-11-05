@@ -21,14 +21,14 @@ public class NotificationsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> List([FromQuery] int take = 20)
+    public async Task<IActionResult> List(CancellationToken ct, [FromQuery] int take = 20)
     {
         var items = await _db.Notifications.AsNoTracking()
             .Where(n => n.UserId == _currentUser.UserId)
             .OrderByDescending(n => n.CreatedAt)
             .Take(Math.Clamp(take, 1, 100))
             .Select(n => new { n.Id, n.Type, n.Message, n.TicketId, n.IsRead, n.CreatedAt })
-            .ToListAsync();
+            .ToListAsync(ct);
 
         return Ok(items);
     }

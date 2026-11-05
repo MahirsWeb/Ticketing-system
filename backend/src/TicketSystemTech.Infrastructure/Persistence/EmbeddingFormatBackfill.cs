@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -100,6 +101,6 @@ public static class EmbeddingFormatBackfill
     {
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = sql;
-        return Convert.ToInt32(await cmd.ExecuteScalarAsync(ct));
+        return Convert.ToInt32(await cmd.ExecuteScalarAsync(ct), CultureInfo.InvariantCulture);
     }
 }

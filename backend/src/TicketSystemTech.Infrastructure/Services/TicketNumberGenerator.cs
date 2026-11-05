@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using TicketSystemTech.Application.Common.Interfaces;
 using TicketSystemTech.Infrastructure.Persistence;
@@ -18,6 +19,6 @@ public class TicketNumberGenerator : ITicketNumberGenerator
         var result = await _db.Database
             .SqlQueryRaw<long>("SELECT NEXT VALUE FOR [TicketNumberSequence] AS [Value]")
             .ToListAsync(ct);
-        return result[0].ToString();
+        return result[0].ToString(CultureInfo.InvariantCulture);
     }
 }

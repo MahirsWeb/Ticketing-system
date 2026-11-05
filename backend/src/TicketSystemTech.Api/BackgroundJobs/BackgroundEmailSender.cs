@@ -4,9 +4,12 @@ using TicketSystemTech.Application.Common.Interfaces;
 namespace TicketSystemTech.Api.BackgroundJobs;
 
 /// <summary>
-/// In-memory queue plus the worker that drains it. The queue is not durable: a restart loses what was waiting. That is
-/// acceptable for what uses it (a password-reset link the user can simply ask for again); anything that must not be
-/// lost belongs in an outbox, not here.
+/// In-memory queue plus the worker that drains it. All the worker does with a message is hand it to <see cref="IEmailSender"/>,
+/// which is the durable outbox: it writes a row to the database and the dispatcher delivers it (with retries) from there. So this
+/// queue only takes that write off the request, which keeps a password-reset request for an address that exists as fast as one
+/// for an address that does not. What a restart can lose is the few messages still waiting here, in the milliseconds before
+/// their row is written (a reset link the user can simply ask for again); anything that must not be lost is filed in the
+/// outbox directly, not through here.
 /// </summary>
 public sealed class BackgroundEmailSender : BackgroundService, IBackgroundEmailQueue
 {

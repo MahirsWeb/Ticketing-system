@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Diagnostics;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.SqlClient;
@@ -52,13 +53,13 @@ public static class StartupTasks
 
         var piiProtector = scope.ServiceProvider.GetRequiredService<IPiiProtector>();
         var inProduction = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().IsProduction();
-        await Step("Encryption check", logger, () => PiiBackfillMigration.RunAsync(db, piiProtector, logger, ct, refuseToStartWithPlaintextLeft: inProduction));
+        await Step("Encryption check", logger, () => PiiBackfillMigration.RunAsync(db, piiProtector, logger, refuseToStartWithPlaintextLeft: inProduction, ct: ct));
 
         await Step("Embedding format", logger, () => EmbeddingFormatBackfill.RunAsync(db, AiSettings.DefaultGeminiEmbeddingModel, logger, ct));
 
         await Step("Avatar paths", logger, () => AvatarPathBackfill.RunAsync(db, logger, ct));
 
-        await Step("Knowledge base content", logger, () => ChunkContentRedactionBackfill.RunAsync(db, logger, ct));
+        await Step("Knowledge base content", logger, () => ChunkContentRedactionBackfill.RunAsync(db, logger, ct: ct));
 
         await Step("Seed", logger, () => DbSeeder.SeedAsync(
             db,
@@ -118,7 +119,7 @@ internal sealed class SqlStartupLock : IAsyncDisposable
             cmd.Parameters.AddWithValue("@timeoutMs", WaitSeconds * 1000);
 
             var waited = Stopwatch.StartNew();
-            var result = Convert.ToInt32(await cmd.ExecuteScalarAsync(ct));
+            var result = Convert.ToInt32(await cmd.ExecuteScalarAsync(ct), CultureInfo.InvariantCulture);
             if (result < 0)
                 throw new TimeoutException(
                     "Another instance has been running the startup tasks for more than 5 minutes. Check that instance's log before starting this one.");

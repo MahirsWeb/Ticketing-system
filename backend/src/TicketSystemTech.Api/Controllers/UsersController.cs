@@ -273,13 +273,13 @@ public class UsersController : ControllerBase
     /// </summary>
     [HttpGet("{id:guid}/export")]
     [Authorize(Roles = nameof(UserRole.Admin))]
-    public async Task<IActionResult> ExportUserData(Guid id)
+    public async Task<IActionResult> ExportUserData(Guid id, CancellationToken ct)
     {
         var user = await _userManager.FindByIdAsync(id.ToString());
         if (user is null) return NotFound();
 
-        var company = user.CompanyId is { } companyId ? await _db.Companies.AsNoTracking().Where(c => c.Id == companyId).Select(c => c.Name).FirstOrDefaultAsync() : null;
-        var branch = user.DepartmentId is { } branchId ? await _db.Departments.AsNoTracking().Where(d => d.Id == branchId).Select(d => d.Name).FirstOrDefaultAsync() : null;
+        var company = user.CompanyId is { } companyId ? await _db.Companies.AsNoTracking().Where(c => c.Id == companyId).Select(c => c.Name).FirstOrDefaultAsync(ct) : null;
+        var branch = user.DepartmentId is { } branchId ? await _db.Departments.AsNoTracking().Where(d => d.Id == branchId).Select(d => d.Name).FirstOrDefaultAsync(ct) : null;
 
         var export = new
         {
@@ -299,35 +299,36 @@ public class UsersController : ControllerBase
                 user.LastLoginAtUtc
             },
             ticketsOpened = await _db.Tickets.AsNoTracking().Where(t => t.ClientId == id).OrderBy(t => t.CreatedAt)
-                .Select(t => new { t.TicketNumber, t.Title, status = t.Status.ToString(), t.CreatedAt, t.ClosedAtUtc }).ToListAsync(),
+                .Select(t => new { t.TicketNumber, t.Title, status = t.Status.ToString(), t.CreatedAt, t.ClosedAtUtc }).ToListAsync(ct),
             ticketsAssigned = await (from a in _db.TicketAssignees.AsNoTracking()
                                      join t in _db.Tickets.AsNoTracking() on a.TicketId equals t.Id
                                      where a.UserId == id
                                      orderby t.CreatedAt
-                                     select new { t.TicketNumber, t.Title, status = t.Status.ToString(), t.CreatedAt }).ToListAsync(),
+                                     select new { t.TicketNumber, t.Title, status = t.Status.ToString(), t.CreatedAt }).ToListAsync(ct),
             messagesWritten = await (from m in _db.TicketMessages.AsNoTracking()
                                      join t in _db.Tickets.AsNoTracking() on m.TicketId equals t.Id
                                      where m.AuthorId == id
                                      orderby m.CreatedAt
-                                     select new { t.TicketNumber, type = m.Type.ToString(), m.CreatedAt, m.BodyHtml }).ToListAsync(),
+                                     select new { t.TicketNumber, type = m.Type.ToString(), m.CreatedAt, m.BodyHtml }).ToListAsync(ct),
             workOnTickets = await (from w in _db.TicketWorkSessions.AsNoTracking()
                                    join t in _db.Tickets.AsNoTracking() on w.TicketId equals t.Id
                                    where w.UserId == id
                                    orderby w.StartedAtUtc
-                                   select new { t.TicketNumber, w.StartedAtUtc, w.EndedAtUtc }).ToListAsync(),
+                                   select new { t.TicketNumber, w.StartedAtUtc, w.EndedAtUtc }).ToListAsync(ct),
             workOnTasks = await (from w in _db.WorkTaskSessions.AsNoTracking()
                                  join t in _db.WorkTasks.AsNoTracking() on w.WorkTaskId equals t.Id
                                  where w.UserId == id
                                  orderby w.StartedAtUtc
-                                 select new { task = t.Title, w.StartedAtUtc, w.EndedAtUtc }).ToListAsync(),
+                                 select new { task = t.Title, w.StartedAtUtc, w.EndedAtUtc }).ToListAsync(ct),
             notifications = await _db.Notifications.AsNoTracking().Where(n => n.UserId == id).OrderBy(n => n.CreatedAt)
-                .Select(n => new { type = n.Type.ToString(), n.Message, n.IsRead, n.CreatedAt }).ToListAsync(),
+                .Select(n => new { type = n.Type.ToString(), n.Message, n.IsRead, n.CreatedAt }).ToListAsync(ct),
             actionsRecordedInTheAuditLog = await _db.AuditLogs.AsNoTracking().Where(a => a.UserId == id).OrderBy(a => a.CreatedAt)
-                .Select(a => new { a.Action, a.EntityType, a.CreatedAt, a.IpAddress }).ToListAsync()
+                .Select(a => new { a.Action, a.EntityType, a.CreatedAt, a.IpAddress }).ToListAsync(ct)
         };
 
+        // Recorded before the file is handed over, so a request that is given up on before this line neither delivers the data nor leaves a record.
         _db.Audit(_currentUser.UserId, "UserDataExported", nameof(ApplicationUser), user.Id, $"Role of target: {user.Role}");
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(ct);
 
         Response.Headers.ContentDisposition = $"attachment; filename=\"user-{user.Id}.json\"";
         return Ok(export);
@@ -416,7 +417,7 @@ public class UsersController : ControllerBase
 
     [HttpGet]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    public async Task<ActionResult<List<UserListItem>>> List([FromQuery] UserRole? role, [FromQuery] Guid? companyId, [FromQuery] Guid? departmentId, [FromQuery] Guid? subBranchId)
+    public async Task<ActionResult<List<UserListItem>>> List([FromQuery] UserRole? role, [FromQuery] Guid? companyId, [FromQuery] Guid? departmentId, [FromQuery] Guid? subBranchId, CancellationToken ct)
     {
         var query = _userManager.Users.AsQueryable();
         if (role.HasValue) query = query.Where(u => u.Role == role.Value);
@@ -429,16 +430,16 @@ public class UsersController : ControllerBase
         // there): staff can route tickets to any branch, so the people of that branch have to be visible to choose from.
         if (_currentUser.Role != UserRole.Admin)
         {
-            var branchClients = await ClientVisibility.ClientsOfBranchAsync(_db, _currentUser, HttpContext.RequestAborted);
+            var branchClients = await ClientVisibility.ClientsOfBranchAsync(_db, _currentUser, ct);
             query = departmentId.HasValue
                 ? query.Where(u => u.Role != UserRole.Client || branchClients.Contains(u.Id))
                 : query.VisibleTo(_currentUser, branchClients);
         }
 
-        var users = await query.OrderBy(u => u.FirstName).ToListAsync();
-        var companyNames = await _db.Companies.ToDictionaryAsync(c => c.Id, c => c.Name);
-        var departmentNames = await _db.Departments.ToDictionaryAsync(d => d.Id, d => d.Name);
-        var subBranchNames = await _db.SubBranches.ToDictionaryAsync(s => s.Id, s => s.Name);
+        var users = await query.OrderBy(u => u.FirstName).ToListAsync(ct);
+        var companyNames = await _db.Companies.ToDictionaryAsync(c => c.Id, c => c.Name, ct);
+        var departmentNames = await _db.Departments.ToDictionaryAsync(d => d.Id, d => d.Name, ct);
+        var subBranchNames = await _db.SubBranches.ToDictionaryAsync(s => s.Id, s => s.Name, ct);
 
         var result = users.Select(u => new UserListItem(
             u.Id, u.FirstName, u.LastName, u.Email!, u.Role.ToString(),
@@ -523,7 +524,7 @@ public class UsersController : ControllerBase
     /// <summary>Fetches a single account's profile — used by the user detail page.</summary>
     [HttpGet("{id:guid}")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    public async Task<ActionResult<UserListItem>> GetById(Guid id)
+    public async Task<ActionResult<UserListItem>> GetById(Guid id, CancellationToken ct)
     {
         var u = await _userManager.FindByIdAsync(id.ToString());
         if (u is null) return NotFound();
@@ -538,13 +539,13 @@ public class UsersController : ControllerBase
         }
 
         string? companyName = u.CompanyId.HasValue
-            ? await _db.Companies.Where(c => c.Id == u.CompanyId).Select(c => c.Name).FirstOrDefaultAsync()
+            ? await _db.Companies.Where(c => c.Id == u.CompanyId).Select(c => c.Name).FirstOrDefaultAsync(ct)
             : null;
         string? departmentName = u.DepartmentId.HasValue
-            ? await _db.Departments.Where(d => d.Id == u.DepartmentId).Select(d => d.Name).FirstOrDefaultAsync()
+            ? await _db.Departments.Where(d => d.Id == u.DepartmentId).Select(d => d.Name).FirstOrDefaultAsync(ct)
             : null;
         string? subBranchName = u.SubBranchId.HasValue
-            ? await _db.SubBranches.Where(s => s.Id == u.SubBranchId).Select(s => s.Name).FirstOrDefaultAsync()
+            ? await _db.SubBranches.Where(s => s.Id == u.SubBranchId).Select(s => s.Name).FirstOrDefaultAsync(ct)
             : null;
 
         return Ok(new UserListItem(
@@ -592,7 +593,7 @@ public class UsersController : ControllerBase
     /// </summary>
     [HttpGet("lookup-by-email")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    public async Task<ActionResult<ClientLookupResult>> LookupByEmail([FromQuery] string email)
+    public async Task<ActionResult<ClientLookupResult>> LookupByEmail([FromQuery] string email, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(email)) return BadRequest(new { message = "Email is required." });
 
@@ -601,7 +602,7 @@ public class UsersController : ControllerBase
             return NotFound(new { message = "No client account found with that email." });
 
         var companyName = user.CompanyId.HasValue
-            ? await _db.Companies.Where(c => c.Id == user.CompanyId).Select(c => c.Name).FirstOrDefaultAsync()
+            ? await _db.Companies.Where(c => c.Id == user.CompanyId).Select(c => c.Name).FirstOrDefaultAsync(ct)
             : null;
 
         // Opening a ticket on behalf of a client who has not written to this branch before needs this lookup, so it stays: but
@@ -617,7 +618,7 @@ public class UsersController : ControllerBase
                 EntityType = nameof(ApplicationUser),
                 EntityId = user.Id
             });
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(ct);
         }
 
         return Ok(new ClientLookupResult(user.Id, user.FirstName, user.LastName, user.Email!,

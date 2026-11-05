@@ -39,10 +39,10 @@ public class EmailIntegrationController : ControllerBase
     public ActionResult<EmailIntegrationConfigDto> GetConfig() => Ok(new EmailIntegrationConfigDto(_graphOptions.ClientId));
 
     [HttpGet("status")]
-    public async Task<ActionResult<EmailConnectionStatusDto>> GetStatus()
+    public async Task<ActionResult<EmailConnectionStatusDto>> GetStatus(CancellationToken ct)
     {
         if (RequireDepartment() is BadRequestObjectResult noBranch) return noBranch;
-        var status = await _emailService.GetStatusAsync(_currentUser.DepartmentId!.Value);
+        var status = await _emailService.GetStatusAsync(_currentUser.DepartmentId!.Value, ct);
         return Ok(new EmailConnectionStatusDto(status.Connected, status.ConnectedEmail));
     }
 
@@ -80,10 +80,10 @@ public class EmailIntegrationController : ControllerBase
     }
 
     [HttpGet("messages")]
-    public async Task<ActionResult<List<InboxMessageSummaryDto>>> ListMessages([FromQuery] int take = 25)
+    public async Task<ActionResult<List<InboxMessageSummaryDto>>> ListMessages(CancellationToken ct, [FromQuery] int take = 25)
     {
         if (RequireDepartment() is BadRequestObjectResult noBranch) return noBranch;
-        var messages = await _emailService.ListInboxAsync(_currentUser.DepartmentId!.Value, take);
+        var messages = await _emailService.ListInboxAsync(_currentUser.DepartmentId!.Value, take, ct);
         return Ok(messages.Select(m => new InboxMessageSummaryDto(
             m.MessageId, m.Subject, m.FromEmail, m.FromName, m.BodyPreview, m.ReceivedAtUtc,
             m.HasAttachments, m.IsMarked, m.ConvertedTicketId)).ToList());
@@ -98,10 +98,10 @@ public class EmailIntegrationController : ControllerBase
     }
 
     [HttpGet("messages/{messageId}/prefill")]
-    public async Task<ActionResult<EmailPrefillDto>> GetPrefill(string messageId)
+    public async Task<ActionResult<EmailPrefillDto>> GetPrefill(string messageId, CancellationToken ct)
     {
         if (RequireDepartment() is BadRequestObjectResult noBranch) return noBranch;
-        var detail = await _emailService.GetMessageAsync(_currentUser.DepartmentId!.Value, messageId);
+        var detail = await _emailService.GetMessageAsync(_currentUser.DepartmentId!.Value, messageId, ct);
         return Ok(new EmailPrefillDto(
             detail.MessageId, detail.FromEmail, detail.Subject, detail.BodyHtml,
             detail.ReceivedAtUtc, detail.Attachments.Count > 0));

@@ -4,7 +4,7 @@ Ovaj dokument kaže **šta znači „prošlo“**, šta je u drugom krugu testir
 i čime, šta nije moguće dokazati na ovom računaru i šta je svjesno ostalo otvoreno. Cilj je da se pri sljedećem krugu ponovo
 provjerava **samo razlika**, a ne cijeli skup.
 
-Stanje opisano ovdje: poslije petog kruga (2026-11-04), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 641 backend i 155 frontend testova.
+Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 644 backend i 155 frontend testova.
 
 ## 1. Statusi
 
@@ -147,3 +147,7 @@ Svih 151 scenarija iz paketa testera ponovo je obrađeno; pregled po scenariju j
 ## 10. Peti krug (2026-11-04)
 
 Grupa 2 iz izvještaja o preostalom (TS-15.2, 34.2, 10.3, 11.2, 31.3, dio 02.3) i nalazi `NOVO-*` iz paketa `full-2026-10-21`. Postupak za svaku ispravku: test koji prvo pada, popravka, mutacijska provjera; pregled je u `IZVJESTAJ_ISPRAVKI.md`, odjeljak 9.11, a stanje svih 80 nalaza u `docs/OTVORENE-STAVKE.md`, odjeljak 7. Nije izvedeno: probna primjena migracije `TicketPrimaryAssigneeOnTheList` na kopiji prave baze (pokriva je test migracije s pet vrsta starih redova), pregled u pregledniku za nove forme (pokrivene Vitest testovima), pravi Graph za TS-31.3 (zamijenjen lažnim Microsoftom koji broji pozive).
+
+## 11. Šesti krug (2026-11-05)
+
+Mjerenje na sintetičkoj bazi od 20.000 tiketa (izvoz u Excel oko 3 s, ostalo ispod 0,1 s; ARC-07, 08, OPS-05, 06, 11 nisu pokriveni), T-40 zatvoren (svaka GET akcija prima token zahtjeva: `ReadActionsCancellationTests` i pravilo CA2016), dio T-58 (pravila CA1305, CA1068, CA1001 za `src`; naziv mjeseca u Excel izvozu više ne zavisi od jezika servera) i ARC-06, HOST-04, OPS-08 pomjereni u riješene poslije čitanja koda. Pregled je u `IZVJESTAJ_ISPRAVKI.md`, odjeljak 9.12.

@@ -30,11 +30,11 @@ public class FilesController : ControllerBase
     }
 
     [HttpGet("{key}")]
-    public async Task<IActionResult> Download(string key, [FromQuery(Name = "t")] string? token)
+    public async Task<IActionResult> Download(string key, [FromQuery(Name = "t")] string? token, CancellationToken ct)
     {
         if (!_links.IsValid(key, token)) return NotFound();
 
-        var stream = await _storage.OpenReadAsync(key);
+        var stream = await _storage.OpenReadAsync(key, ct);
         if (stream is null) return NotFound();
 
         // Never let the browser guess a type: an uploaded .html/.svg must not be rendered in this origin.
@@ -45,20 +45,20 @@ public class FilesController : ControllerBase
         if (inlineType is not null)
             return File(stream, inlineType);
 
-        var downloadName = await FindOriginalNameAsync(key) ?? key;
+        var downloadName = await FindOriginalNameAsync(key, ct) ?? key;
         return File(stream, "application/octet-stream", downloadName);
     }
 
-    private async Task<string?> FindOriginalNameAsync(string key)
+    private async Task<string?> FindOriginalNameAsync(string key, CancellationToken ct)
     {
         var name = await _db.TicketAttachments.AsNoTracking()
             .Where(a => a.FileUrl.EndsWith(key))
             .Select(a => a.FileName)
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(ct);
 
         return name ?? await _db.KnowledgeBaseDocuments.AsNoTracking()
             .Where(d => d.FileUrl != null && d.FileUrl.EndsWith(key))
             .Select(d => d.SourceFileName)
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(ct);
     }
 }

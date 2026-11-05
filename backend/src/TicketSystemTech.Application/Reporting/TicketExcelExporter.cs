@@ -1,3 +1,4 @@
+using System.Globalization;
 using NPOI.SS.UserModel;
 using NPOI.SS.Util;
 using NPOI.XDDF.UserModel.Chart;
@@ -123,7 +124,7 @@ public static class TicketExcelExporter
             row.CreateCell(0).SetCellValue(stats[i].Label);
             var cell = row.CreateCell(1);
             if (stats[i].Value is int intVal) cell.SetCellValue(intVal);
-            else cell.SetCellValue(Convert.ToDouble(stats[i].Value));
+            else cell.SetCellValue(Convert.ToDouble(stats[i].Value, CultureInfo.InvariantCulture));
         }
 
         // Monthly breakdown table, used as the data source for the chart below.
@@ -144,7 +145,7 @@ public static class TicketExcelExporter
         for (var i = 0; i < monthly.Count; i++)
         {
             var row = sheet.CreateRow(monthlyDataStartRow + i);
-            row.CreateCell(0).SetCellValue(monthly[i].Month.ToString("MMM yyyy"));
+            row.CreateCell(0).SetCellValue(monthly[i].Month.ToString("MMM yyyy", CultureInfo.InvariantCulture));
             row.CreateCell(1).SetCellValue(monthly[i].Count);
         }
 

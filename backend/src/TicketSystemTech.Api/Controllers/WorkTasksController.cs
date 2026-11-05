@@ -91,7 +91,8 @@ public class WorkTasksController : ControllerBase
     public async Task<ActionResult<List<WorkTaskListItem>>> List(
         [FromQuery] Guid? departmentId,
         [FromQuery] Guid? assignedToUserId,
-        [FromQuery] WorkTaskStatus? status)
+        [FromQuery] WorkTaskStatus? status,
+        CancellationToken ct)
     {
         var query = _db.WorkTasks.AsNoTracking().AsQueryable();
 
@@ -103,19 +104,19 @@ public class WorkTasksController : ControllerBase
         if (assignedToUserId.HasValue) query = query.Where(t => t.AssignedToUserId == assignedToUserId.Value);
         if (status.HasValue) query = query.Where(t => t.Status == status.Value);
 
-        var tasks = await query.OrderByDescending(t => t.CreatedAt).ToListAsync();
+        var tasks = await query.OrderByDescending(t => t.CreatedAt).ToListAsync(ct);
 
         var userIds = tasks.SelectMany(t => new[] { t.CreatedByUserId, t.AssignedByUserId, t.AssignedToUserId }).Distinct().ToList();
-        var users = await _db.Users.Where(u => userIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FirstName + " " + u.LastName);
+        var users = await _db.Users.Where(u => userIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FirstName + " " + u.LastName, ct);
         var departmentIds = tasks.Select(t => t.DepartmentId).Distinct().ToList();
-        var departments = await _db.Departments.Where(d => departmentIds.Contains(d.Id)).ToDictionaryAsync(d => d.Id, d => d.Name);
+        var departments = await _db.Departments.Where(d => departmentIds.Contains(d.Id)).ToDictionaryAsync(d => d.Id, d => d.Name, ct);
 
         var taskIds = tasks.Select(t => t.Id).ToList();
         var summaries = await _db.WorkTaskSessions.AsNoTracking()
             .Where(s => taskIds.Contains(s.WorkTaskId))
             .GroupBy(s => s.WorkTaskId)
             .Select(g => new { TaskId = g.Key, First = g.Min(s => s.StartedAtUtc), Running = g.Any(s => s.EndedAtUtc == null), Last = g.Max(s => s.EndedAtUtc) })
-            .ToDictionaryAsync(x => x.TaskId);
+            .ToDictionaryAsync(x => x.TaskId, ct);
 
         var items = tasks.Select(t => new WorkTaskListItem(
             t.Id, t.Title, t.Status.ToString(),
@@ -132,13 +133,13 @@ public class WorkTasksController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<WorkTaskDetailDto>> GetById(Guid id)
+    public async Task<ActionResult<WorkTaskDetailDto>> GetById(Guid id, CancellationToken ct)
     {
-        var task = await _db.WorkTasks.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id);
+        var task = await _db.WorkTasks.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id, ct);
         if (task is null) return NotFound();
         if (!CanAccess(task)) return Forbid();
 
-        return Ok(await BuildDetailDto(id));
+        return Ok(await BuildDetailDto(id, ct));
     }
 
     /// <summary>Hands the task off to someone else in the same branch. Every handoff is recorded in the assignment history.</summary>
@@ -273,15 +274,15 @@ public class WorkTasksController : ControllerBase
     /// work sessions — the data source for the Dashboard Gantt chart.
     /// </summary>
     [HttpGet("gantt")]
-    public async Task<ActionResult<GanttResponse>> Gantt([FromQuery] Guid userId, [FromQuery] DateTime? date)
+    public async Task<ActionResult<GanttResponse>> Gantt([FromQuery] Guid userId, [FromQuery] DateTime? date, CancellationToken ct)
     {
-        var targetUser = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId);
+        var targetUser = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
         if (targetUser is null) return NotFound();
         if (_currentUser.Role != UserRole.Admin && targetUser.DepartmentId != _currentUser.DepartmentId)
             return Forbid();
 
         var (from, to, localDay) = BusinessTimeZone.DayWindow(date, _zone.Value, UtcNow);
-        var entries = await BuildGanttEntriesAsync(userId, from, to);
+        var entries = await BuildGanttEntriesAsync(userId, from, to, ct);
         return Ok(new GanttResponse(userId, $"{targetUser.FirstName} {targetUser.LastName}", DateTime.SpecifyKind(localDay.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc), entries));
     }
 
@@ -290,9 +291,9 @@ public class WorkTasksController : ControllerBase
     /// for their own branch) can see the whole team's day side by side instead of picking one person at a time.
     /// </summary>
     [HttpGet("gantt/branch")]
-    public async Task<ActionResult<BranchGanttResponse>> GanttByBranch([FromQuery] Guid departmentId, [FromQuery] DateTime? date)
+    public async Task<ActionResult<BranchGanttResponse>> GanttByBranch([FromQuery] Guid departmentId, [FromQuery] DateTime? date, CancellationToken ct)
     {
-        var department = await _db.Departments.FirstOrDefaultAsync(d => d.Id == departmentId);
+        var department = await _db.Departments.FirstOrDefaultAsync(d => d.Id == departmentId, ct);
         if (department is null) return NotFound();
         if (_currentUser.Role != UserRole.Admin && departmentId != _currentUser.DepartmentId)
             return Forbid();
@@ -302,12 +303,12 @@ public class WorkTasksController : ControllerBase
         var employees = await _db.Users.AsNoTracking()
             .Where(u => u.Role == UserRole.Employee && u.DepartmentId == departmentId && u.IsActive)
             .OrderBy(u => u.FirstName)
-            .ToListAsync();
+            .ToListAsync(ct);
 
         var users = new List<GanttResponse>();
         foreach (var employee in employees)
         {
-            var entries = await BuildGanttEntriesAsync(employee.Id, from, to);
+            var entries = await BuildGanttEntriesAsync(employee.Id, from, to, ct);
             users.Add(new GanttResponse(employee.Id, $"{employee.FirstName} {employee.LastName}", day, entries));
         }
 
@@ -319,10 +320,10 @@ public class WorkTasksController : ControllerBase
     /// them with no logged work at all still shows, from opening to closing, so it does not disappear just because nobody typed
     /// in a time. People added to a ticket as extra help have no sessions and therefore no block on it.
     /// </summary>
-    private async Task<List<GanttEntryDto>> BuildGanttEntriesAsync(Guid userId, DateTime dayStart, DateTime dayEnd)
+    private async Task<List<GanttEntryDto>> BuildGanttEntriesAsync(Guid userId, DateTime dayStart, DateTime dayEnd, CancellationToken ct)
     {
         var now = UtcNow;
-        var blocks = await Queries.TicketWorkBlocks.ForUserAsync(_db, userId, dayStart, dayEnd, null, now);
+        var blocks = await Queries.TicketWorkBlocks.ForUserAsync(_db, userId, dayStart, dayEnd, null, now, ct);
         var tickets = blocks
             .Select(b => new GanttEntryDto("Ticket", b.TicketId, $"#{b.TicketNumber} — {b.Title}", b.Status.ToString(), b.Start, b.End, b.Status.ToString(), b.IsLogged))
             .ToList();
@@ -332,7 +333,7 @@ public class WorkTasksController : ControllerBase
             .Where(s => s.UserId == userId && s.StartedAtUtc < dayEnd && (s.EndedAtUtc ?? now) >= dayStart)
             .Select(s => new GanttEntryDto("WorkTask", s.WorkTaskId, s.WorkTask!.Title, null, s.StartedAtUtc, s.EndedAtUtc,
                 s.EndedAtUtc == null ? nameof(WorkTaskStatus.InProgress) : nameof(WorkTaskStatus.Done), true))
-            .ToListAsync();
+            .ToListAsync(ct);
 
         return tickets.Concat(tasks).OrderBy(e => e.StartedAtUtc).ToList();
     }
@@ -355,24 +356,24 @@ public class WorkTasksController : ControllerBase
     private bool CanAccess(WorkTask task) =>
         _currentUser.Role == UserRole.Admin || task.DepartmentId == _currentUser.DepartmentId;
 
-    private async Task<WorkTaskDetailDto> BuildDetailDto(Guid taskId)
+    private async Task<WorkTaskDetailDto> BuildDetailDto(Guid taskId, CancellationToken ct = default)
     {
-        var t = await _db.WorkTasks.AsNoTracking().Include(x => x.Department).FirstAsync(x => x.Id == taskId);
+        var t = await _db.WorkTasks.AsNoTracking().Include(x => x.Department).FirstAsync(x => x.Id == taskId, ct);
         var history = await _db.WorkTaskAssignmentLogs.AsNoTracking()
-            .Where(h => h.WorkTaskId == taskId).OrderBy(h => h.AssignedAtUtc).ToListAsync();
+            .Where(h => h.WorkTaskId == taskId).OrderBy(h => h.AssignedAtUtc).ToListAsync(ct);
 
         var userIds = new List<Guid> { t.CreatedByUserId, t.AssignedByUserId, t.AssignedToUserId };
         userIds.AddRange(history.SelectMany(h => new[] { h.AssignedByUserId, h.AssignedToUserId }));
-        var users = await _db.Users.Where(u => userIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FirstName + " " + u.LastName);
+        var users = await _db.Users.Where(u => userIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FirstName + " " + u.LastName, ct);
         string NameOf(Guid id) => users.GetValueOrDefault(id, "");
 
         var historyDtos = history.Select(h => new WorkTaskAssignmentLogDto(
             h.AssignedByUserId, NameOf(h.AssignedByUserId), h.AssignedToUserId, NameOf(h.AssignedToUserId), h.AssignedAtUtc
         )).ToList();
 
-        var sessions = await _db.WorkTaskSessions.AsNoTracking().Where(x => x.WorkTaskId == taskId).OrderBy(x => x.StartedAtUtc).ToListAsync();
+        var sessions = await _db.WorkTaskSessions.AsNoTracking().Where(x => x.WorkTaskId == taskId).OrderBy(x => x.StartedAtUtc).ToListAsync(ct);
         var workerIds = sessions.Select(x => x.UserId).Distinct().ToList();
-        var workers = await _db.Users.Where(u => workerIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FirstName + " " + u.LastName);
+        var workers = await _db.Users.Where(u => workerIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FirstName + " " + u.LastName, ct);
         var sessionDtos = sessions.Select(x => new WorkTaskSessionDto(x.Id, x.UserId, workers.GetValueOrDefault(x.UserId, ""), x.StartedAtUtc, x.EndedAtUtc)).ToList();
         DateTime? firstStart = sessions.Count == 0 ? null : sessions[0].StartedAtUtc;
         DateTime? lastEnd = sessions.Count == 0 || sessions.Any(x => x.EndedAtUtc is null) ? null : sessions.Max(x => x.EndedAtUtc);

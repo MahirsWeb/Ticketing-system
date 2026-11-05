@@ -293,7 +293,8 @@ public class TicketsController : ControllerBase
         [FromQuery] DateTime? createdTo,
         [FromQuery] bool answeredOnly = false,
         [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 25)
+        [FromQuery] int pageSize = 25,
+        CancellationToken ct = default)
     {
         page = Math.Max(page, 1);
         pageSize = Math.Clamp(pageSize, 1, 100);
@@ -324,12 +325,12 @@ public class TicketsController : ControllerBase
         {
             // "Answered" = an open (never Closed/New) ticket that a staff member has already replied to —
             // e.g. staff called the client and the client asked to follow up tomorrow, so it's not done yet.
-            var staffIds = await _db.Users.Where(u => u.Role != UserRole.Client).Select(u => u.Id).ToListAsync();
+            var staffIds = await _db.Users.Where(u => u.Role != UserRole.Client).Select(u => u.Id).ToListAsync(ct);
             query = query.Where(t => t.Status != TicketStatus.Closed && t.Status != TicketStatus.New &&
                 t.Messages.Any(m => m.Type == MessageType.Response && staffIds.Contains(m.AuthorId)));
         }
 
-        var totalCount = await query.CountAsync();
+        var totalCount = await query.CountAsync(ct);
 
         var desc = string.Equals(sortDir, "desc", StringComparison.OrdinalIgnoreCase);
         query = (sortBy?.ToLowerInvariant()) switch
@@ -367,17 +368,17 @@ public class TicketsController : ControllerBase
                 t.DepartmentId,
                 t.SubBranchId
             })
-            .ToListAsync();
+            .ToListAsync(ct);
 
         var userIds = page_.SelectMany(t => new[] { t.ClientId, t.AssignedToUserId }).Where(id => id.HasValue).Select(id => id!.Value)
             .Concat(page_.Select(t => t.ClientId)).Distinct().ToList();
-        var users = await _db.Users.Where(u => userIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FirstName + " " + u.LastName);
+        var users = await _db.Users.Where(u => userIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FirstName + " " + u.LastName, ct);
         var companyIds = page_.Select(t => t.CompanyId).Distinct().ToList();
-        var companies = await _db.Companies.Where(c => companyIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id, c => c.Name);
+        var companies = await _db.Companies.Where(c => companyIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id, c => c.Name, ct);
         var departmentIds = page_.Where(t => t.DepartmentId.HasValue).Select(t => t.DepartmentId!.Value).Distinct().ToList();
-        var departments = await _db.Departments.Where(d => departmentIds.Contains(d.Id)).ToDictionaryAsync(d => d.Id, d => d.Name);
+        var departments = await _db.Departments.Where(d => departmentIds.Contains(d.Id)).ToDictionaryAsync(d => d.Id, d => d.Name, ct);
         var subBranchIds = page_.Where(t => t.SubBranchId.HasValue).Select(t => t.SubBranchId!.Value).Distinct().ToList();
-        var subBranches = await _db.SubBranches.Where(s => subBranchIds.Contains(s.Id)).ToDictionaryAsync(s => s.Id, s => s.Name);
+        var subBranches = await _db.SubBranches.Where(s => subBranchIds.Contains(s.Id)).ToDictionaryAsync(s => s.Id, s => s.Name, ct);
 
         var items = page_.Select(t => new TicketListItem(
             t.Id, t.TicketNumber, t.Title, t.Status.ToString(), t.Priority?.ToString(),
@@ -398,7 +399,7 @@ public class TicketsController : ControllerBase
     /// scoped exactly like <see cref="List"/> so the numbers always match what clicking through shows.
     /// </summary>
     [HttpGet("counts")]
-    public async Task<ActionResult<TicketCountsDto>> Counts()
+    public async Task<ActionResult<TicketCountsDto>> Counts(CancellationToken ct)
     {
         var query = _db.Tickets.AsNoTracking().AsQueryable();
         query = _currentUser.Role switch
@@ -408,7 +409,7 @@ public class TicketsController : ControllerBase
             _ => query.Where(t => t.DepartmentId == _currentUser.DepartmentId)
         };
 
-        var byStatus = await query.GroupBy(t => t.Status).Select(g => new { g.Key, Count = g.Count() }).ToListAsync();
+        var byStatus = await query.GroupBy(t => t.Status).Select(g => new { g.Key, Count = g.Count() }).ToListAsync(ct);
         int CountOf(params TicketStatus[] wanted) => byStatus.Where(x => wanted.Contains(x.Key)).Sum(x => x.Count);
 
         var newCount = CountOf(TicketStatus.New);
@@ -417,7 +418,7 @@ public class TicketsController : ControllerBase
 
         var openedStatuses = new[] { TicketStatus.Open, TicketStatus.InProgress, TicketStatus.Resolved };
         var mineCount = _currentUser.UserId.HasValue
-            ? await query.CountAsync(t => openedStatuses.Contains(t.Status) && t.Assignees.Any(a => a.UserId == _currentUser.UserId.Value))
+            ? await query.CountAsync(t => openedStatuses.Contains(t.Status) && t.Assignees.Any(a => a.UserId == _currentUser.UserId.Value), ct)
             : 0;
 
         return Ok(new TicketCountsDto(newCount + openedCount + closedCount, newCount, openedCount, closedCount, mineCount));
@@ -432,13 +433,13 @@ public class TicketsController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<TicketDetailDto>> GetById(Guid id)
+    public async Task<ActionResult<TicketDetailDto>> GetById(Guid id, CancellationToken ct)
     {
-        var ticket = await _db.Tickets.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id);
+        var ticket = await _db.Tickets.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id, ct);
         if (ticket is null) return NotFound();
         if (!CanAccess(ticket)) return Forbid();
 
-        return Ok(await BuildDetailDto(id));
+        return Ok(await BuildDetailDto(id, ct));
     }
 
     [HttpPost("{id:guid}/open")]
@@ -1024,7 +1025,7 @@ public class TicketsController : ControllerBase
     private TicketAttachmentDto ToAttachmentDto(TicketAttachment a) =>
         new(a.Id, a.FileName, _links.ToDownloadUrl(a.FileUrl) ?? string.Empty, a.FileSizeBytes, a.ContentType, a.CreatedAt);
 
-    private async Task<TicketDetailDto> BuildDetailDto(Guid ticketId)
+    private async Task<TicketDetailDto> BuildDetailDto(Guid ticketId, CancellationToken ct = default)
     {
         var t = await _db.Tickets.AsNoTracking()
             .Include(x => x.Company)
@@ -1034,24 +1035,24 @@ public class TicketsController : ControllerBase
             .Include(x => x.SubBranch)
             .Include(x => x.SlaPlan)
             .Include(x => x.Attachments)
-            .FirstAsync(x => x.Id == ticketId);
+            .FirstAsync(x => x.Id == ticketId, ct);
 
         var messages = await _db.TicketMessages.AsNoTracking()
             .Include(m => m.Attachments)
             .Where(m => m.TicketId == ticketId)
             .OrderBy(m => m.CreatedAt)
-            .ToListAsync();
+            .ToListAsync(ct);
 
         // Clients never see InternalNote or SystemEvent entries — only the Response conversation.
         if (_currentUser.Role == UserRole.Client)
             messages = messages.Where(m => m.Type == MessageType.Response).ToList();
 
-        var assignees = await _db.TicketAssignees.AsNoTracking().Where(a => a.TicketId == ticketId).ToListAsync();
+        var assignees = await _db.TicketAssignees.AsNoTracking().Where(a => a.TicketId == ticketId).ToListAsync(ct);
 
         // How long staff worked is internal: the client gets an empty list.
         var sessions = _currentUser.Role == UserRole.Client
             ? new List<TicketWorkSession>()
-            : await _db.TicketWorkSessions.AsNoTracking().Where(s => s.TicketId == ticketId).OrderBy(s => s.StartedAtUtc).ToListAsync();
+            : await _db.TicketWorkSessions.AsNoTracking().Where(s => s.TicketId == ticketId).OrderBy(s => s.StartedAtUtc).ToListAsync(ct);
 
         var primaryId = assignees.FirstOrDefault(a => a.IsPrimary)?.UserId;
         var relevantUserIds = new List<Guid> { t.ClientId };
@@ -1059,7 +1060,7 @@ public class TicketsController : ControllerBase
         relevantUserIds.AddRange(assignees.Select(a => a.UserId));
         relevantUserIds.AddRange(messages.Select(m => m.AuthorId));
         var users = await _db.Users.Where(u => relevantUserIds.Contains(u.Id))
-            .ToDictionaryAsync(u => u.Id, u => u);
+            .ToDictionaryAsync(u => u.Id, u => u, ct);
 
         string NameOf(Guid userId) => users.TryGetValue(userId, out var u) ? $"{u.FirstName} {u.LastName}" : "";
 

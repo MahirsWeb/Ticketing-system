@@ -1,15 +1,15 @@
 # Otvorene stavke: šta nije ispravljeno i šta je ispravljeno samo djelimično
 
-**Stanje:** poslije petog kruga ispravki (2026-11-04). Detalji i dokazi su u `IZVJESTAJ_ISPRAVKI.md` (odjeljci 9.8 do 9.11).
-**Testovi:** 641 backend i 155 frontend testova prolaze, bez preskočenih. Format, ranjivi paketi, migracije u odnosu na model, lint, `tsc`, build i `npm audit` (visoke) su čisti.
+**Stanje:** poslije šestog kruga ispravki (2026-11-05). Detalji i dokazi su u `IZVJESTAJ_ISPRAVKI.md` (odjeljci 9.8 do 9.12).
+**Testovi:** 644 backend i 155 frontend testova prolaze, bez preskočenih. Format, ranjivi paketi, migracije u odnosu na model, lint, `tsc`, build i `npm audit` (visoke) su čisti.
 **Izvor:** analiza `ANALYSIS_1` (T-01 … T-64), ponovno testiranje commita `7af778a` (149 scenarija) i moje ponovno izvođenje scenarija na izoliranoj kopiji.
 
 ## 1. Sažetak
 
 | Stavke analize (64) | Broj |
 |---|---|
-| Riješeno | **41** |
-| Djelimično | **13** |
+| Riješeno | **42** |
+| Djelimično | **12** |
 | Nije rađeno | **9** |
 | Isključeno odlukom vlasnika (MFA) | **1** |
 
@@ -31,7 +31,7 @@ U četvrtom krugu su svi scenariji iz paketa testera ponovo izvedeni (uživo, u 
 
 Isključeno odlukom vlasnika: **T-28 MFA**.
 
-## 3. Djelimično (13 stavki)
+## 3. Djelimično (12 stavki)
 
 | Stavka | Šta je urađeno | Šta je ostalo |
 |---|---|---|
@@ -42,12 +42,13 @@ Isključeno odlukom vlasnika: **T-28 MFA**.
 | **T-23** zaglavlja | API šalje zaglavlja; `AllowedHosts` ograničen; gotovi primjeri za nginx i IIS | Primjena na stvarnom serveru |
 | **T-37** upiti i indeksi | Novi indeksi, paginirana lista korisnika | Izvještaji učitavaju cijele tikete; N+1 u izvozu |
 | **T-38** RAG | Model i veličina vektora uz svaki vektor; reindeks pri promjeni modela | `taskType`; dimenzija 768 (traži ponovno računanje svih vektora); ograničenje veličine chunka (TS-ONP-04.1) |
-| **T-40** otkazivanje zahtjeva | Globalni handler, jedinstven oblik greške, otkazivanje u izvještajima i AI-ju | Prosljeđivanje u svih ~90 akcija |
 | **T-46** pristupačnost | Kontrast, nazivi, jedinstven fokus, greška po ruti, naslov i `lang` | Provjera čitačem ekrana |
 | **T-49** topologija | Render, Vercel, Brevo uklonjeni; README i ADR; primjeri za `docker-compose` (s rotacijom loga), nginx, IIS (uz opis prava pisanja); skripta za backup | IIS paket (zip) za backend; više instanci; primjeri nisu isprobani (YAML i XML su sintaksno provjereni) |
 | **T-52** licenca | `CONTRIBUTING.md`, `.mailmap` | **Odluka o licenci i vlasništvu (vlasnik, pravno)**; `THIRD-PARTY-NOTICES` |
 | **T-53** README | Prepisan prema stvarnom stanju | Nisam ga prošao od nule na čistom računaru |
-| **T-58** sitnice | Uklonjeni ostaci, brojevi tiketa se sortiraju kao brojevi | Upozorenja analizatora, magični stringovi, struktura foldera |
+| **T-58** sitnice | Uklonjeni ostaci, brojevi tiketa se sortiraju kao brojevi; pravila analizatora CA2016 (token se prosljeđuje), te za `src` CA1305 (kultura pri formatiranju), CA1068 i CA1001 su upozorenja, a CI ih pretvara u greške | Ostala pravila analizatora (npr. CA1848 poruke loga preko `LoggerMessage`, CA1861 nizovi konstanti), magični stringovi, struktura foldera |
+
+**Zatvoreno u šestom krugu: T-40.** Svaka GET akcija koja nešto čeka prima token zahtjeva ili ga kontroler izlaže kao `Ct` (test `ReadActionsCancellationTests`), a pravilo CA2016 traži da se token proslijedi svemu što akcija čeka. Akcije koje pišu (POST, PUT, PATCH, DELETE) namjerno se ne prekidaju na pola puta: prekid između spremanja i slanja poruke ostavio bi pola urađen posao.
 
 Iz scenarija testera, još otvoreno: **TS-02.3** (`IFileStorage` je sada asinhron, ali blob ili zajednički storage nisu rađeni), **TS-12.1** (zaštitu grane `main` podešava vlasnik na GitHubu), **TS-54.1** (nema drugog autora ni recenzenta u historiji, što kod ne može riješiti).
 
@@ -63,7 +64,7 @@ Provjereni u kodu i **riješeni** u ovom krugu: preklapanje vremena (NOVO-DOM-01
 - **Docker i IIS:** nema Docker engine-a ni IIS-a na ovom računaru. Docker slika se provjerava u CI poslu "Docker image"; `docker-compose.example.yml`, nginx i IIS primjeri nisu pokrenuti.
 - **Skripta za backup:** isprobana na probnoj bazi (backup, verifikacija, upozorenje, greška), ali ne i čišćenje starih fajlova (folder instance nije čitljiv ovom nalogu). U zadanom folderu instance su ostala **5 probnih fajlova `TicketSystemTech_Retest_72f47b_*.bak`** (oko 55 MB) koje taj nalog ne može obrisati; obrišite ih ručno.
 - **Promjena poruke u formi "New ticket on behalf" (TS-07.2):** provjerena samo `tsc`-om i lintom, bez testa komponente i bez živog izvođenja.
-- **SQL Server 2017** (minimum je 2019), čitač ekrana, axe, opterećenje.
+- **SQL Server 2017** (minimum je 2019), čitač ekrana, axe. **Opterećenje:** izmjereno samo djelimično, na sintetičkoj bazi (vidi odjeljak 7).
 - **Od tester-ovih scenarija** uživo ili u pregledniku izvedeni su oni navedeni u `IZVJESTAJ_ISPRAVKI.md` (9.8 i 9.10); ostali su provjereni kodom i postojećim testovima, što je slabiji dokaz i tako je označeno u zapisu uz svaki scenarij.
 
 ## 6. Odluke vlasnika koje čekaju
@@ -79,15 +80,19 @@ Pregled svih 80 nalaza po stanju (detalji u `IZVJESTAJ_ISPRAVKI.md`, odjeljak 9.
 
 | Stanje | Nalazi |
 |---|---|
-| Riješeno (ovaj krug) | ARC-04, 05, 10, 11, 12, 15; DOM-02, 04, 06, 07, 08; PRV-01, 02; FE-01, 03, 05, 07, 08, 09, 10, 11; SEC-05, 08, 10; OPS-14, 15 |
+| Riješeno (ovaj krug) | ARC-04, 05, 06, 10, 11, 12, 15; DOM-02, 04, 06, 07, 08; PRV-01, 02; HOST-04; FE-01, 03, 05, 07, 08, 09, 10, 11; SEC-05, 08, 10; OPS-08, 14, 15 |
 | Riješeno (ranije, provjereno) | ARC-01, 02, 03; DOM-01, 03, 05; DB-01; FE-02, 04, 06; HOST-01, 02, 03, 05, 06, 08, 09, 11; OPS-01, 02, 03, 04, 09, 10, 13, 16; SEC-07, 09 |
-| Djelimično | ARC-06, HOST-04, OPS-08 (poruke za reset lozinke i obavijest o zaključavanju idu kroz red u memoriji); SEC-03 (CSP samo u primjerima za server) |
+| Djelimično | SEC-03 (CSP samo u primjerima za server) |
 | Prihvaćeno uz obrazloženje | ARC-09, OPS-07, ARC-14, HOST-12, OPS-17, SEC-01, SEC-02, SEC-06 |
-| Otvoreno | ARC-07, 08, 13; OPS-05, 06, 11 (opterećenje i memorija, nije mjereno); HOST-07, OPS-12 (SQL Server 2017 ili 2019, odluka vlasnika); HOST-10; SEC-04 (odluka vlasnika) |
+| Otvoreno | ARC-07, 08, 13; OPS-05, 06, 11 (opterećenje i memorija, mjereno samo djelimično, vidi ispod); HOST-07, OPS-12 (SQL Server 2017 ili 2019, odluka vlasnika); HOST-10; SEC-04 (odluka vlasnika) |
+
+ARC-06, HOST-04 i OPS-08 su u prošlom krugu bili označeni kao djelimični jer reset lozinke i obavijest o zaključavanju idu kroz red u memoriji. Poslije čitanja koda: red samo upisuje poruku u outbox u bazi (`IEmailSender` je `OutboxEmailSender`), a dispatcher je šalje s ponavljanjem. Gubi se jedino ono što u trenutku restarta čeka na taj upis, u milisekundama, a reset lozinke korisnik može ponovo zatražiti. Komentar na klasi je ispravljen da to kaže.
+
+**Mjerenje (šesti krug).** Na probnoj bazi s 20.000 sintetičkih tiketa (ne na kopiji prave baze) izmjeren je po jedan zahtjev: lista tiketa (prva stranica) 19 ms, brojači 27 ms, izvještaji sažetak 68 ms, vremenska serija 35 ms, po poslovnicama 54 ms i poređenje perioda 34 ms, a izvoz u Excel 2,6 do 3,5 s (1,5 MB; samo sastavljanje datoteke je oko 2 s, ostalo je čitanje). Jednom je izvoz trajao 27 s i nisam ga mogao ponoviti, pa ne znam šta ga je tada usporilo. Rang lista i najčešći problemi odgovorili su za 2 ms, što upućuje na to da probni podaci nisu imali ono što ti izvještaji broje (zadužene, teme), pa ta dva ne računam kao izmjerena. Ovim **nisu** pokriveni ARC-07 (spisak klijenata poslovnice u pregledu korisnika), ARC-08 i OPS-05 (indeks vektora), OPS-06 (xlsx u memoriji dok radi više korisnika) niti OPS-11: za njih i dalje nema mjerenja.
 
 ## 8. Šta bih uradio sljedeće
 
 1. **Odluke vlasnika** iz odjeljka 6 i dvije nove: minimum SQL Servera (HOST-07) i ko smije resetovati klijentsku lozinku (SEC-04). Zaštita grane `main` je pet minuta posla na GitHubu.
-2. **Mjerenje prije optimizacije:** ARC-07, ARC-08, OPS-05, 06, 11 su pretpostavke o opterećenju; treba ih izmjeriti na pravoj bazi (21.712 tiketa) prije bilo kakve izmjene.
-3. **Srednji poslovi:** T-40 (otkazivanje u svim akcijama, mehanički), T-37 (izvještaji bez učitavanja cijelih tiketa), T-58 (analizator), ARC-13 (razlikovati grešku jednog tiketa od nedostupnog davaoca), ARC-06 (reset lozinke kroz outbox).
+2. **Mjerenje prije optimizacije:** ARC-07, ARC-08, OPS-05, 06, 11 su pretpostavke o opterećenju; treba ih izmjeriti na pravoj bazi (21.712 tiketa) prije bilo kakve izmjene. Ono što je mjereno na sintetičkoj bazi (odjeljak 7) ne ukazuje na problem osim Excel izvoza od oko 3 s.
+3. **Srednji poslovi:** T-37 (izvještaji bez učitavanja cijelih tiketa; mjerenje pokazuje da to sada nije hitno), ostatak T-58 (preostala pravila analizatora, magični stringovi), ARC-13 (razlikovati grešku jednog tiketa od nedostupnog davaoca).
 4. **Veliki refaktori** (T-15, T-17, T-31, T-47, T-45) tek poslije toga, svaki kao zaseban zadatak, jer svaki mijenja način rada cijele aplikacije.

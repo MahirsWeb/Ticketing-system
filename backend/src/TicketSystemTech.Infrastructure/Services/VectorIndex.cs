@@ -17,7 +17,7 @@ namespace TicketSystemTech.Infrastructure.Services;
 /// The note-length rule can change without the indexer running (a note is added to a ticket), so besides the explicit
 /// <see cref="Invalidate"/> calls the copy expires on its own after <see cref="TimeToLive"/>.
 /// </summary>
-public sealed class VectorIndex : IVectorIndex
+public sealed class VectorIndex : IVectorIndex, IDisposable
 {
     internal static readonly TimeSpan TimeToLive = TimeSpan.FromMinutes(5);
 
@@ -29,6 +29,10 @@ public sealed class VectorIndex : IVectorIndex
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<VectorIndex> _logger;
     private readonly SemaphoreSlim _loadLock = new(1, 1);
+
+    /// <summary>Called by the container when the application stops.</summary>
+    public void Dispose() => _loadLock.Dispose();
+
     private IReadOnlyList<VectorEntry>? _entries;
     private DateTime _loadedAtUtc;
     private long _version;
