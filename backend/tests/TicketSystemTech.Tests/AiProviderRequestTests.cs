@@ -112,4 +112,43 @@ public class AiProviderRequestTests
         Assert.Contains("ne radi štampa", JsonDocument.Parse(handler.RequestBody!).RootElement
             .GetProperty("content").GetProperty("parts")[0].GetProperty("text").GetString());
     }
+
+    private static async Task<string> EmbeddedTextAsync(string text)
+    {
+        var handler = new CapturingHandler("""{"embedding":{"values":[0.1,0.2,0.3]}}""");
+        var service = new AiEmbeddingService(new HttpClient(handler), Config(), NullLogger<AiEmbeddingService>.Instance, TimeProvider.System);
+
+        var vector = await service.EmbedAsync(text, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(vector); // a text that was too long for the provider used to come back as null, i.e. as a ticket that cannot be indexed
+        return JsonDocument.Parse(handler.RequestBody!).RootElement.GetProperty("content").GetProperty("parts")[0].GetProperty("text").GetString()!;
+    }
+
+    [Fact]
+    public async Task A_text_too_long_for_the_provider_is_cut_to_its_beginning_before_it_is_sent()
+    {
+        // A ticket with a log pasted into its notes is one chunk of tens of thousands of characters; the start is what describes the problem.
+        var sent = await EmbeddedTextAsync("Printer ne radi. " + new string('x', 50_000));
+
+        Assert.Equal(AiPromptLimits.MaxEmbeddingChars, sent.Length);
+        Assert.StartsWith("Printer ne radi.", sent);
+    }
+
+    [Fact]
+    public async Task A_text_that_fits_is_sent_whole()
+    {
+        var text = new string('y', AiPromptLimits.MaxEmbeddingChars);
+
+        Assert.Equal(text, await EmbeddedTextAsync(text));
+    }
+
+    [Fact]
+    public async Task Cutting_never_splits_a_character_that_takes_two_places()
+    {
+        // The emoji straddles the limit: keeping half of it would be an invalid string that cannot even be written as JSON.
+        var sent = await EmbeddedTextAsync(new string('a', AiPromptLimits.MaxEmbeddingChars - 1) + "😀" + new string('b', 100));
+
+        Assert.Equal(AiPromptLimits.MaxEmbeddingChars - 1, sent.Length);
+        Assert.DoesNotContain(sent, c => char.IsSurrogate(c));
+    }
 }

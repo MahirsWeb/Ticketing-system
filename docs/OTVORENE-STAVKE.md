@@ -1,7 +1,7 @@
 # Otvorene stavke: šta nije ispravljeno i šta je ispravljeno samo djelimično
 
 **Stanje:** poslije šestog kruga ispravki (2026-11-05). Detalji i dokazi su u `IZVJESTAJ_ISPRAVKI.md` (odjeljci 9.8 do 9.12).
-**Testovi:** 646 backend i 155 frontend testova prolaze, bez preskočenih. Format, ranjivi paketi, migracije u odnosu na model, lint, `tsc`, build i `npm audit` (visoke) su čisti.
+**Testovi:** 649 backend i 155 frontend testova prolaze, bez preskočenih. Format, ranjivi paketi, migracije u odnosu na model, lint, `tsc`, build i `npm audit` (visoke) su čisti.
 **Izvor:** analiza `ANALYSIS_1` (T-01 … T-64), ponovno testiranje commita `7af778a` (149 scenarija) i moje ponovno izvođenje scenarija na izoliranoj kopiji.
 
 ## 1. Sažetak
@@ -41,7 +41,7 @@ Isključeno odlukom vlasnika: **T-28 MFA**.
 | **T-18** sesije | Opoziv tokena, hub se gasi pri odjavi | JWT je u `localStorage`, nema refresh tokena (TS-18.1) |
 | **T-23** zaglavlja | API šalje zaglavlja; `AllowedHosts` ograničen; gotovi primjeri za nginx i IIS | Primjena na stvarnom serveru |
 | **T-37** upiti i indeksi | Novi indeksi, paginirana lista korisnika | Izvještaji učitavaju cijele tikete; N+1 u izvozu |
-| **T-38** RAG | Model i veličina vektora uz svaki vektor; reindeks pri promjeni modela | `taskType`; dimenzija 768 (traži ponovno računanje svih vektora); ograničenje veličine chunka (TS-ONP-04.1) |
+| **T-38** RAG | Model i veličina vektora uz svaki vektor; reindeks pri promjeni modela; tekst jednog tiketa za embedding je ograničen na 6.000 znakova (TS-ONP-04.1) | `taskType`; dimenzija 768 (traži ponovno računanje svih vektora) |
 | **T-46** pristupačnost | Kontrast, nazivi, jedinstven fokus, greška po ruti, naslov i `lang` | Provjera čitačem ekrana |
 | **T-49** topologija | Render, Vercel, Brevo uklonjeni; README i ADR; primjeri za `docker-compose` (s rotacijom loga), nginx, IIS (uz opis prava pisanja); skripta za backup | IIS paket (zip) za backend; više instanci; primjeri nisu isprobani (YAML i XML su sintaksno provjereni) |
 | **T-52** licenca | `CONTRIBUTING.md`, `.mailmap` | **Odluka o licenci i vlasništvu (vlasnik, pravno)**; `THIRD-PARTY-NOTICES` |

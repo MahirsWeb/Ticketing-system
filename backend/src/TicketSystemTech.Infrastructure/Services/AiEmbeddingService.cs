@@ -74,6 +74,10 @@ public class AiEmbeddingService : IEmbeddingService
         if (settings.RedactPersonalData)
             text = PiiRedactor.Redact(text);
 
+        // A ticket is one chunk however long its notes are, and a provider takes only so much in one request: the beginning is cut to
+        // the length a passage can ever be shown to the model, instead of the whole ticket coming back refused and never being indexed.
+        text = AiPromptLimits.CutForEmbedding(text);
+
         var retries = priority == EmbeddingPriority.Background ? BackgroundRetries : InteractiveRetries;
         var longestWait = priority == EmbeddingPriority.Background ? BackgroundLongestWait : InteractiveLongestWait;
 

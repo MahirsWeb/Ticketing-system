@@ -14,10 +14,25 @@ public static class AiPromptLimits
     /// <summary>One retrieved ticket or document passage. Longer ones are cut (the start of a ticket is what describes the problem).</summary>
     public const int MaxEntryChars = 6_000;
 
+    /// <summary>The most text of one ticket or document that is turned into a vector. A ticket is one chunk however long its notes are, and a
+    /// provider has a limit on what it takes in one request; the part beyond what a passage can ever show the model (<see cref="MaxEntryChars"/>) would
+    /// not change what the ticket is about, so it is left out instead of making the whole ticket impossible to index.</summary>
+    public const int MaxEmbeddingChars = MaxEntryChars;
+
     /// <summary>Everything retrieved for one question. Entries beyond this are left out, best matches first.</summary>
     public const int MaxContextChars = 60_000;
 
     private const string Separator = "\n---\n";
+
+    /// <summary>The beginning of <paramref name="text"/>, no longer than <see cref="MaxEmbeddingChars"/>, and never ending in half of a character.</summary>
+    public static string CutForEmbedding(string text)
+    {
+        if (text.Length <= MaxEmbeddingChars) return text;
+
+        var end = MaxEmbeddingChars;
+        if (char.IsHighSurrogate(text[end - 1])) end--; // the other half would fall outside
+        return text[..end];
+    }
 
     /// <summary>Joins the passages into the context for the model, cutting long ones and stopping at the total ceiling.</summary>
     public static string BuildContext(IEnumerable<string> entries)
