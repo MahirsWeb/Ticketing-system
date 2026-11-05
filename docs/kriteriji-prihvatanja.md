@@ -4,7 +4,7 @@ Ovaj dokument kaže **šta znači „prošlo“**, šta je u drugom krugu testir
 i čime, šta nije moguće dokazati na ovom računaru i šta je svjesno ostalo otvoreno. Cilj je da se pri sljedećem krugu ponovo
 provjerava **samo razlika**, a ne cijeli skup.
 
-Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 718 backend i 700 frontend testova.
+Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 718 backend i 752 frontend testova.
 
 ## 1. Statusi
 
@@ -191,3 +191,5 @@ T-17 (sedmi dio) i T-42 (šesti dio): zadaci su na zajedničkom sloju upita i ra
 T-17 (osmi dio) i T-42 (sedmi dio): spisak i pravljenje naloga su na zajedničkom sloju upita i razbijeni na dijelove u `pages/users/` (stranica 26 linija, bila 329); 63 testa koja ranije nisu postojala, uključujući greške koje su ranije prolazile tiho ili miješale prikaz (stari redovi pod novom karticom, poruka o grešci uz stare redove, imena od razmaka, spiskovi koji se ne učitaju). Zajednički `Pager` i `Tabs`. Ostale velike stranice ostaju.
 
 T-17 (deveti dio) i T-42 (osmi dio): firme (spisak i stranica jedne firme) su na zajedničkom sloju upita i razbijene na dijelove u `pages/users/` (stranica firme 24 linije, bila 323; spisak 43, bio 96); 60 testova koja ranije nisu postojala, uključujući greške koje su ranije prolazile tiho ili miješale prikaz (pitanje preko razloga odbijanja, neuspjeli tiketi i klijenti, stanje prethodne firme, zatvoreno uređivanje dostupno tastaturi, spisak koji se ne učita). Ostaje samo `EmailsPage` (303 linije).
+
+T-17 (deseti dio) i T-42 (deveti dio): sanduče emailova je na zajedničkom sloju upita i razbijeno na dijelove u `pages/emails/` (stranica 49 linija, bila 303); 52 testa koja ranije nisu postojala, uključujući greške koje su ranije prolazile tiho ili miješale prikaz (status veze koji se ne učita uzet za nepovezano sanduče, poruka koja se ne učita s pokazivačem zauvijek, tekst jedne poruke uz pošiljaoca druge, označavanje i odjava koji ne uspiju bez riječi). Nijedna stranica više nije veća od 200 linija; ostaju dvije komponente i `EmailCallbackPage` bez testova.
