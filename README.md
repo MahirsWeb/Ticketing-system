@@ -460,6 +460,22 @@ Prije nego što pošalješ promjenu provjeri da model i migracije ne odudaraju (
 dotnet ef migrations has-pending-model-changes --project src/TicketSystemTech.Infrastructure --startup-project src/TicketSystemTech.Api
 ```
 
+### Promjena API-ja (za programere)
+
+Opis API-ja je u `docs/openapi.json`, a tipovi koje frontend generiše iz njega u `frontend/src/types/api.generated.ts`. Kad
+promijeniš zahtjev ili odgovor na serveru, backend test `ApiContractTests` padne dok se opis ne osvježi:
+
+```bash
+cd backend && TST_UPDATE_OPENAPI=1 dotnet test --filter ApiContractTests
+```
+```bash
+cd frontend && npm run gen:api && npm run build
+```
+
+`npm run build` tada pokaže (u `src/types/contract.check.ts`) svaki ručno pisani tip koji se više ne slaže s onim što server
+šalje; njega ispravljaš ručno. Oba fajla ulaze u isti commit. Na Windowsu u PowerShellu se prvi korak piše
+`$env:TST_UPDATE_OPENAPI = "1"; dotnet test --filter ApiContractTests`.
+
 ### Pregled podataka kroz SSMS
 
 Poveži se na svoju instancu → proširi **Databases** → `TicketSystemTech`. Baza i sve tabele su automatski
@@ -541,7 +557,7 @@ TypeScript tipova. Isto rade i GitHub Actions
 - **Docker image** se gradi kao pri pravom puštanju u rad i provjerava se: .NET 10, zakucani digesti, proces nije root, health
   check postoji i javlja grešku kad aplikacija ne radi, a server s razvojnim postavkama odbija da krene i kaže zašto
   (informativno dok se novi koraci jednom ne zelene).
-- **Frontend** prolazi lint, testove, build i `npm audit`.
+- **Frontend** prolazi lint, testove, build i `npm audit`, a generisani tipovi API-ja moraju odgovarati `docs/openapi.json`.
 - **Dependabot** (`.github/dependabot.yml`) otvara pull request kad paket, Docker slika ili GitHub Action ima novu verziju.
 
 Formatiranje: `dotnet format` očekuje završetke redova platforme na kojoj radi. Na Windowsu sa `core.autocrlf=true` (podrazumijevano)

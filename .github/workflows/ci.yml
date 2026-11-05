@@ -147,6 +147,13 @@ jobs:
       - name: Install
         run: npm ci
 
+      # The types in src/types/api.generated.ts come from docs/openapi.json (which the backend tests keep true); the build below then
+      # checks the hand-written types against them. A committed file that is not what the generator makes of openapi.json fails here.
+      - name: The generated API types are current
+        run: |
+          npm run gen:api
+          git diff --exit-code -- src/types/api.generated.ts
+
       - name: Lint
         run: npm run lint
 

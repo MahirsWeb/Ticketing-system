@@ -305,6 +305,8 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new Microsoft.OpenApi.OpenApiInfo { Title = "Ticket System Tech API", Version = "v1" });
+    // `string` and `string?` are different things in the description (the frontend's types are generated from it): without this every text may be null.
+    options.SupportNonNullableReferenceTypes();
     options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.OpenApiSecurityScheme
     {
         Scheme = "bearer",

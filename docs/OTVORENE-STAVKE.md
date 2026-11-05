@@ -1,28 +1,27 @@
 # Otvorene stavke: šta nije ispravljeno i šta je ispravljeno samo djelimično
 
 **Stanje:** poslije šestog kruga ispravki (2026-11-05). Detalji i dokazi su u `IZVJESTAJ_ISPRAVKI.md` (odjeljci 9.8 do 9.12).
-**Testovi:** 649 backend i 155 frontend testova prolaze, bez preskočenih. Format, ranjivi paketi, migracije u odnosu na model, lint, `tsc`, build i `npm audit` (visoke) su čisti.
+**Testovi:** 650 backend i 155 frontend testova prolaze, bez preskočenih. Format, ranjivi paketi, migracije u odnosu na model, lint, `tsc`, build i `npm audit` (visoke) su čisti.
 **Izvor:** analiza `ANALYSIS_1` (T-01 … T-64), ponovno testiranje commita `7af778a` (149 scenarija) i moje ponovno izvođenje scenarija na izoliranoj kopiji.
 
 ## 1. Sažetak
 
 | Stavke analize (64) | Broj |
 |---|---|
-| Riješeno | **42** |
+| Riješeno | **43** |
 | Djelimično | **12** |
-| Nije rađeno | **9** |
+| Nije rađeno | **8** |
 | Isključeno odlukom vlasnika (MFA) | **1** |
 
 U četvrtom krugu su svi scenariji iz paketa testera ponovo izvedeni (uživo, u pregledniku ili kodom i testom), a nađene greške ispravljene: brisanje poslovnice sa osobljem, `Pii:HashKey` koji se tiho promijeni, nepokriven test za prilog na tuđoj poruci, trostruko pravilo dodjele, tastatura u meniju i tabeli zadataka, zastarjeli i nekorišteni paketi (uključujući xunit), skripta za backup s upozorenjem na limit Expressa. Ispod je **samo ono što je ostalo**.
 
-## 2. Nije ispravljeno (9 stavki)
+## 2. Nije ispravljeno (8 stavki)
 
 | Stavka | Šta je ostalo | Zašto | Šta treba |
 |---|---|---|---|
 | **T-17** (TS-17.1) | Nema React Querya; podaci se učitavaju ručno | Veliki frontend refaktor. Zaštite od starih odgovora su ipak dodane | Planiran refaktor |
 | **T-20** | Aplikacija radi kao jedna instanca (prilozi na disku, SignalR i keš u memoriji) | Epic za skaliranje; README to navodi kao ograničenje | Samo ako zatreba više od jedne instance |
 | **T-31** (TS-31.1, 31.2) | Email → tiket nije atomski ni idempotentan; nema povezivanja odgovora u niti | Veća funkcionalnost | Posebna izrada |
-| **T-41** | Tipovi na frontendu se održavaju ručno | Nije rađeno | Generisanje tipova iz OpenAPI dokumenta |
 | **T-42** | Predimenzionirane stranice, duplirane forme | Nije rađeno | Refaktor |
 | **T-45** | i18n pokriva oko 5 % interfejsa | Veliki posao | Prevod i izmjena komponenti |
 | **T-47** (TS-47.1) | Kontroleri direktno zovu `IEmailSender`; šabloni su C# stringovi | Nije rađeno | Jedna tačka za notifikacije, šabloni kao resursi |
@@ -47,6 +46,8 @@ Isključeno odlukom vlasnika: **T-28 MFA**.
 | **T-52** licenca | `CONTRIBUTING.md`, `.mailmap` | **Odluka o licenci i vlasništvu (vlasnik, pravno)**; `THIRD-PARTY-NOTICES` |
 | **T-53** README | Prepisan prema stvarnom stanju | Nisam ga prošao od nule na čistom računaru |
 | **T-58** sitnice | Uklonjeni ostaci, brojevi tiketa se sortiraju kao brojevi; pravila analizatora CA2016 (token se prosljeđuje), te za `src` CA1305 (kultura pri formatiranju), CA1068 i CA1001 su upozorenja, a CI ih pretvara u greške | Ostala pravila analizatora (npr. CA1848 poruke loga preko `LoggerMessage`, CA1861 nizovi konstanti), magični stringovi, struktura foldera |
+
+**Zatvoreno u šestom krugu: T-41.** Opis API-ja (OpenAPI) je u `docs/openapi.json`, a backend test `ApiContractTests` pada čim se zahtjev ili odgovor promijeni bez osvježenja tog fajla. Frontend iz njega generiše tipove (`npm run gen:api` → `src/types/api.generated.ts`, CI provjerava da je generisani fajl svjež), a `src/types/contract.check.ts` pri svakom `tsc`/build provjerava 37 ručno pisanih tipova i 6 lista dozvoljenih vrijednosti protiv onoga što server stvarno šalje: polje koje server više ne šalje ili je preimenovao, polje koje server može poslati kao `null` a tip ga drži obaveznim, tekst tamo gdje ekran očekuje broj, i lista dozvoljenih vrijednosti koja se razlikuje. Ručno pisani tipovi su ostali (ekranima treba preciznije, npr. `status` kao skup poznatih statusa), ali ih kompajler sada drži uz server. Danas se svi slažu. Ne hvata: polje koje je server dodao a ekran ne zna (bezopasno), niti zahtjeve koje ekran šalje, niti šta tačno vraćaju liste u šifarnicima, jer su deklarisane kao `List<object>`.
 
 **Zatvoreno u šestom krugu: T-40.** Svaka GET akcija koja nešto čeka prima token zahtjeva ili ga kontroler izlaže kao `Ct` (test `ReadActionsCancellationTests`), a pravilo CA2016 traži da se token proslijedi svemu što akcija čeka. Akcije koje pišu (POST, PUT, PATCH, DELETE) namjerno se ne prekidaju na pola puta: prekid između spremanja i slanja poruke ostavio bi pola urađen posao.
 
