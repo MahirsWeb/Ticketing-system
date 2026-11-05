@@ -1,43 +1,10 @@
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { lookupsApi } from '../../api/lookups';
-import type { CompanyItemFull } from '../../types';
-import { Button, Card, ErrorText, Input, Label, StatusPill, Field } from '../../components/ui';
+import { useCompaniesAdmin } from '../../api/adminLookupQueries';
+import { Card, ErrorText, StatusPill } from '../../components/ui';
+import { AddCompanyForm } from './AddCompanyForm';
 
 export default function CompaniesPage() {
-  const [companies, setCompanies] = useState<CompanyItemFull[]>([]);
-  const [name, setName] = useState('');
-  const [address, setAddress] = useState('');
-  const [contactInfo, setContactInfo] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  function refresh() {
-    lookupsApi.companiesAdmin().then(setCompanies);
-  }
-
-  useEffect(refresh, []);
-
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    if (!name.trim()) {
-      setError('Company name is required.');
-      return;
-    }
-    setLoading(true);
-    try {
-      await lookupsApi.createCompany(name, address || undefined, contactInfo || undefined);
-      setName('');
-      setAddress('');
-      setContactInfo('');
-      refresh();
-    } catch (err: any) {
-      setError(err?.response?.data?.message ?? 'Could not create the company.');
-    } finally {
-      setLoading(false);
-    }
-  }
+  const companies = useCompaniesAdmin();
 
   return (
     <div className="space-y-6">
@@ -46,32 +13,11 @@ export default function CompaniesPage() {
         <p className="mt-1 text-sm text-slate-500">Click a company to see its users and tickets.</p>
       </div>
 
-      <Card className="p-5">
-        <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-500">Add a company</h2>
-        <form onSubmit={handleCreate} className="grid grid-cols-3 gap-4">
-          <Field>
-            <Label>Name</Label>
-            <Input required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} />
-          </Field>
-          <Field>
-            <Label>Address (optional)</Label>
-            <Input maxLength={100} value={address} onChange={(e) => setAddress(e.target.value)} />
-          </Field>
-          <Field>
-            <Label>Contact info (optional)</Label>
-            <Input maxLength={120} value={contactInfo} onChange={(e) => setContactInfo(e.target.value)} />
-          </Field>
-          <div className="col-span-3">
-            <ErrorText>{error}</ErrorText>
-            <Button type="submit" disabled={loading}>
-              {loading ? 'Adding…' : 'Add company'}
-            </Button>
-          </div>
-        </form>
-      </Card>
+      <AddCompanyForm />
 
+      {companies.isError && <ErrorText>The companies could not be loaded. Try again in a moment.</ErrorText>}
       <Card className="divide-y divide-slate-100">
-        {companies.map((c) => (
+        {(companies.data ?? []).map((c) => (
           <Link
             key={c.id}
             to={`/companies/${c.id}`}
@@ -89,7 +35,8 @@ export default function CompaniesPage() {
             </div>
           </Link>
         ))}
-        {companies.length === 0 && <div className="px-4 py-6 text-center text-sm text-slate-500">No companies yet.</div>}
+        {companies.isPending && <div className="px-4 py-6 text-center text-sm text-slate-500">Loading companies…</div>}
+        {companies.isSuccess && companies.data.length === 0 && <div className="px-4 py-6 text-center text-sm text-slate-500">No companies yet.</div>}
       </Card>
     </div>
   );

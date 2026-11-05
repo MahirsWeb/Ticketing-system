@@ -8,6 +8,11 @@ export { userKeys };
 
 export type UserPageParams = Parameters<typeof usersApi.listPaged>[0];
 
+/** The clients of one company: asked for when the company is opened and forgotten when it is left. */
+export function useCompanyClients(companyId: string) {
+  return useQuery({ queryKey: userKeys.companyClients(companyId), queryFn: () => usersApi.list({ role: 'Client', companyId }), gcTime: 0 });
+}
+
 /**
  * One page of the list of accounts (clients or staff, for a search). Every page of every list is an entry of its own and is forgotten when
  * it is left (gcTime 0), so the answer to an earlier choice is never shown as the answer to the current one, and a request that has been

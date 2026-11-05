@@ -13,6 +13,19 @@ export function useDepartmentsAdmin() {
   return useQuery({ queryKey: lookupKeys.departmentsAdmin, queryFn: lookupsApi.departmentsAdmin, ...ADMIN });
 }
 
+/** Every company, the switched off ones too: the page of the companies is where they can be opened and switched back on. */
+export function useCompaniesAdmin() {
+  return useQuery({ queryKey: lookupKeys.companiesAdmin, queryFn: lookupsApi.companiesAdmin, ...ADMIN });
+}
+
+/**
+ * One company. Another company is another entry, so what one has is never shown for the next, and it is forgotten when the page is left. A change
+ * made on the page comes back as the whole company and is written into this entry (see `updateCompany` in lookups.ts).
+ */
+export function useCompany(id: string) {
+  return useQuery({ queryKey: lookupKeys.company(id), queryFn: () => lookupsApi.getCompany(id), ...ADMIN });
+}
+
 export function useHelpTopicsAdmin() {
   return useQuery({ queryKey: lookupKeys.helpTopicsAdmin, queryFn: lookupsApi.helpTopicsAdmin, ...ADMIN });
 }

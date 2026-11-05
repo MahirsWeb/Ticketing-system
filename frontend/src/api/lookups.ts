@@ -18,7 +18,13 @@ export const lookupsApi = {
   createCompany: (name: string, address?: string, contactInfo?: string) =>
     refreshed(apiClient.post<LookupItem>('/api/companies', { name, address, contactInfo }).then((r) => r.data)),
   updateCompany: (id: string, name: string, address: string | undefined, contactInfo: string | undefined, isActive: boolean) =>
-    refreshed(apiClient.put<CompanyItemFull>(`/api/companies/${id}`, { name, address, contactInfo, isActive }).then((r) => r.data)),
+    refreshed(
+      apiClient.put<CompanyItemFull>(`/api/companies/${id}`, { name, address, contactInfo, isActive }).then((r) => {
+        // The company that is open takes what the server sent back at once; nothing is put into memory for one that is not.
+        queryClient.setQueryData(lookupKeys.company(r.data.id), (open: CompanyItemFull | undefined) => (open ? r.data : undefined));
+        return r.data;
+      })
+    ),
 
   // Branches (grane) — every authenticated user gets name + email; includeInactive is admin-only.
   departments: () => apiClient.get<DepartmentItemFull[]>('/api/departments').then((r) => r.data),
