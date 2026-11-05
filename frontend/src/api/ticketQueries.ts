@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { ticketsApi, type TicketListParams } from './tickets';
 import { ticketKeys } from './ticketKeys';
-import { usersApi } from './users';
 
 export { ticketKeys };
 
@@ -26,9 +25,4 @@ export function useTicketCounts() {
  */
 export function useTicket(id: string | undefined) {
   return useQuery({ queryKey: ticketKeys.detail(id ?? ''), queryFn: () => ticketsApi.getById(id!), enabled: !!id, gcTime: 0 });
-}
-
-/** The staff, for the "assigned to" filter. Asked again on each visit; the list is short and people are added now and then. */
-export function useEmployees(options: { enabled?: boolean } = {}) {
-  return useQuery({ queryKey: ['users', 'employees'], queryFn: () => usersApi.list({ role: 'Employee' }), enabled: options.enabled ?? true });
 }

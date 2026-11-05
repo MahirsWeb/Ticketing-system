@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import clsx from 'clsx';
-import { useEmployees, useTicketList } from '../../api/ticketQueries';
+import { useTicketList } from '../../api/ticketQueries';
+import { useEmployees } from '../../api/userQueries';
 import { useDepartments } from '../../api/lookupQueries';
 import type { TicketListItem, UserListItemDto } from '../../types';
 import { Button, Card, ErrorText, Input, PriorityBadge, Select, Spinner } from '../../components/ui';
