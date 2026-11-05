@@ -4,7 +4,7 @@ Ovaj dokument kaže **šta znači „prošlo“**, šta je u drugom krugu testir
 i čime, šta nije moguće dokazati na ovom računaru i šta je svjesno ostalo otvoreno. Cilj je da se pri sljedećem krugu ponovo
 provjerava **samo razlika**, a ne cijeli skup.
 
-Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 718 backend i 768 frontend testova.
+Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 718 backend i 790 frontend testova.
 
 ## 1. Statusi
 
@@ -195,3 +195,5 @@ T-17 (deveti dio) i T-42 (osmi dio): firme (spisak i stranica jedne firme) su na
 T-17 (deseti dio) i T-42 (deveti dio): sanduče emailova je na zajedničkom sloju upita i razbijeno na dijelove u `pages/emails/` (stranica 49 linija, bila 303); 52 testa koja ranije nisu postojala, uključujući greške koje su ranije prolazile tiho ili miješale prikaz (status veze koji se ne učita uzet za nepovezano sanduče, poruka koja se ne učita s pokazivačem zauvijek, tekst jedne poruke uz pošiljaoca druge, označavanje i odjava koji ne uspiju bez riječi). Nijedna stranica više nije veća od 200 linija; ostaju dvije komponente i `EmailCallbackPage` bez testova.
 
 Povratak s Microsofta (`EmailCallbackPage`): 16 testova koja ranije nisu postojala, uključujući provjeru da se `state` ne puštaju kad ga nema ni u adresi ni sačuvanog; dvostruko izvršavanje u strogom režimu i preusmjeravanje poslije napuštanja stranice popravljeni.
+
+T-17 (jedanaesti dio): kandidati za zaduženje (panel zaduženih na tiketu i obrazac za otvaranje tiketa) idu kroz zajednički upit osoblja po poslovnici i podposlovnici; 22 testa koja ranije nisu postojala, uključujući spisak koji se ne učita i zakasnjeli odgovor za prethodnu poslovnicu.

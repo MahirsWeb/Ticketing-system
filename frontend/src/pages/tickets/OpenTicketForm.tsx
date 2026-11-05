@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSubBranches } from '../../api/lookupQueries';
-import { usersApi } from '../../api/users';
+import { useEmployees } from '../../api/userQueries';
 import { ticketsApi } from '../../api/tickets';
 import type { TicketDetailDto, TicketPriority, TicketSource } from '../../types';
 import { Button, Card, ErrorText, Field, Label, Select } from '../../components/ui';
@@ -12,8 +12,6 @@ import { useTicketLists } from './useTicketLists';
 export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; onOpened: (t: TicketDetailDto) => void }) {
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === 'Admin';
-
-  const [assignees, setAssignees] = useState<{ id: string; name: string }[]>([]);
 
   const [source, setSource] = useState<TicketSource>('TicketSystem');
   const [priority, setPriority] = useState<TicketPriority>('Medium');
@@ -39,23 +37,16 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
     setSubBranchId('');
   }, [departmentId]);
 
+  // Who the ticket can be given to: the staff of the chosen branch, and of the sub-branch when one is chosen. The sub-branch only counts once the list of the
+  // branch says it is one of them, so that changing the branch does not ask for the staff of a pair that does not exist; each branch is a list of its own,
+  // so the answer for the one that was chosen before is never offered for the one that is chosen now.
+  const effectiveSubBranchId = subBranches.some((s) => s.id === subBranchId) ? subBranchId : '';
+  const employees = useEmployees({ departmentId: departmentId || undefined, subBranchId: effectiveSubBranchId || undefined, enabled: !!departmentId });
+  const assignees = (employees.data ?? []).map((u) => ({ id: u.id, name: `${u.firstName} ${u.lastName}` }));
+
   useEffect(() => {
-    if (!departmentId) {
-      setAssignees([]);
-      return;
-    }
-    let current = true;
     setAssignedToUserId('');
-    usersApi
-      .list({ role: 'Employee', departmentId, subBranchId: subBranchId || undefined })
-      .then((employees) => {
-        if (current) setAssignees(employees.map((u) => ({ id: u.id, name: `${u.firstName} ${u.lastName}` })));
-      })
-      .catch(() => current && setAssignees([]));
-    return () => {
-      current = false;
-    };
-  }, [departmentId, subBranchId]);
+  }, [departmentId, effectiveSubBranchId]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -117,6 +108,7 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
               </option>
             ))}
           </Select>
+          {employees.isError && <ErrorText>The list of agents could not be loaded.</ErrorText>}
         </Field>
         <SelectField
           label="Category (internal, staff only)"

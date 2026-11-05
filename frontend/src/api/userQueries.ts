@@ -30,12 +30,12 @@ export function useUserPage(params: UserPageParams) {
 
 /**
  * The staff, for the screens that let somebody be picked (the "assigned to" filter of the ticket list, the people of the dashboard).
- * Asked again on each visit: the list is short and people are added now and then. Pass a branch to get only the staff of that branch.
+ * Asked again on each visit: the list is short and people are added now and then. Pass a branch (and a sub-branch of it) to get only their staff.
  */
-export function useEmployees(options: { departmentId?: string; enabled?: boolean } = {}) {
+export function useEmployees(options: { departmentId?: string; subBranchId?: string; enabled?: boolean } = {}) {
   return useQuery({
-    queryKey: userKeys.employees(options.departmentId ?? null),
-    queryFn: () => usersApi.list({ role: 'Employee', departmentId: options.departmentId }),
+    queryKey: userKeys.employees(options.departmentId ?? null, options.subBranchId ?? null),
+    queryFn: () => usersApi.list({ role: 'Employee', departmentId: options.departmentId, subBranchId: options.subBranchId }),
     enabled: options.enabled ?? true,
   });
 }

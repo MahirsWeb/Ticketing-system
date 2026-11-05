@@ -1,24 +1,21 @@
-import { useEffect, useState } from 'react';
-import { usersApi } from '../../api/users';
+import { useState } from 'react';
+import { useEmployees } from '../../api/userQueries';
 import { ticketsApi } from '../../api/tickets';
-import type { TicketDetailDto, UserListItemDto } from '../../types';
+import { messageOf } from '../../lib/messageOf';
+import type { TicketDetailDto } from '../../types';
 import { Button, ErrorText, Select } from '../../components/ui';
 
 /// Lets staff add a co-assignee (e.g. a second person who resolved a different part of the ticket) or remove one.
 export function TicketAssigneesPanel({ ticket, onChanged }: { ticket: TicketDetailDto; onChanged: (t: TicketDetailDto) => void }) {
-  const [candidates, setCandidates] = useState<UserListItemDto[]>([]);
+  // The staff of the branch (or sub-branch) the ticket is in. Another branch is another list, so the answer for the one the ticket was in before is
+  // never offered for the one it is in now; nothing is asked for while the ticket is in no branch.
+  const colleagues = useEmployees({ departmentId: ticket.departmentId ?? undefined, subBranchId: ticket.subBranchId ?? undefined, enabled: !!ticket.departmentId });
   const [selectedUserId, setSelectedUserId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    if (!ticket.departmentId) return;
-    const subBranchId = ticket.subBranchId ?? undefined;
-    usersApi.list({ role: 'Employee', departmentId: ticket.departmentId, subBranchId }).then(setCandidates);
-  }, [ticket.departmentId, ticket.subBranchId]);
-
   const assignedIds = new Set(ticket.assignees.map((a) => a.userId));
-  const available = candidates.filter((c) => !assignedIds.has(c.id));
+  const available = (colleagues.data ?? []).filter((c) => !assignedIds.has(c.id));
 
   async function handleAdd() {
     if (!selectedUserId) return;
@@ -28,8 +25,8 @@ export function TicketAssigneesPanel({ ticket, onChanged }: { ticket: TicketDeta
       const updated = await ticketsApi.addAssignee(ticket.id, selectedUserId);
       setSelectedUserId('');
       onChanged(updated);
-    } catch (err: any) {
-      setError(err?.response?.data?.message ?? 'Could not add assignee.');
+    } catch (err) {
+      setError(messageOf(err, 'Could not add assignee.'));
     } finally {
       setBusy(false);
     }
@@ -41,8 +38,8 @@ export function TicketAssigneesPanel({ ticket, onChanged }: { ticket: TicketDeta
     try {
       const updated = await ticketsApi.removeAssignee(ticket.id, userId);
       onChanged(updated);
-    } catch (err: any) {
-      setError(err?.response?.data?.message ?? 'Could not remove assignee.');
+    } catch (err) {
+      setError(messageOf(err, 'Could not remove assignee.'));
     } finally {
       setBusy(false);
     }
@@ -57,7 +54,7 @@ export function TicketAssigneesPanel({ ticket, onChanged }: { ticket: TicketDeta
           <span key={a.userId} className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
             {a.name}
             <span className="text-[10px] font-semibold uppercase text-slate-500">{a.userId === ticket.assignedToUserId ? 'works on it' : 'helps'}</span>
-            <button type="button" disabled={busy} onClick={() => handleRemove(a.userId)} className="font-bold text-slate-500 hover:text-red-600">
+            <button type="button" aria-label={`Remove ${a.name}`} disabled={busy} onClick={() => handleRemove(a.userId)} className="font-bold text-slate-500 hover:text-red-600">
               ×
             </button>
           </span>
@@ -69,7 +66,7 @@ export function TicketAssigneesPanel({ ticket, onChanged }: { ticket: TicketDeta
       {available.length > 0 && (
         <div className="mt-2 flex items-center gap-2">
           <div className="w-52">
-            <Select value={selectedUserId} onChange={(e) => setSelectedUserId(e.target.value)} className="text-xs">
+            <Select aria-label="Add a co-assignee" value={selectedUserId} onChange={(e) => setSelectedUserId(e.target.value)} className="text-xs">
               <option value="">Add a co-assignee…</option>
               {available.map((u) => (
                 <option key={u.id} value={u.id}>
@@ -83,6 +80,7 @@ export function TicketAssigneesPanel({ ticket, onChanged }: { ticket: TicketDeta
           </Button>
         </div>
       )}
+      {colleagues.isError && <ErrorText>The colleagues could not be loaded, so nobody can be added now.</ErrorText>}
       <ErrorText>{error}</ErrorText>
     </div>
   );

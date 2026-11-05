@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithQuery } from '../test/renderWithQuery';
-import { useUserPage } from './userQueries';
+import { useEmployees, useUserPage } from './userQueries';
 import { userKeys } from './userKeys';
 import { usersApi } from './users';
 import { queryClient } from './queryClient';
@@ -40,6 +40,10 @@ function Page({ group = 'clients', page = 1, tag = 'page' }: { group?: 'clients'
     </p>
   );
 }
+function Staff({ departmentId, subBranchId, tag }: { departmentId?: string; subBranchId?: string; tag: string }) {
+  const q = useEmployees({ departmentId, subBranchId });
+  return <p data-testid={tag}>{q.data ? q.data.map((u) => u.id).join(',') : 'loading'}</p>;
+}
 function Switch() {
   const [group, setGroup] = useState<'clients' | 'staff'>('clients');
   return (
@@ -71,6 +75,28 @@ describe('the account data the screens share (T-17)', () => {
 
     await waitFor(() => expect(screen.getByTestId('staff')).toHaveTextContent('staff-1'));
     expect(asked()).toHaveLength(2);
+  });
+
+  it('keeps the staff of each branch, and of each sub-branch of it, as an entry of its own, and asks for each once', async () => {
+    get.mockImplementation((async (url: string, config?: { params?: { departmentId?: string; subBranchId?: string } }) => {
+      if (url === '/api/users') return { data: [{ id: `${config?.params?.departmentId ?? 'all'}/${config?.params?.subBranchId ?? '-'}` }] };
+      return answer('clients');
+    }) as never);
+    renderWithQuery(
+      <>
+        <Staff tag="all" />
+        <Staff tag="a" departmentId="a" />
+        <Staff tag="a-again" departmentId="a" />
+        <Staff tag="a-s1" departmentId="a" subBranchId="s1" />
+        <Staff tag="b" departmentId="b" />
+      </>,
+      queryClient
+    );
+
+    await waitFor(() => expect(screen.getByTestId('b')).toHaveTextContent('b/-'));
+    expect([screen.getByTestId('all').textContent, screen.getByTestId('a').textContent, screen.getByTestId('a-again').textContent, screen.getByTestId('a-s1').textContent]).toEqual(['all/-', 'a/-', 'a/-', 'a/s1']);
+    expect(get.mock.calls.filter((c) => c[0] === '/api/users')).toHaveLength(4);
+    expect(get.mock.calls.find((c) => (c[1] as { params: { subBranchId?: string } }).params.subBranchId === 's1')![1]).toEqual({ params: { role: 'Employee', departmentId: 'a', subBranchId: 's1' } });
   });
 
   it('forgets a page when it is left, so that coming back to it asks again', async () => {

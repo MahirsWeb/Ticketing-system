@@ -84,6 +84,67 @@ describe('the form that opens a ticket', () => {
     expect(options).not.toContain('Sub of A');
   });
 
+  describe('who the ticket can be given to', () => {
+    it('says that the list of agents could not be loaded, instead of offering nobody without a word', async () => {
+      vi.mocked(usersApi.list).mockRejectedValue(new Error('network'));
+      renderWithQuery(<OpenTicketForm ticket={ticket} onOpened={() => {}} />);
+
+      expect(await screen.findByText('The list of agents could not be loaded.')).toBeInTheDocument();
+    });
+
+    it('does not say that when it could', async () => {
+      vi.mocked(usersApi.list).mockResolvedValue([person('bea', 'Bea')]);
+      renderWithQuery(<OpenTicketForm ticket={ticket} onOpened={() => {}} />);
+      await screen.findByRole('option', { name: 'Bea Tester' });
+
+      expect(screen.queryByText('The list of agents could not be loaded.')).not.toBeInTheDocument();
+    });
+
+    it('asks for the staff of the branch, then of the sub-branch once one is chosen, and never for a sub-branch of another branch when the branch is changed', async () => {
+      const user = userEvent.setup();
+      vi.mocked(lookupsApi.subBranches).mockImplementation((async (departmentId: string) =>
+        departmentId === 'b' ? [{ id: 'sb', departmentId: 'b', name: 'Sub of B', isActive: true }] : []) as never);
+      vi.mocked(usersApi.list).mockResolvedValue([]);
+      renderWithQuery(<OpenTicketForm ticket={ticket} onOpened={() => {}} />);
+      await screen.findByDisplayValue('Branch A');
+
+      await user.selectOptions(screen.getByLabelText('Branch'), 'b');
+      await user.selectOptions(await screen.findByLabelText('Sub-branch'), 'sb');
+      await waitFor(() => expect(usersApi.list).toHaveBeenCalledWith({ role: 'Employee', departmentId: 'b', subBranchId: 'sb' }));
+      await user.selectOptions(screen.getByLabelText('Branch'), 'a');
+
+      await waitFor(() => expect(usersApi.list).toHaveBeenLastCalledWith({ role: 'Employee', departmentId: 'a', subBranchId: undefined }));
+      expect(vi.mocked(usersApi.list).mock.calls.some(([params]) => params?.departmentId === 'a' && params?.subBranchId === 'sb')).toBe(false);
+      expect(vi.mocked(usersApi.list).mock.calls.some(([params]) => params?.departmentId === 'b' && !params?.subBranchId)).toBe(true);
+    });
+
+    it('lets go of the person that was chosen when the branch is changed, so that nobody of the old branch is sent along', async () => {
+      const user = userEvent.setup();
+      vi.mocked(usersApi.list).mockImplementation((async (params?: { departmentId?: string }) => (params?.departmentId === 'a' ? [person('ana', 'Ana')] : [person('bea', 'Bea')])) as never);
+      renderWithQuery(<OpenTicketForm ticket={ticket} onOpened={() => {}} />);
+      await screen.findByRole('option', { name: 'Ana Tester' });
+      await user.selectOptions(screen.getByLabelText('Assign to'), 'ana');
+      expect(screen.getByLabelText('Assign to')).toHaveValue('ana');
+
+      await user.selectOptions(screen.getByLabelText('Branch'), 'b');
+
+      await screen.findByRole('option', { name: 'Bea Tester' });
+      expect(screen.getByLabelText('Assign to')).toHaveValue('');
+      // not only shown as not chosen: trying to open the ticket says that somebody has to be, and nothing is sent
+      await user.click(screen.getByRole('button', { name: 'Open ticket' }));
+      expect(await screen.findByText('All fields except due date are required to open a ticket.')).toBeInTheDocument();
+      expect(ticketsApi.open).not.toHaveBeenCalled();
+    });
+
+    it('does not ask for anybody while no branch is chosen', async () => {
+      useAuthStore.setState({ accessToken: 't', user: { id: 'e', firstName: 'Em', lastName: 'Ploy', role: 'Employee', departmentId: null } as never });
+      renderWithQuery(<OpenTicketForm ticket={ticket} onOpened={() => {}} />);
+      await screen.findByLabelText('Assign to');
+
+      expect(usersApi.list).not.toHaveBeenCalled();
+    });
+  });
+
   describe('opening it', () => {
     beforeEach(() => {
       vi.mocked(lookupsApi.ticketCategories).mockResolvedValue([{ id: 'cat', name: 'Hardware' }] as never);
