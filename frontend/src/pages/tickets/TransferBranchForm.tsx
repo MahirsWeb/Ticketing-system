@@ -1,38 +1,24 @@
-import { useEffect, useState } from 'react';
-import { lookupsApi } from '../../api/lookups';
+import { useEffect, useMemo, useState } from 'react';
+import { useDepartments, useSubBranches } from '../../api/lookupQueries';
 import { ticketsApi } from '../../api/tickets';
-import type { DepartmentItemFull, SubBranchItemFull, TicketDetailDto } from '../../types';
+import type { TicketDetailDto } from '../../types';
 import { Button, ErrorText, Select } from '../../components/ui';
 
 export function TransferBranchForm({ ticket, onTransferred }: { ticket: TicketDetailDto; onTransferred: (t: TicketDetailDto) => void }) {
   const [expanded, setExpanded] = useState(false);
-  const [departments, setDepartments] = useState<DepartmentItemFull[]>([]);
   const [departmentId, setDepartmentId] = useState('');
-  const [subBranches, setSubBranches] = useState<SubBranchItemFull[]>([]);
   const [subBranchId, setSubBranchId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (!expanded) return;
-    lookupsApi.departments().then((depts) => setDepartments(depts.filter((d) => d.id !== ticket.departmentId)));
-  }, [expanded, ticket.departmentId]);
+  // The branches are fetched once for the whole application (and only when the form is opened); this ticket's own branch is not a destination.
+  const { data: allDepartments = [] } = useDepartments({ enabled: expanded });
+  const departments = useMemo(() => allDepartments.filter((d) => d.id !== ticket.departmentId), [allDepartments, ticket.departmentId]);
 
-  // A branch that has sub-branches needs one chosen too. The answer for a branch that is no longer the chosen one is thrown away.
+  // A branch that has sub-branches needs one chosen too. The list is asked for per branch, so an answer for a branch that is no longer the chosen one is never shown.
+  const { data: subBranches = [] } = useSubBranches(departmentId);
   useEffect(() => {
     setSubBranchId('');
-    if (!departmentId) {
-      setSubBranches([]);
-      return;
-    }
-    let current = true;
-    lookupsApi
-      .subBranches(departmentId)
-      .then((list) => current && setSubBranches(list))
-      .catch(() => current && setSubBranches([]));
-    return () => {
-      current = false;
-    };
   }, [departmentId]);
 
   async function handleSubmit(e: React.FormEvent) {

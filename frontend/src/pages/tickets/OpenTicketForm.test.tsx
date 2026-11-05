@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { OpenTicketForm } from './OpenTicketForm';
 import { lookupsApi } from '../../api/lookups';
+import { renderWithQuery } from '../../test/renderWithQuery';
 import { usersApi } from '../../api/users';
 import { useAuthStore } from '../../store/authStore';
 import type { TicketDetailDto, UserSummary } from '../../types';
@@ -47,7 +48,7 @@ describe('the form that opens a ticket', () => {
     vi.mocked(usersApi.list).mockImplementation((params?: { departmentId?: string }) =>
       params?.departmentId === 'a' ? forA.promise : Promise.resolve([person('bea', 'Bea')])
     );
-    render(<OpenTicketForm ticket={ticket} onOpened={() => {}} />);
+    renderWithQuery(<OpenTicketForm ticket={ticket} onOpened={() => {}} />);
 
     // Branch A is chosen first (the form picks the first one for an Admin); then the agent switches to B.
     const branch = await screen.findByDisplayValue('Branch A');
@@ -69,7 +70,7 @@ describe('the form that opens a ticket', () => {
       departmentId === 'a' ? forA.promise : Promise.resolve([{ id: 'sb', departmentId: 'b', name: 'Sub of B', isActive: true }] as never)
     );
     vi.mocked(usersApi.list).mockResolvedValue([]);
-    render(<OpenTicketForm ticket={ticket} onOpened={() => {}} />);
+    renderWithQuery(<OpenTicketForm ticket={ticket} onOpened={() => {}} />);
 
     await userEvent.selectOptions(await screen.findByDisplayValue('Branch A'), 'b');
     expect(await screen.findByRole('option', { name: 'Sub of B' })).toBeInTheDocument();

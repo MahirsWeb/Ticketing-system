@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TransferBranchForm } from './TransferBranchForm';
 import { lookupsApi } from '../../api/lookups';
 import { ticketsApi } from '../../api/tickets';
 import type { TicketDetailDto } from '../../types';
+import { renderWithQuery } from '../../test/renderWithQuery';
 
 vi.mock('../../api/lookups', () => ({ lookupsApi: { departments: vi.fn(), subBranches: vi.fn() } }));
 vi.mock('../../api/tickets', () => ({ ticketsApi: { transferBranch: vi.fn() } }));
@@ -26,7 +27,7 @@ describe('moving a ticket to another branch', () => {
   });
 
   async function open() {
-    render(<TransferBranchForm ticket={ticket} onTransferred={() => {}} />);
+    renderWithQuery(<TransferBranchForm ticket={ticket} onTransferred={() => {}} />);
     await userEvent.click(screen.getByRole('button', { name: /Transfer to another branch/ }));
   }
 

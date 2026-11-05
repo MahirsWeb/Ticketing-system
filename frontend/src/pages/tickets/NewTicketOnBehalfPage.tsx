@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { usersApi } from '../../api/users';
-import { lookupsApi } from '../../api/lookups';
+import { useDepartments, useHelpTopics, useSlaPlans, useSubBranches, useTicketCategories } from '../../api/lookupQueries';
 import { ticketsApi } from '../../api/tickets';
 import { emailIntegrationApi } from '../../api/emailIntegration';
-import type { ClientLookupResult, DepartmentItemFull, LookupItem, SlaPlanItem, SubBranchItemFull, TicketPriority, TicketSource, UserListItemDto } from '../../types';
+import type { ClientLookupResult, TicketPriority, TicketSource, UserListItemDto } from '../../types';
 import { Button, Card, ErrorText, Input, Label, Select, Field } from '../../components/ui';
 import { RichTextEditor } from '../../components/RichTextEditor';
 import { useAuthStore } from '../../store/authStore';
@@ -12,6 +12,7 @@ import { newIdempotencyKey } from '../../lib/idempotency';
 import { isBlankHtml } from '../../lib/htmlText';
 import { finishNewTicket } from '../../lib/finishNewTicket';
 
+const NO_ITEMS: never[] = [];
 const SOURCES: TicketSource[] = ['Phone', 'Email', 'TicketSystem', 'Other'];
 const PRIORITIES: TicketPriority[] = ['Emergency', 'High', 'Medium', 'Low'];
 
@@ -29,11 +30,6 @@ export default function NewTicketOnBehalfPage() {
   const [prefilledFromEmail, setPrefilledFromEmail] = useState(false);
   const [emailHasAttachments, setEmailHasAttachments] = useState(false);
 
-  const [helpTopics, setHelpTopics] = useState<LookupItem[]>([]);
-  const [departments, setDepartments] = useState<DepartmentItemFull[]>([]);
-  const [subBranches, setSubBranches] = useState<SubBranchItemFull[]>([]);
-  const [slaPlans, setSlaPlans] = useState<SlaPlanItem[]>([]);
-  const [categories, setCategories] = useState<LookupItem[]>([]);
   // Full employee roster (not branch-filtered) so picking an assignee can drive the branch selection,
   // not just the other way around — see handleAssigneeChange / handleDepartmentChange below.
   const [allEmployees, setAllEmployees] = useState<UserListItemDto[]>([]);
@@ -58,55 +54,57 @@ export default function NewTicketOnBehalfPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // The lists are shared with the other screens (fetched once, not on every visit).
+  const { data: helpTopics = [] } = useHelpTopics();
+  const { data: departments = [] } = useDepartments();
+  const { data: slaPlans = [] } = useSlaPlans();
+  const { data: categories = [] } = useTicketCategories();
+
   useEffect(() => {
-    Promise.all([
-      lookupsApi.helpTopics(),
-      lookupsApi.departments(),
-      lookupsApi.slaPlans(),
-      lookupsApi.ticketCategories(),
-      usersApi.list({ role: 'Employee' }),
-    ]).then(([topics, depts, slas, cats, employees]) => {
-      setHelpTopics(topics);
-      setDepartments(depts);
-      setSlaPlans(slas);
-      setCategories(cats);
-      setAllEmployees(employees);
-      if (topics[0]) setHelpTopicId(topics[0].id);
-      if (isAdmin && depts[0]) setDepartmentId(depts[0].id);
-      if (slas[0]) setSlaPlanId(slas[0].id);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the lists are loaded once when the page opens and the first entries become the defaults
+    usersApi.list({ role: 'Employee' }).then(setAllEmployees);
   }, []);
+
+  // The first entry of each list becomes the default, once, when the list arrives: whatever the person chooses afterwards stays.
+  const defaulted = useRef({ topic: false, sla: false, department: false });
+  useEffect(() => {
+    if (!defaulted.current.topic && helpTopics[0]) {
+      defaulted.current.topic = true;
+      setHelpTopicId(helpTopics[0].id);
+    }
+  }, [helpTopics]);
+  useEffect(() => {
+    if (!defaulted.current.sla && slaPlans[0]) {
+      defaulted.current.sla = true;
+      setSlaPlanId(slaPlans[0].id);
+    }
+  }, [slaPlans]);
+  useEffect(() => {
+    if (!defaulted.current.department && isAdmin && departments[0]) {
+      defaulted.current.department = true;
+      setDepartmentId(departments[0].id);
+    }
+  }, [departments, isAdmin]);
 
   // Refreshes the sub-branch list whenever the branch changes. If the currently assigned employee
   // belongs to this branch, their sub-branch is pre-selected too (keeps them fully in sync rather
   // than just clearing sub-branch on every branch change).
+  // The sub-branches are asked for per branch, so an answer for a branch that is no longer the chosen one is never shown (see OpenTicketForm).
+  const subBranchQuery = useSubBranches(departmentId);
+  const subBranches = subBranchQuery.data ?? NO_ITEMS;
+  const loadedSubBranches = subBranchQuery.data;
   useEffect(() => {
-    if (!departmentId) {
-      setSubBranches([]);
+    if (!departmentId || !loadedSubBranches) {
       setSubBranchId('');
       return;
     }
-    // The answer for a branch that is no longer the chosen one is thrown away (see OpenTicketForm).
-    let current = true;
-    lookupsApi
-      .subBranches(departmentId)
-      .then((subs) => {
-        if (!current) return;
-        setSubBranches(subs);
-        const assignee = allEmployees.find((e) => e.id === assignedToUserId);
-        if (assignee?.departmentId === departmentId && assignee.subBranchId && subs.some((s) => s.id === assignee.subBranchId)) {
-          setSubBranchId(assignee.subBranchId);
-        } else {
-          setSubBranchId('');
-        }
-      })
-      .catch(() => current && setSubBranches([]));
-    return () => {
-      current = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- sub-branches are loaded when the branch changes; picking an assignee must not reload them
-  }, [departmentId]);
+    const assignee = allEmployees.find((e) => e.id === assignedToUserId);
+    if (assignee?.departmentId === departmentId && assignee.subBranchId && loadedSubBranches.some((s) => s.id === assignee.subBranchId)) {
+      setSubBranchId(assignee.subBranchId);
+    } else {
+      setSubBranchId('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the choice is made when the branch (or its sub-branches) changes; picking an assignee must not redo it
+  }, [departmentId, loadedSubBranches]);
 
   // Picking an assignee is the primary flow: their branch (and sub-branch) is adopted automatically.
   // Only meaningful for Admin — non-admin staff have a fixed, non-editable branch, so their assignee

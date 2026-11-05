@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
-import { lookupsApi } from '../../api/lookups';
+import { useEffect, useRef, useState } from 'react';
+import { useDepartments, useHelpTopics, useSlaPlans, useSubBranches, useTicketCategories } from '../../api/lookupQueries';
 import { usersApi } from '../../api/users';
 import { ticketsApi } from '../../api/tickets';
-import type { DepartmentItemFull, LookupItem, SlaPlanItem, SubBranchItemFull, TicketDetailDto, TicketPriority, TicketSource } from '../../types';
+import type { TicketDetailDto, TicketPriority, TicketSource } from '../../types';
 import { Button, Card, ErrorText, Label, Select, Field, Input } from '../../components/ui';
 import { useAuthStore } from '../../store/authStore';
 
@@ -13,11 +13,6 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === 'Admin';
 
-  const [helpTopics, setHelpTopics] = useState<LookupItem[]>([]);
-  const [departments, setDepartments] = useState<DepartmentItemFull[]>([]);
-  const [subBranches, setSubBranches] = useState<SubBranchItemFull[]>([]);
-  const [slaPlans, setSlaPlans] = useState<SlaPlanItem[]>([]);
-  const [categories, setCategories] = useState<LookupItem[]>([]);
   const [assignees, setAssignees] = useState<{ id: string; name: string }[]>([]);
 
   const [source, setSource] = useState<TicketSource>('TicketSystem');
@@ -34,38 +29,37 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // The lists are shared with the other screens (fetched once, not on every visit). The sub-branches are asked for per branch, so an answer for a
+  // branch that is no longer the chosen one is never shown: changing the branch quickly used to let the slower answer replace the list for the new one.
+  const { data: helpTopics = [] } = useHelpTopics();
+  const { data: departments = [] } = useDepartments();
+  const { data: slaPlans = [] } = useSlaPlans();
+  const { data: categories = [] } = useTicketCategories();
+  const { data: subBranches = [] } = useSubBranches(departmentId);
+
+  // The first entry of each list is chosen for the person, once, when the list arrives: whatever they choose afterwards stays.
+  const defaulted = useRef({ topic: false, sla: false, department: false });
   useEffect(() => {
-    Promise.all([lookupsApi.helpTopics(), lookupsApi.departments(), lookupsApi.slaPlans(), lookupsApi.ticketCategories()]).then(
-      ([topics, depts, slas, cats]) => {
-        setHelpTopics(topics);
-        setDepartments(depts);
-        setSlaPlans(slas);
-        setCategories(cats);
-        if (topics[0]) setHelpTopicId(topics[0].id);
-        if (isAdmin && !departmentId && depts[0]) setDepartmentId(depts[0].id);
-        if (slas[0]) setSlaPlanId(slas[0].id);
-      }
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the lists are loaded once when the form opens; isAdmin and departmentId only matter at that moment
-  }, []);
+    if (!defaulted.current.topic && helpTopics[0]) {
+      defaulted.current.topic = true;
+      setHelpTopicId(helpTopics[0].id);
+    }
+  }, [helpTopics]);
+  useEffect(() => {
+    if (!defaulted.current.sla && slaPlans[0]) {
+      defaulted.current.sla = true;
+      setSlaPlanId(slaPlans[0].id);
+    }
+  }, [slaPlans]);
+  useEffect(() => {
+    if (!defaulted.current.department && isAdmin && departments[0]) {
+      defaulted.current.department = true;
+      if (!departmentId) setDepartmentId(departments[0].id);
+    }
+  }, [departments, isAdmin, departmentId]);
 
   useEffect(() => {
-    if (!departmentId) {
-      setSubBranches([]);
-      setSubBranchId('');
-      return;
-    }
-    // The answer for a branch that is no longer the chosen one is thrown away: changing the branch quickly used to let the slower answer
-    // for the old branch replace the list for the new one.
-    let current = true;
     setSubBranchId('');
-    lookupsApi
-      .subBranches(departmentId)
-      .then((list) => current && setSubBranches(list))
-      .catch(() => current && setSubBranches([]));
-    return () => {
-      current = false;
-    };
   }, [departmentId]);
 
   useEffect(() => {

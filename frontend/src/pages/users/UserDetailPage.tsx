@@ -4,9 +4,9 @@ import { format } from 'date-fns';
 import clsx from 'clsx';
 import { useAuthStore } from '../../store/authStore';
 import { usersApi } from '../../api/users';
-import { lookupsApi } from '../../api/lookups';
+import { useCompanies, useDepartments, useSubBranches } from '../../api/lookupQueries';
 import { ticketsApi } from '../../api/tickets';
-import type { CompanyItemFull, CreatedUserResponse, DepartmentItemFull, SubBranchItemFull, TicketListItem, UserListItemDto, UserRole } from '../../types';
+import type { CreatedUserResponse, TicketListItem, UserListItemDto, UserRole } from '../../types';
 import { Button, Card, ErrorText, Input, Label, PriorityBadge, Select, Spinner, StatusBadge, StatusPill, Field } from '../../components/ui';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { UserAvatar } from '../../components/UserAvatar';
@@ -25,9 +25,8 @@ export default function UserDetailPage() {
   const [tickets, setTickets] = useState<TicketListItem[]>([]);
   const [ticketsLoading, setTicketsLoading] = useState(true);
 
-  const [companies, setCompanies] = useState<CompanyItemFull[]>([]);
-  const [departments, setDepartments] = useState<DepartmentItemFull[]>([]);
-  const [subBranchesByDept, setSubBranchesByDept] = useState<Record<string, SubBranchItemFull[]>>({});
+  const { data: companies = [] } = useCompanies();
+  const { data: departments = [] } = useDepartments();
 
   const [editing, setEditing] = useState(false);
   const [firstName, setFirstName] = useState('');
@@ -48,7 +47,8 @@ export default function UserDetailPage() {
   const [avatarError, setAvatarError] = useState<string | null>(null);
 
   const needsBranch = accountType === 'Employee';
-  const availableSubBranches = departmentId ? subBranchesByDept[departmentId] ?? [] : [];
+  // Sub-branches are kept per branch by the shared cache, so going back to a branch already seen does not ask again.
+  const { data: availableSubBranches = [] } = useSubBranches(departmentId, { enabled: needsBranch });
 
   function loadUser() {
     if (!id) return;
@@ -70,17 +70,8 @@ export default function UserDetailPage() {
 
   useEffect(() => {
     loadUser();
-    lookupsApi.companies().then(setCompanies);
-    lookupsApi.departments().then(setDepartments);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the user and the lookups are loaded when the id in the address changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the user is loaded when the id in the address changes
   }, [id]);
-
-  useEffect(() => {
-    if (needsBranch && departmentId && !subBranchesByDept[departmentId]) {
-      lookupsApi.subBranches(departmentId).then((items) => setSubBranchesByDept((prev) => ({ ...prev, [departmentId]: items })));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- sub-branches are fetched when the branch or role changes; the cache object is read here, not a trigger
-  }, [departmentId, needsBranch]);
 
   useEffect(() => {
     if (!id || !target) return;

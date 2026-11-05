@@ -1,20 +1,13 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { lookupsApi } from './lookups';
+import { lookupKeys } from './lookupKeys';
 
 /**
  * The lists the application is configured with (branches, firms, help topics, SLA plans, categories, sub-branches) are asked for by a
- * dozen screens and change a few times a year. They are fetched once and shared, instead of by every screen on every visit; the settings
- * screens, which change them, call {@link useRefreshLookups} so nobody keeps looking at an old list.
+ * dozen screens and change a few times a year. They are fetched once and shared, instead of by every screen on every visit. Every change made through
+ * `lookupsApi` (create, update, delete) refreshes them, so nobody keeps looking at an old list.
  */
-export const lookupKeys = {
-  all: ['lookups'] as const,
-  departments: ['lookups', 'departments'] as const,
-  companies: ['lookups', 'companies'] as const,
-  helpTopics: ['lookups', 'help-topics'] as const,
-  slaPlans: ['lookups', 'sla-plans'] as const,
-  ticketCategories: ['lookups', 'ticket-categories'] as const,
-  subBranches: (departmentId: string) => ['lookups', 'sub-branches', departmentId] as const,
-};
+export { lookupKeys };
 
 /** Some screens need a list only for some people (the branch filter is for Admin) or only once something is opened. */
 export interface LookupOptions {
@@ -52,10 +45,4 @@ export function useSubBranches(departmentId: string | null | undefined, options:
     enabled: !!departmentId && (options.enabled ?? true),
     staleTime: LOOKUP_STALE_MS,
   });
-}
-
-/** Call after one of the lists was changed: every screen that uses a list gets the new one the next time it looks. */
-export function useRefreshLookups() {
-  const client = useQueryClient();
-  return () => client.invalidateQueries({ queryKey: lookupKeys.all });
 }

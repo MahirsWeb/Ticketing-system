@@ -3,8 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import clsx from 'clsx';
 import { useAuthStore } from '../../store/authStore';
 import { usersApi } from '../../api/users';
-import { lookupsApi } from '../../api/lookups';
-import type { CompanyItemFull, CreatedUserResponse, DepartmentItemFull, SubBranchItemFull, UserPageDto, UserRole } from '../../types';
+import { useCompanies, useDepartments, useSubBranches } from '../../api/lookupQueries';
+import type { CreatedUserResponse, UserPageDto, UserRole } from '../../types';
 import { Button, Card, ErrorText, Input, Label, Select, StatusPill, Field } from '../../components/ui';
 import { TempPasswordModal } from './TempPasswordModal';
 import CompaniesPage from './CompaniesPage';
@@ -26,9 +26,8 @@ export default function UsersPage() {
   const [page, setPage] = useState(1);
   const [reloadKey, setReloadKey] = useState(0);
   const [listError, setListError] = useState<string | null>(null);
-  const [companies, setCompanies] = useState<CompanyItemFull[]>([]);
-  const [departments, setDepartments] = useState<DepartmentItemFull[]>([]);
-  const [subBranchesByDept, setSubBranchesByDept] = useState<Record<string, SubBranchItemFull[]>>({});
+  const { data: companies = [] } = useCompanies();
+  const { data: departments = [] } = useDepartments();
   const [result, setResult] = useState<CreatedUserResponse | null>(null);
 
   const [firstName, setFirstName] = useState('');
@@ -42,7 +41,8 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(false);
 
   const needsBranch = accountType === 'Employee';
-  const availableSubBranches = departmentId ? subBranchesByDept[departmentId] ?? [] : [];
+  // Sub-branches are kept per branch by the shared cache, so going back to a branch already seen does not ask again.
+  const { data: availableSubBranches = [] } = useSubBranches(departmentId, { enabled: needsBranch });
 
   const activeTab = canSeeEmployees ? tab : 'clients';
 
@@ -77,22 +77,6 @@ export default function UsersPage() {
     return () => controller.abort();
   }, [section, activeTab, debouncedSearch, page, reloadKey]);
 
-  async function getSubBranches(deptId: string): Promise<SubBranchItemFull[]> {
-    if (subBranchesByDept[deptId]) return subBranchesByDept[deptId];
-    const items = await lookupsApi.subBranches(deptId);
-    setSubBranchesByDept((prev) => ({ ...prev, [deptId]: items }));
-    return items;
-  }
-
-  useEffect(() => {
-    lookupsApi.companies().then(setCompanies);
-    lookupsApi.departments().then(setDepartments);
-  }, []);
-
-  useEffect(() => {
-    if (needsBranch && departmentId) getSubBranches(departmentId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- sub-branches are fetched when the branch or role changes; getSubBranches reads the current cache
-  }, [departmentId, needsBranch]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();

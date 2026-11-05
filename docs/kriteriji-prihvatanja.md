@@ -169,3 +169,5 @@ T-15 (šesti komad): kontroler izvještaja je sveden na 75 linija, a računica j
 T-15 (sedmi komad): kontroler prijave je sveden na 38 linija, a pravila su u `Api/Auth/AuthService.cs` uz 9 novih testova pravila prijave i lozinki; ponašanje je isto.
 
 T-15 je zatvoren: svi kontroleri su tanki (ukupno 1.022 linije), a pravila su u servisima; servisi koriste `AppDbContext` izravno i nisu iza interfejsa u `Application` sloju.
+
+T-17 (prvi dio): šifarnici na frontendu dolaze iz zajedničkog sloja upita (`src/api/lookupQueries.ts`), s osvježavanjem pri izmjeni i brisanjem pri odjavi; 164 frontend testa. Podaci tiketa, izvještaja, zadataka i naloga ostaju ručni.
