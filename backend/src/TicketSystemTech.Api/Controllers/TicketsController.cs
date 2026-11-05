@@ -1,136 +1,53 @@
-using System.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using TicketSystemTech.Api.Contracts;
-using TicketSystemTech.Api.Emails;
+using TicketSystemTech.Api.Services;
+using TicketSystemTech.Api.Tickets;
 using TicketSystemTech.Application.Common;
-using TicketSystemTech.Application.Common.Interfaces;
-using TicketSystemTech.Application.WorkTime;
-using TicketSystemTech.Domain.Entities;
 using TicketSystemTech.Domain.Enums;
 using TicketSystemTech.Domain.Workflow;
-using TicketSystemTech.Infrastructure.Identity;
-using TicketSystemTech.Infrastructure.Persistence;
-using TicketSystemTech.Infrastructure.Services;
 
 namespace TicketSystemTech.Api.Controllers;
 
+/// <summary>
+/// The HTTP face of the tickets: it reads the request, hands it to the service that owns the rule and turns the answer into a
+/// status code. What a ticket may do, who may reach it and what is sent to whom lives in <c>TicketSystemTech.Api.Tickets</c>.
+/// </summary>
 [ApiController]
 [Route("api/tickets")]
 [Authorize]
 public class TicketsController : ControllerBase
 {
-    private readonly AppDbContext _db;
-    private readonly ICurrentUserService _currentUser;
-    private readonly ITicketNumberGenerator _ticketNumberGenerator;
-    private readonly IEmailSender _emailSender;
-    private readonly INotificationPublisher _notificationPublisher;
-    private readonly IKnowledgeBaseIndexQueue _indexQueue;
-    private readonly IPiiProtector _piiProtector;
-    private readonly IHtmlSanitizerService _html;
-    private readonly IFileLinkService _links;
-    private readonly ISlaCalculator _sla;
-    private readonly ILogger<TicketsController> _logger;
-
-    private readonly TimeProvider _time;
-    private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
+    private readonly ITicketQueries _queries;
+    private readonly ITicketCreationService _creation;
+    private readonly ITicketAssigneeService _assignees;
+    private readonly ITicketWorkSessionService _workSessions;
+    private readonly ITicketLifecycleService _lifecycle;
+    private readonly ITicketMessageService _messages;
 
     public TicketsController(
-        AppDbContext db,
-        ICurrentUserService currentUser,
-        ITicketNumberGenerator ticketNumberGenerator,
-        IEmailSender emailSender,
-        INotificationPublisher notificationPublisher,
-        IKnowledgeBaseIndexQueue indexQueue,
-        IPiiProtector piiProtector,
-        IHtmlSanitizerService html,
-        IFileLinkService links,
-        ISlaCalculator sla,
-        ILogger<TicketsController> logger,
-        TimeProvider time)
+        ITicketQueries queries,
+        ITicketCreationService creation,
+        ITicketAssigneeService assignees,
+        ITicketWorkSessionService workSessions,
+        ITicketLifecycleService lifecycle,
+        ITicketMessageService messages)
     {
-        _time = time;
-        _links = links;
-        _sla = sla;
-        _logger = logger;
-        _db = db;
-        _currentUser = currentUser;
-        _ticketNumberGenerator = ticketNumberGenerator;
-        _emailSender = emailSender;
-        _notificationPublisher = notificationPublisher;
-        _indexQueue = indexQueue;
-        _piiProtector = piiProtector;
-        _html = html;
+        _queries = queries;
+        _creation = creation;
+        _assignees = assignees;
+        _workSessions = workSessions;
+        _lifecycle = lifecycle;
+        _messages = messages;
     }
 
-    // Names/branches are user-controlled text interpolated into HTML the server itself builds
-    // (system-event feed entries), so they must be encoded.
-    private static string H(string? text) => WebUtility.HtmlEncode(text ?? string.Empty);
-    private static string FullName(ApplicationUser u) => $"{H(u.FirstName)} {H(u.LastName)}";
+    /// <summary>The Idempotency-Key header as it came, or null; whether it is acceptable is for the service to say.</summary>
+    private string? RawIdempotencyKey() => Request.Headers.TryGetValue(IdempotencyKey.HeaderName, out var values) ? values.ToString() : null;
 
     [HttpPost]
     [Authorize(Roles = nameof(UserRole.Client))]
-    public async Task<ActionResult<TicketDetailDto>> Create(CreateTicketRequest request)
-    {
-        var clientId = _currentUser.UserId!.Value;
-
-        var (idempotencyKey, keyError) = ReadIdempotencyKey();
-        if (keyError is not null) return keyError;
-        if (idempotencyKey is not null && await FindPreviousResultAsync(clientId, idempotencyKey) is { } previous)
-            return Ok(await BuildDetailDto(previous)); // a retry of a request that already succeeded
-
-        var companyId = _currentUser.CompanyId;
-        if (companyId is null)
-            return BadRequest(new { message = "Your account is not linked to a company." });
-
-        if (HtmlText.IsBlank(request.Description)) return BadRequest(new { message = "Please describe the problem." });
-
-        var department = await _db.Departments.FirstOrDefaultAsync(d => d.Id == request.DepartmentId && d.IsActive);
-        if (department is null) return BadRequest(new { message = "Please select a valid branch." });
-
-        var client = await _db.Users.FirstAsync(u => u.Id == clientId);
-        var company = await _db.Companies.FirstAsync(c => c.Id == companyId.Value);
-
-        var ticket = new Ticket
-        {
-            TicketNumber = await _ticketNumberGenerator.NextAsync(),
-            Title = request.Title,
-            Description = _html.Sanitize(request.Description),
-            ClientId = clientId,
-            CompanyId = companyId.Value,
-            DepartmentId = department.Id,
-            Status = TicketStatus.New
-        };
-        _db.Tickets.Add(ticket);
-
-        // Ticket is routed to the branch the client picked — only that branch's staff are notified/emailed for triage.
-        var staff = await _db.Users.Where(u => u.Role == UserRole.Employee && u.IsActive && u.DepartmentId == department.Id).ToListAsync();
-        foreach (var member in staff)
-        {
-            _db.Notifications.Add(new Notification
-            {
-                UserId = member.Id,
-                Type = NotificationType.NewTicket,
-                Message = $"New ticket #{ticket.TicketNumber}: {ticket.Title}",
-                TicketId = ticket.Id
-            });
-        }
-
-        // The ticket, its in-app notifications and the idempotency record commit together or not at all, so a
-        // retry can never find a ticket without its notifications (or notifications without a ticket).
-        var raced = await SaveCreatedAsync(clientId, idempotencyKey, ticket.Id);
-        if (raced is { } winner) return Ok(await BuildDetailDto(winner));
-
-        foreach (var member in staff)
-        {
-            await _emailSender.SendAsync(member.Email!, $"New ticket #{ticket.TicketNumber} submitted — {company.Name}",
-                EmailTemplates.NewTicketSubmitted(member.FirstName, ticket.TicketNumber, ticket.Title, $"{client.FirstName} {client.LastName}", company.Name));
-            await _notificationPublisher.PushToUserAsync(member.Id, "newTicket", new { ticket.Id, ticket.TicketNumber, ticket.Title });
-        }
-
-        return Ok(await BuildDetailDto(ticket.Id));
-    }
+    public async Task<ActionResult<TicketDetailDto>> Create(CreateTicketRequest request) =>
+        this.ToActionResult(await _creation.CreateAsync(request, RawIdempotencyKey()));
 
     /// <summary>
     /// Staff creates a ticket on behalf of a client who reported the issue verbally (e.g. by phone) rather
@@ -139,144 +56,8 @@ public class TicketsController : ControllerBase
     /// </summary>
     [HttpPost("on-behalf")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    public async Task<ActionResult<TicketDetailDto>> CreateOnBehalf(CreateTicketOnBehalfRequest request)
-    {
-        var (idempotencyKey, keyError) = ReadIdempotencyKey();
-        if (keyError is not null) return keyError;
-        if (idempotencyKey is not null && await FindPreviousResultAsync(_currentUser.UserId!.Value, idempotencyKey) is { } previous)
-            return Ok(await BuildDetailDto(previous));
-
-        var clientEmailHash = _piiProtector.Hash(request.ClientEmail);
-        var client = await _db.Users.FirstOrDefaultAsync(u => u.NormalizedEmail == clientEmailHash && u.Role == UserRole.Client);
-        if (client is null) return NotFound(new { message = "No client account found with that email." });
-        if (client.CompanyId is null) return BadRequest(new { message = "This client is not linked to a company." });
-
-        // Non-admin staff can only route a ticket into their own branch; moving it elsewhere later requires an explicit transfer.
-        if (_currentUser.Role != UserRole.Admin && request.DepartmentId != _currentUser.DepartmentId)
-            return BadRequest(new { message = "You can only open tickets into your own branch." });
-        if (HtmlText.IsBlank(request.Description)) return BadRequest(new { message = "Please describe the problem." });
-
-        var lookupError = await ValidateLookupsAsync(request.HelpTopicId, request.CategoryId, request.DepartmentId);
-        if (lookupError is not null) return BadRequest(new { message = lookupError });
-
-        var subBranchError = await ValidateSubBranchAsync(request.DepartmentId, request.SubBranchId);
-        if (subBranchError is not null) return BadRequest(new { message = subBranchError });
-
-        var assignee = await _db.Users.FirstOrDefaultAsync(u => u.Id == request.AssignedToUserId
-            && u.Role == UserRole.Employee && u.IsActive);
-        if (assignee is null) return BadRequest(new { message = TicketAssignment.NotAnAgent });
-        var assigneeError = TicketAssignment.Check(assignee.DepartmentId, assignee.SubBranchId, request.DepartmentId, request.SubBranchId);
-        if (assigneeError is not null) return BadRequest(new { message = assigneeError });
-
-        var openedAtUtc = UtcNow;
-        var (dueDateUtc, slaError) = await ResolveDueDateAsync(request.SlaPlanId, request.DueDateUtc, openedAtUtc);
-        if (slaError is not null) return BadRequest(new { message = slaError });
-
-        var ticket = new Ticket
-        {
-            TicketNumber = await _ticketNumberGenerator.NextAsync(),
-            Title = request.Title,
-            Description = _html.Sanitize(request.Description),
-            ClientId = client.Id,
-            CompanyId = client.CompanyId.Value,
-            Status = TicketStatus.Open,
-            Source = request.Source,
-            HelpTopicId = request.HelpTopicId,
-            DepartmentId = request.DepartmentId,
-            SubBranchId = request.SubBranchId,
-            SlaPlanId = request.SlaPlanId,
-            Priority = request.Priority,
-            DueDateUtc = dueDateUtc,
-            CategoryId = request.CategoryId,
-            OpenedByUserId = _currentUser.UserId,
-            OpenedAtUtc = openedAtUtc
-        };
-        _db.Tickets.Add(ticket);
-        _db.TicketAssignees.Add(new TicketAssignee { Ticket = ticket, UserId = assignee.Id, IsPrimary = true });
-
-        var openedBy = await _db.Users.FirstAsync(u => u.Id == _currentUser.UserId);
-        _db.TicketMessages.Add(new TicketMessage
-        {
-            Ticket = ticket,
-            AuthorId = openedBy.Id,
-            Type = MessageType.SystemEvent,
-            BodyHtml = $"<p>Ticket opened by {FullName(openedBy)} and assigned to {FullName(assignee)}.</p>"
-        });
-
-        _db.Notifications.Add(new Notification { UserId = assignee.Id, Type = NotificationType.TicketAssigned, Message = $"Ticket #{ticket.TicketNumber} assigned to you", TicketId = ticket.Id });
-        _db.Notifications.Add(new Notification { UserId = client.Id, Type = NotificationType.TicketOpened, Message = $"Your ticket #{ticket.TicketNumber} has been opened", TicketId = ticket.Id });
-
-        var raced = await SaveCreatedAsync(_currentUser.UserId!.Value, idempotencyKey, ticket.Id);
-        if (raced is { } winner) return Ok(await BuildDetailDto(winner));
-
-        await _emailSender.SendAsync(client.Email!, $"Your ticket #{ticket.TicketNumber} has been opened", EmailTemplates.TicketOpened(client.FirstName, ticket.TicketNumber));
-        await _emailSender.SendAsync(assignee.Email!, $"Ticket #{ticket.TicketNumber} assigned to you", EmailTemplates.TicketAssigned(assignee.FirstName, ticket.TicketNumber, ticket.Title));
-        await _notificationPublisher.PushToUserAsync(assignee.Id, "ticketAssigned", new { ticket.Id, ticket.TicketNumber, ticket.Title });
-        await _notificationPublisher.PushToUserAsync(client.Id, "ticketOpened", new { ticket.Id, ticket.TicketNumber, ticket.Title });
-
-        return Ok(await BuildDetailDto(ticket.Id));
-    }
-
-    /// <summary>
-    /// The lookups a staff member picks when opening a ticket must exist and still be in use. An unknown id used to reach
-    /// the database and come back as a 500 (foreign-key failure); an inactive branch, topic or category was accepted, so a
-    /// ticket could be routed to a branch that no longer exists in practice.
-    /// </summary>
-    private async Task<string?> ValidateLookupsAsync(Guid helpTopicId, Guid? categoryId, Guid departmentId)
-    {
-        if (!await _db.Departments.AnyAsync(d => d.Id == departmentId && d.IsActive)) return "Branch not found.";
-        if (!await _db.HelpTopics.AnyAsync(h => h.Id == helpTopicId && h.IsActive)) return "Help topic not found.";
-        if (categoryId.HasValue && !await _db.TicketCategories.AnyAsync(c => c.Id == categoryId.Value && c.IsActive)) return "Category not found.";
-        return null;
-    }
-
-    private const string TicketCreateScope = "ticket-create";
-    private const string TicketMessageScope = "ticket-message";
-
-    /// <summary>Reads the optional Idempotency-Key header. A present but malformed key is an error, never silently ignored.</summary>
-    private (string? Key, BadRequestObjectResult? Error) ReadIdempotencyKey()
-    {
-        if (!Request.Headers.TryGetValue(IdempotencyKey.HeaderName, out var values)) return (null, null);
-
-        var key = values.ToString();
-        return IdempotencyKey.IsValid(key)
-            ? (key, null)
-            : (null, BadRequest(new { message = $"{IdempotencyKey.HeaderName} must be 1-{IdempotencyKey.MaxLength} letters, digits, '-' or '_'." }));
-    }
-
-    private Task<Guid?> FindPreviousResultAsync(Guid userId, string key, string scope = TicketCreateScope) =>
-        _db.IdempotencyRecords.AsNoTracking()
-            .Where(r => r.UserId == userId && r.Scope == scope && r.Key == key)
-            .Select(r => (Guid?)r.ResourceId)
-            .FirstOrDefaultAsync();
-
-    /// <summary>
-    /// Commits everything staged on the context. When a key was supplied its record goes in the same transaction;
-    /// if another request with the same key won the race the unique index rejects this one, nothing is written, and
-    /// the winner's ticket id is returned so the caller can hand that back instead.
-    /// </summary>
-    private async Task<Guid?> SaveCreatedAsync(Guid userId, string? key, Guid ticketId, string scope = TicketCreateScope)
-    {
-        if (key is null)
-        {
-            await _db.SaveChangesAsync();
-            return null;
-        }
-
-        _db.IdempotencyRecords.Add(new IdempotencyRecord { UserId = userId, Scope = scope, Key = key, ResourceId = ticketId });
-        try
-        {
-            await _db.SaveChangesAsync();
-            return null;
-        }
-        catch (DbUpdateException)
-        {
-            _db.ChangeTracker.Clear();
-            var winner = await FindPreviousResultAsync(userId, key, scope);
-            if (winner is null) throw; // not the idempotency index: a genuine failure
-            return winner;
-        }
-    }
+    public async Task<ActionResult<TicketDetailDto>> CreateOnBehalf(CreateTicketOnBehalfRequest request) =>
+        this.ToActionResult(await _creation.CreateOnBehalfAsync(request, RawIdempotencyKey()));
 
     [HttpGet]
     public async Task<ActionResult<PagedResult<TicketListItem>>> List(
@@ -294,331 +75,35 @@ public class TicketsController : ControllerBase
         [FromQuery] bool answeredOnly = false,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 25,
-        CancellationToken ct = default)
-    {
-        page = Math.Max(page, 1);
-        pageSize = Math.Clamp(pageSize, 1, 100);
-
-        var query = _db.Tickets.AsNoTracking().AsQueryable();
-
-        query = _currentUser.Role switch
-        {
-            UserRole.Client => query.Where(t => t.ClientId == _currentUser.UserId),
-            UserRole.Admin => query, // Admin sees everything across all branches
-            // Branches are isolated, strictly: an employee sees only their own branch's tickets (a ticket without a branch is Admin's alone).
-            _ => query.Where(t => t.DepartmentId == _currentUser.DepartmentId)
-        };
-
-        var statuses = ParseStatuses(status);
-        if (statuses.Count > 0) query = query.Where(t => statuses.Contains(t.Status));
-        if (companyId.HasValue) query = query.Where(t => t.CompanyId == companyId.Value);
-        if (clientId.HasValue) query = query.Where(t => t.ClientId == clientId.Value);
-        if (assignedToUserId.HasValue)
-            query = query.Where(t => t.Assignees.Any(a => a.UserId == assignedToUserId.Value));
-        if (departmentId.HasValue) query = query.Where(t => t.DepartmentId == departmentId.Value);
-        if (subBranchId.HasValue) query = query.Where(t => t.SubBranchId == subBranchId.Value);
-        if (!string.IsNullOrWhiteSpace(search))
-            query = query.Where(t => t.TicketNumber.Contains(search) || t.Title.Contains(search));
-        if (createdFrom.HasValue) query = query.Where(t => t.CreatedAt >= createdFrom.Value);
-        if (createdTo.HasValue) query = query.Where(t => t.CreatedAt <= createdTo.Value);
-        if (answeredOnly)
-        {
-            // "Answered" = an open (never Closed/New) ticket that a staff member has already replied to —
-            // e.g. staff called the client and the client asked to follow up tomorrow, so it's not done yet.
-            var staffIds = await _db.Users.Where(u => u.Role != UserRole.Client).Select(u => u.Id).ToListAsync(ct);
-            query = query.Where(t => t.Status != TicketStatus.Closed && t.Status != TicketStatus.New &&
-                t.Messages.Any(m => m.Type == MessageType.Response && staffIds.Contains(m.AuthorId)));
-        }
-
-        var totalCount = await query.CountAsync(ct);
-
-        var desc = string.Equals(sortDir, "desc", StringComparison.OrdinalIgnoreCase);
-        query = (sortBy?.ToLowerInvariant()) switch
-        {
-            // Numbers have different lengths ("99999", "100002"), so sorting the text puts 100002 before 99999: shorter first, then text.
-            "ticketnumber" => desc
-                ? query.OrderByDescending(t => t.TicketNumber.Length).ThenByDescending(t => t.TicketNumber)
-                : query.OrderBy(t => t.TicketNumber.Length).ThenBy(t => t.TicketNumber),
-            "title" => desc ? query.OrderByDescending(t => t.Title) : query.OrderBy(t => t.Title),
-            "status" => desc ? query.OrderByDescending(t => t.Status) : query.OrderBy(t => t.Status),
-            "priority" => desc ? query.OrderByDescending(t => t.Priority) : query.OrderBy(t => t.Priority),
-            "duedate" => desc ? query.OrderByDescending(t => t.DueDateUtc) : query.OrderBy(t => t.DueDateUtc),
-            "createdat" => desc ? query.OrderByDescending(t => t.CreatedAt) : query.OrderBy(t => t.CreatedAt),
-            "branch" => desc ? query.OrderByDescending(t => t.Department!.Name) : query.OrderBy(t => t.Department!.Name),
-            "company" => desc ? query.OrderByDescending(t => t.Company!.Name) : query.OrderBy(t => t.Company!.Name),
-            // Default: most urgent first (Emergency, High, Medium, Low), then newest created first.
-            _ => query.OrderBy(t => t.Priority).ThenByDescending(t => t.CreatedAt)
-        };
-
-        var page_ = await query
-            .Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(t => new
-            {
-                t.Id,
-                t.TicketNumber,
-                t.Title,
-                t.Status,
-                t.Priority,
-                t.CompanyId,
-                t.ClientId,
-                AssignedToUserId = t.Assignees.Where(a => a.IsPrimary).Select(a => (Guid?)a.UserId).FirstOrDefault(),
-                t.CreatedAt,
-                t.DueDateUtc,
-                t.ClosedAtUtc,
-                t.DepartmentId,
-                t.SubBranchId
-            })
-            .ToListAsync(ct);
-
-        var userIds = page_.SelectMany(t => new[] { t.ClientId, t.AssignedToUserId }).Where(id => id.HasValue).Select(id => id!.Value)
-            .Concat(page_.Select(t => t.ClientId)).Distinct().ToList();
-        var users = await _db.Users.Where(u => userIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FirstName + " " + u.LastName, ct);
-        var companyIds = page_.Select(t => t.CompanyId).Distinct().ToList();
-        var companies = await _db.Companies.Where(c => companyIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id, c => c.Name, ct);
-        var departmentIds = page_.Where(t => t.DepartmentId.HasValue).Select(t => t.DepartmentId!.Value).Distinct().ToList();
-        var departments = await _db.Departments.Where(d => departmentIds.Contains(d.Id)).ToDictionaryAsync(d => d.Id, d => d.Name, ct);
-        var subBranchIds = page_.Where(t => t.SubBranchId.HasValue).Select(t => t.SubBranchId!.Value).Distinct().ToList();
-        var subBranches = await _db.SubBranches.Where(s => subBranchIds.Contains(s.Id)).ToDictionaryAsync(s => s.Id, s => s.Name, ct);
-
-        var items = page_.Select(t => new TicketListItem(
-            t.Id, t.TicketNumber, t.Title, t.Status.ToString(), t.Priority?.ToString(),
-            companies.GetValueOrDefault(t.CompanyId, ""),
-            t.ClientId,
-            users.GetValueOrDefault(t.ClientId, ""),
-            t.AssignedToUserId.HasValue ? users.GetValueOrDefault(t.AssignedToUserId.Value) : null,
-            t.CreatedAt, t.DueDateUtc, t.ClosedAtUtc,
-            t.DepartmentId, t.DepartmentId.HasValue ? departments.GetValueOrDefault(t.DepartmentId.Value) : null,
-            t.SubBranchId, t.SubBranchId.HasValue ? subBranches.GetValueOrDefault(t.SubBranchId.Value) : null
-        )).ToList();
-
-        return Ok(new PagedResult<TicketListItem>(items, page, pageSize, totalCount));
-    }
+        CancellationToken ct = default) =>
+        Ok(await _queries.ListAsync(new TicketListFilter(status, companyId, clientId, assignedToUserId, departmentId, subBranchId,
+            search, sortBy, sortDir, createdFrom, createdTo, answeredOnly, page, pageSize), ct));
 
     /// <summary>
     /// Counts for the "Tickets" nav dropdown: total plus New / Opened (Open+InProgress+Resolved) / Closed,
     /// scoped exactly like <see cref="List"/> so the numbers always match what clicking through shows.
     /// </summary>
     [HttpGet("counts")]
-    public async Task<ActionResult<TicketCountsDto>> Counts(CancellationToken ct)
-    {
-        var query = _db.Tickets.AsNoTracking().AsQueryable();
-        query = _currentUser.Role switch
-        {
-            UserRole.Client => query.Where(t => t.ClientId == _currentUser.UserId),
-            UserRole.Admin => query,
-            _ => query.Where(t => t.DepartmentId == _currentUser.DepartmentId)
-        };
-
-        var byStatus = await query.GroupBy(t => t.Status).Select(g => new { g.Key, Count = g.Count() }).ToListAsync(ct);
-        int CountOf(params TicketStatus[] wanted) => byStatus.Where(x => wanted.Contains(x.Key)).Sum(x => x.Count);
-
-        var newCount = CountOf(TicketStatus.New);
-        var openedCount = CountOf(TicketStatus.Open, TicketStatus.InProgress, TicketStatus.Resolved);
-        var closedCount = CountOf(TicketStatus.Closed);
-
-        var openedStatuses = new[] { TicketStatus.Open, TicketStatus.InProgress, TicketStatus.Resolved };
-        var mineCount = _currentUser.UserId.HasValue
-            ? await query.CountAsync(t => openedStatuses.Contains(t.Status) && t.Assignees.Any(a => a.UserId == _currentUser.UserId.Value), ct)
-            : 0;
-
-        return Ok(new TicketCountsDto(newCount + openedCount + closedCount, newCount, openedCount, closedCount, mineCount));
-    }
-
-    private static List<TicketStatus> ParseStatuses(string? raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw)) return new List<TicketStatus>();
-        return raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(s => Enum.TryParse<TicketStatus>(s, true, out var v) ? (TicketStatus?)v : null)
-            .Where(v => v.HasValue).Select(v => v!.Value).ToList();
-    }
+    public async Task<ActionResult<TicketCountsDto>> Counts(CancellationToken ct) => Ok(await _queries.CountsAsync(ct));
 
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<TicketDetailDto>> GetById(Guid id, CancellationToken ct)
-    {
-        var ticket = await _db.Tickets.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id, ct);
-        if (ticket is null) return NotFound();
-        if (!CanAccess(ticket)) return Forbid();
-
-        return Ok(await BuildDetailDto(id, ct));
-    }
+    public async Task<ActionResult<TicketDetailDto>> GetById(Guid id, CancellationToken ct) => this.ToActionResult(await _queries.GetAsync(id, ct));
 
     [HttpPost("{id:guid}/open")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    public async Task<ActionResult<TicketDetailDto>> OpenTicket(Guid id, OpenTicketRequest request)
-    {
-        var ticket = await _db.Tickets.FirstOrDefaultAsync(t => t.Id == id);
-        if (ticket is null) return NotFound();
-        if (!CanAccess(ticket)) return Forbid();
-        if (ticket.Status != TicketStatus.New || !TicketWorkflow.CanTransition(ticket.Status, TicketStatus.Open))
-            return BadRequest(new { message = "Only new tickets can be opened." });
-
-        var lookupError = await ValidateLookupsAsync(request.HelpTopicId, request.CategoryId, request.DepartmentId);
-        if (lookupError is not null) return BadRequest(new { message = lookupError });
-
-        // The client's branch pick is only a suggestion, and it is corrected here by whoever opens the ticket: Admin, or staff of the
-        // branch the ticket sits in. Staff of another branch cannot see it at all (that is the point of branches); if the pick was
-        // wrong, the branch that received it moves it on with "transfer".
-        var subBranchError = await ValidateSubBranchAsync(request.DepartmentId, request.SubBranchId);
-        if (subBranchError is not null) return BadRequest(new { message = subBranchError });
-
-        var assignee = await _db.Users.FirstOrDefaultAsync(u => u.Id == request.AssignedToUserId
-            && u.Role == UserRole.Employee && u.IsActive);
-        if (assignee is null) return BadRequest(new { message = TicketAssignment.NotAnAgent });
-        var assigneeError = TicketAssignment.Check(assignee.DepartmentId, assignee.SubBranchId, request.DepartmentId, request.SubBranchId);
-        if (assigneeError is not null) return BadRequest(new { message = assigneeError });
-
-        var openedAtUtc = UtcNow;
-        var (dueDateUtc, slaError) = await ResolveDueDateAsync(request.SlaPlanId, request.DueDateUtc, openedAtUtc);
-        if (slaError is not null) return BadRequest(new { message = slaError });
-
-        ticket.Source = request.Source;
-        ticket.HelpTopicId = request.HelpTopicId;
-        ticket.DepartmentId = request.DepartmentId;
-        ticket.SubBranchId = request.SubBranchId;
-        ticket.SlaPlanId = request.SlaPlanId;
-        ticket.Priority = request.Priority;
-        ticket.DueDateUtc = dueDateUtc;
-        ticket.CategoryId = request.CategoryId;
-        ticket.Status = TicketStatus.Open;
-        ticket.OpenedByUserId = _currentUser.UserId;
-        ticket.OpenedAtUtc = openedAtUtc;
-        _db.TicketAssignees.Add(new TicketAssignee { TicketId = ticket.Id, UserId = assignee.Id, IsPrimary = true });
-
-        var client = await _db.Users.FirstAsync(u => u.Id == ticket.ClientId);
-        var openedBy = await _db.Users.FirstAsync(u => u.Id == _currentUser.UserId);
-        _db.TicketMessages.Add(new TicketMessage
-        {
-            TicketId = ticket.Id,
-            AuthorId = openedBy.Id,
-            Type = MessageType.SystemEvent,
-            BodyHtml = $"<p>Ticket opened by {FullName(openedBy)} and assigned to {FullName(assignee)}.</p>"
-        });
-
-        _db.Notifications.Add(new Notification { UserId = assignee.Id, Type = NotificationType.TicketAssigned, Message = $"Ticket #{ticket.TicketNumber} assigned to you", TicketId = ticket.Id });
-        _db.Notifications.Add(new Notification { UserId = client.Id, Type = NotificationType.TicketOpened, Message = $"Your ticket #{ticket.TicketNumber} has been opened", TicketId = ticket.Id });
-        _db.Audit(_currentUser.UserId, "TicketOpened", nameof(Ticket), ticket.Id, $"Assigned to {assignee.Id}; branch {ticket.DepartmentId}");
-        await _db.SaveChangesAsync();
-
-        await _emailSender.SendAsync(client.Email!, $"Your ticket #{ticket.TicketNumber} has been opened", EmailTemplates.TicketOpened(client.FirstName, ticket.TicketNumber));
-        await _emailSender.SendAsync(assignee.Email!, $"Ticket #{ticket.TicketNumber} assigned to you", EmailTemplates.TicketAssigned(assignee.FirstName, ticket.TicketNumber, ticket.Title));
-        await _notificationPublisher.PushToUserAsync(assignee.Id, "ticketAssigned", new { ticket.Id, ticket.TicketNumber, ticket.Title });
-        await _notificationPublisher.PushToUserAsync(client.Id, "ticketOpened", new { ticket.Id, ticket.TicketNumber, ticket.Title });
-
-        return Ok(await BuildDetailDto(id));
-    }
+    public async Task<ActionResult<TicketDetailDto>> OpenTicket(Guid id, OpenTicketRequest request) =>
+        this.ToActionResult(await _lifecycle.OpenAsync(id, request));
 
     /// <summary>Moves an already-opened ticket to a different branch. Only staff with access to the ticket's current branch (or Admin) may do this. Notifies everyone in the destination branch.</summary>
     [HttpPost("{id:guid}/transfer-branch")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    public async Task<ActionResult<TicketDetailDto>> TransferBranch(Guid id, TransferTicketBranchRequest request)
-    {
-        var ticket = await _db.Tickets.FirstOrDefaultAsync(t => t.Id == id);
-        if (ticket is null) return NotFound();
-        if (!CanAccess(ticket)) return Forbid();
-        if (ticket.Status == TicketStatus.New) return BadRequest(new { message = "Open the ticket before transferring it to a branch." });
-        // A closed ticket is history: transferring it would wipe its assignee record and notify a branch about work that is finished.
-        if (ticket.Status == TicketStatus.Closed) return BadRequest(new { message = "A closed ticket cannot be transferred. Reopen it first." });
-
-        var fromDepartment = ticket.DepartmentId.HasValue
-            ? await _db.Departments.FirstOrDefaultAsync(d => d.Id == ticket.DepartmentId.Value)
-            : null;
-        var toDepartment = await _db.Departments.FirstOrDefaultAsync(d => d.Id == request.DepartmentId && d.IsActive);
-        if (toDepartment is null) return BadRequest(new { message = "Destination branch not found." });
-        if (toDepartment.Id == ticket.DepartmentId) return BadRequest(new { message = "Ticket is already in this branch." });
-        // A branch that has sub-branches needs one chosen, as everywhere else a ticket is routed: leaving it empty put the ticket outside
-        // every sub-branch filter and past the check that assignees belong to the ticket's sub-branch, with no way to set it afterwards.
-        var subBranchError = await ValidateSubBranchAsync(toDepartment.Id, request.SubBranchId);
-        if (subBranchError is not null) return BadRequest(new { message = subBranchError });
-
-        var transferredBy = await _db.Users.FirstAsync(u => u.Id == _currentUser.UserId);
-
-        ticket.DepartmentId = toDepartment.Id;
-        ticket.SubBranchId = request.SubBranchId; // the old one belonged to the old branch; this is the one chosen in the new branch (or none, if it has none)
-        var oldAssignees = await _db.TicketAssignees.Where(a => a.TicketId == ticket.Id).ToListAsync();
-        _db.TicketAssignees.RemoveRange(oldAssignees);
-        await _db.EndRunningSessionsAsync(new[] { ticket.Id }, null, UtcNow); // nobody is working it any more
-        _db.TicketMessages.Add(new TicketMessage
-        {
-            TicketId = ticket.Id,
-            AuthorId = transferredBy.Id,
-            Type = MessageType.SystemEvent,
-            BodyHtml = $"<p>Ticket transferred from <b>{H(fromDepartment?.Name ?? "(unrouted)")}</b> to <b>{H(toDepartment.Name)}</b> by {FullName(transferredBy)}.</p>"
-        });
-        _db.Audit(_currentUser.UserId, "TicketTransferred", nameof(Ticket), ticket.Id, $"Branch {fromDepartment?.Id.ToString() ?? "-"} -> {toDepartment.Id}");
-        await _db.SaveChangesAsync();
-
-        var destinationStaff = await _db.Users
-            .Where(u => u.Role == UserRole.Employee && u.DepartmentId == toDepartment.Id && u.IsActive)
-            .ToListAsync();
-
-        foreach (var member in destinationStaff)
-        {
-            _db.Notifications.Add(new Notification
-            {
-                UserId = member.Id,
-                Type = NotificationType.TicketTransferred,
-                Message = $"Ticket #{ticket.TicketNumber} transferred to {toDepartment.Name}",
-                TicketId = ticket.Id
-            });
-        }
-        await _db.SaveChangesAsync();
-
-        foreach (var member in destinationStaff)
-        {
-            await _emailSender.SendAsync(member.Email!, $"Ticket #{ticket.TicketNumber} transferred to your branch",
-                EmailTemplates.TicketTransferred(member.FirstName, ticket.TicketNumber, ticket.Title,
-                    fromDepartment?.Name ?? "(unrouted)", toDepartment.Name, $"{transferredBy.FirstName} {transferredBy.LastName}"));
-            await _notificationPublisher.PushToUserAsync(member.Id, "ticketTransferred", new { ticket.Id, ticket.TicketNumber, ticket.Title, Branch = toDepartment.Name });
-        }
-
-        return Ok(await BuildDetailDto(id));
-    }
+    public async Task<ActionResult<TicketDetailDto>> TransferBranch(Guid id, TransferTicketBranchRequest request) =>
+        this.ToActionResult(await _lifecycle.TransferBranchAsync(id, request));
 
     [HttpPost("{id:guid}/close")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    public async Task<ActionResult<TicketDetailDto>> CloseTicket(Guid id, CloseTicketRequest request)
-    {
-        var ticket = await _db.Tickets.FirstOrDefaultAsync(t => t.Id == id);
-        if (ticket is null) return NotFound();
-        if (!CanAccess(ticket)) return Forbid();
-        if (ticket.Status is TicketStatus.New) return BadRequest(new { message = "Ticket must be opened before it can be closed." });
-        if (ticket.Status == TicketStatus.Closed) return BadRequest(new { message = "Ticket is already closed." });
-        if (!TicketWorkflow.CanTransition(ticket.Status, TicketStatus.Closed))
-            return BadRequest(new { message = $"A {ticket.Status} ticket cannot be closed." });
-        if (string.IsNullOrWhiteSpace(request.ResolutionSummary))
-            return BadRequest(new { message = "A resolution summary is required to close a ticket." });
-
-        ticket.Status = TicketStatus.Closed;
-        ticket.ResolutionSummary = request.ResolutionSummary;
-        ticket.ClosedByUserId = _currentUser.UserId;
-        ticket.ClosedAtUtc = UtcNow;
-        await _db.EndRunningSessionsAsync(new[] { ticket.Id }, null, ticket.ClosedAtUtc.Value);
-
-        var client = await _db.Users.FirstAsync(u => u.Id == ticket.ClientId);
-        var closedBy = await _db.Users.FirstAsync(u => u.Id == _currentUser.UserId);
-
-        _db.TicketMessages.Add(new TicketMessage
-        {
-            TicketId = ticket.Id,
-            AuthorId = closedBy.Id,
-            Type = MessageType.SystemEvent,
-            BodyHtml = $"<p>Ticket closed by {FullName(closedBy)}.</p>"
-        });
-
-        _db.Notifications.Add(new Notification { UserId = client.Id, Type = NotificationType.TicketClosed, Message = $"Ticket #{ticket.TicketNumber} has been resolved", TicketId = ticket.Id });
-        _db.Audit(_currentUser.UserId, "TicketClosed", nameof(Ticket), ticket.Id, $"Ticket #{ticket.TicketNumber}");
-        await _db.SaveChangesAsync();
-
-        await _emailSender.SendAsync(client.Email!, $"Your ticket #{ticket.TicketNumber} has been resolved",
-            EmailTemplates.TicketClosed(client.FirstName, ticket.TicketNumber, $"{closedBy.FirstName} {closedBy.LastName}"));
-        await _notificationPublisher.PushToUserAsync(client.Id, "ticketClosed", new { ticket.Id, ticket.TicketNumber });
-
-        // Embedding calls an external API that can take half a minute: the ticket is already closed, so the answer does not wait for
-        // it. A background worker indexes the ticket (and a failure there is logged, never reported as a failed close).
-        _indexQueue.Enqueue(ticket.Id);
-
-        return Ok(await BuildDetailDto(id));
-    }
+    public async Task<ActionResult<TicketDetailDto>> CloseTicket(Guid id, CloseTicketRequest request) =>
+        this.ToActionResult(await _lifecycle.CloseAsync(id, request));
 
     /// <summary>
     /// Moves a live ticket between Open, InProgress and Resolved. Closing needs a resolution summary and reopening
@@ -627,62 +112,8 @@ public class TicketsController : ControllerBase
     /// </summary>
     [HttpPost("{id:guid}/status")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    public async Task<ActionResult<TicketDetailDto>> ChangeStatus(Guid id, ChangeTicketStatusRequest request)
-    {
-        var ticket = await _db.Tickets.FirstOrDefaultAsync(t => t.Id == id);
-        if (ticket is null) return NotFound();
-        if (!CanAccess(ticket)) return Forbid();
-
-        if (!TicketWorkflow.IsDirectlyAssignable(request.Status))
-            return BadRequest(new { message = $"A ticket cannot be moved to {request.Status} this way." });
-        if (ticket.Status == request.Status)
-            return BadRequest(new { message = $"The ticket is already {request.Status}." });
-        if (!TicketWorkflow.CanTransition(ticket.Status, request.Status))
-            return BadRequest(new { message = $"A {ticket.Status} ticket cannot be moved to {request.Status}." });
-
-        var from = ticket.Status;
-        ticket.Status = request.Status;
-        // Leaving Closed through this endpoint is a reopen like any other: the "closed by / closed at" facts no longer hold.
-        if (from == TicketStatus.Closed) ClearClosedState(ticket);
-        _db.Audit(_currentUser.UserId, "TicketStatusChanged", nameof(Ticket), ticket.Id, $"{from} -> {request.Status}");
-
-        var changedBy = await _db.Users.FirstAsync(u => u.Id == _currentUser.UserId);
-        _db.TicketMessages.Add(new TicketMessage
-        {
-            TicketId = ticket.Id,
-            AuthorId = changedBy.Id,
-            Type = MessageType.SystemEvent,
-            BodyHtml = $"<p>Status changed from <b>{H(from.ToString())}</b> to <b>{H(request.Status.ToString())}</b> by {FullName(changedBy)}.</p>"
-        });
-        await _db.SaveChangesAsync();
-
-        return Ok(await BuildDetailDto(id));
-    }
-
-    /// <summary>The ticket's due date: what staff typed if they typed one, otherwise the SLA plan's resolution time counted from <paramref name="startUtc"/>.</summary>
-    private async Task<(DateTime? DueDateUtc, string? Error)> ResolveDueDateAsync(Guid slaPlanId, DateTime? requested, DateTime startUtc)
-    {
-        var plan = await _db.SlaPlans.AsNoTracking().FirstOrDefaultAsync(s => s.Id == slaPlanId && s.IsActive);
-        if (plan is null) return (null, "SLA plan not found.");
-
-        if (requested.HasValue)
-        {
-            var requestedUtc = AsUtc(requested.Value); // no zone means UTC (the same rule as work sessions and reports), not the host's zone
-            if (requestedUtc <= startUtc) return (null, "The due date must be in the future.");
-            return (requestedUtc, null);
-        }
-
-        return (_sla.ComputeDueDateUtc(startUtc, plan.ResolutionTimeHours), null);
-    }
-
-    /// <summary>What stops being true when a closed ticket becomes live again. Every way out of Closed goes through here.</summary>
-    private static void ClearClosedState(Ticket ticket)
-    {
-        ticket.ClosedByUserId = null;
-        ticket.ClosedAtUtc = null;
-        // The ticket is live again: if it is (still) past its due date the overdue alert has to be able to fire again.
-        ticket.OverdueNotifiedAtUtc = null;
-    }
+    public async Task<ActionResult<TicketDetailDto>> ChangeStatus(Guid id, ChangeTicketStatusRequest request) =>
+        this.ToActionResult(await _lifecycle.ChangeStatusAsync(id, request));
 
     /// <summary>
     /// Reopens a closed ticket — e.g. something was missed and needs to be added or fixed before it's
@@ -690,412 +121,40 @@ public class TicketsController : ControllerBase
     /// </summary>
     [HttpPost("{id:guid}/reopen")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    public async Task<ActionResult<TicketDetailDto>> ReopenTicket(Guid id)
-    {
-        var ticket = await _db.Tickets.FirstOrDefaultAsync(t => t.Id == id);
-        if (ticket is null) return NotFound();
-        if (!CanAccess(ticket)) return Forbid();
-        if (ticket.Status != TicketStatus.Closed) return BadRequest(new { message = "Only closed tickets can be reopened." });
-
-        ticket.Status = TicketStatus.Open;
-        ClearClosedState(ticket);
-        _db.Audit(_currentUser.UserId, "TicketReopened", nameof(Ticket), ticket.Id, $"Ticket #{ticket.TicketNumber}");
-
-        var reopenedBy = await _db.Users.FirstAsync(u => u.Id == _currentUser.UserId);
-        _db.TicketMessages.Add(new TicketMessage
-        {
-            TicketId = ticket.Id,
-            AuthorId = reopenedBy.Id,
-            Type = MessageType.SystemEvent,
-            BodyHtml = $"<p>Ticket reopened by {FullName(reopenedBy)}.</p>"
-        });
-
-        await _db.SaveChangesAsync();
-
-        return Ok(await BuildDetailDto(id));
-    }
+    public async Task<ActionResult<TicketDetailDto>> ReopenTicket(Guid id) =>
+        this.ToActionResult(await _lifecycle.ReopenAsync(id));
 
     /// <summary>Adds a co-assignee — e.g. a second person who helped resolve a different part of the same ticket.</summary>
     [HttpPost("{id:guid}/assignees")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    public async Task<ActionResult<TicketDetailDto>> AddAssignee(Guid id, AddTicketAssigneeRequest request)
-    {
-        var ticket = await _db.Tickets.FirstOrDefaultAsync(t => t.Id == id);
-        if (ticket is null) return NotFound();
-        if (!CanAccess(ticket)) return Forbid();
-        if (ticket.Status is TicketStatus.New or TicketStatus.Closed)
-            return BadRequest(new { message = "The ticket must be open to change its assignees." });
-
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == request.UserId && u.Role == UserRole.Employee && u.IsActive);
-        if (user is null) return BadRequest(new { message = TicketAssignment.NotAnAgent });
-        var assigneeError = TicketAssignment.Check(user.DepartmentId, user.SubBranchId, ticket.DepartmentId, ticket.SubBranchId);
-        if (assigneeError is not null) return BadRequest(new { message = assigneeError });
-
-        var alreadyAssigned = await _db.TicketAssignees.AnyAsync(a => a.TicketId == id && a.UserId == request.UserId);
-        if (alreadyAssigned) return BadRequest(new { message = "This person is already assigned to the ticket." });
-
-        // The first person added to a ticket that has nobody becomes the one it is "assigned to"; everybody after is help.
-        var hasPrimary = await _db.TicketAssignees.AnyAsync(a => a.TicketId == id && a.IsPrimary);
-        _db.TicketAssignees.Add(new TicketAssignee { TicketId = id, UserId = user.Id, IsPrimary = !hasPrimary });
-
-        var addedBy = await _db.Users.FirstAsync(u => u.Id == _currentUser.UserId);
-        _db.TicketMessages.Add(new TicketMessage
-        {
-            TicketId = id,
-            AuthorId = addedBy.Id,
-            Type = MessageType.SystemEvent,
-            BodyHtml = $"<p>{FullName(user)} added as an assignee by {FullName(addedBy)}.</p>"
-        });
-
-        _db.Notifications.Add(new Notification { UserId = user.Id, Type = NotificationType.TicketAssigned, Message = $"Ticket #{ticket.TicketNumber} assigned to you", TicketId = ticket.Id });
-        _db.Audit(_currentUser.UserId, "TicketAssigneeAdded", nameof(Ticket), ticket.Id, $"Added {user.Id}");
-        try
-        {
-            await _db.SaveChangesAsync();
-        }
-        catch (DbUpdateException)
-        {
-            // Two identical requests (a double click) raced past the check above; the unique index stopped the second.
-            // Anything else that made the save fail is a real error.
-            if (await AssigneeExistsAsync(id, user.Id))
-                return BadRequest(new { message = "This person is already assigned to the ticket." });
-            // Two people were added as the first assignee at the same moment; the unique index lets only one be the main one.
-            if (!hasPrimary)
-                return Conflict(new { message = "Somebody else changed the assignees of this ticket a moment ago. Reload it and try again.", code = "CONFLICT" });
-            throw;
-        }
-
-        await _emailSender.SendAsync(user.Email!, $"Ticket #{ticket.TicketNumber} assigned to you", EmailTemplates.TicketAssigned(user.FirstName, ticket.TicketNumber, ticket.Title));
-        await _notificationPublisher.PushToUserAsync(user.Id, "ticketAssigned", new { ticket.Id, ticket.TicketNumber, ticket.Title });
-
-        return Ok(await BuildDetailDto(id));
-    }
+    public async Task<ActionResult<TicketDetailDto>> AddAssignee(Guid id, AddTicketAssigneeRequest request) =>
+        this.ToActionResult(await _assignees.AddAsync(id, request.UserId));
 
     [HttpDelete("{id:guid}/assignees/{userId:guid}")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    public async Task<ActionResult<TicketDetailDto>> RemoveAssignee(Guid id, Guid userId)
-    {
-        var ticket = await _db.Tickets.FirstOrDefaultAsync(t => t.Id == id);
-        if (ticket is null) return NotFound();
-        if (!CanAccess(ticket)) return Forbid();
-        if (ticket.Status is TicketStatus.New or TicketStatus.Closed)
-            return BadRequest(new { message = "The ticket must be open to change its assignees." }); // who worked a closed ticket is history
-
-        var assignment = await _db.TicketAssignees.FirstOrDefaultAsync(a => a.TicketId == id && a.UserId == userId);
-        if (assignment is null) return NotFound();
-
-        _db.TicketAssignees.Remove(assignment);
-        _db.Audit(_currentUser.UserId, "TicketAssigneeRemoved", nameof(Ticket), ticket.Id, $"Removed {userId}");
-        await _db.EndRunningSessionsAsync(new[] { id }, userId, UtcNow); // the person stops working it
-        if (assignment.IsPrimary)
-        {
-            // The one the ticket was assigned to leaves: whoever has been on it longest of the others takes over, if anyone is left.
-            var next = await _db.TicketAssignees.Where(a => a.TicketId == id && a.UserId != userId).OrderBy(a => a.AssignedAtUtc).FirstOrDefaultAsync();
-            if (next is not null) next.IsPrimary = true;
-        }
-        await _db.SaveChangesAsync();
-
-        return Ok(await BuildDetailDto(id));
-    }
+    public async Task<ActionResult<TicketDetailDto>> RemoveAssignee(Guid id, Guid userId) =>
+        this.ToActionResult(await _assignees.RemoveAsync(id, userId));
 
     // ---------------- work sessions ----------------
-    // A ticket can have any number of sessions (the morning and the afternoon are two). They are the work of the person the
-    // ticket is assigned to; people added as extra help are listed on the ticket but log no time of their own.
-
-    private static DateTime AsUtc(DateTime value) => value.Kind switch
-    {
-        DateTimeKind.Utc => value,
-        DateTimeKind.Local => value.ToUniversalTime(),
-        _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
-    };
-
-    private async Task<List<WorkSessionRules.Span>> OtherSessionsAsync(Guid ticketId, Guid? exceptSessionId) =>
-        await _db.TicketWorkSessions.AsNoTracking()
-            .Where(s => s.TicketId == ticketId && s.Id != exceptSessionId)
-            .Select(s => new WorkSessionRules.Span(s.Id, s.StartedAtUtc, s.EndedAtUtc))
-            .ToListAsync();
-
-    private void AuditWorkSession(string action, Guid ticketId, TicketWorkSession session) =>
-        _db.AuditLogs.Add(new AuditLog
-        {
-            UserId = _currentUser.UserId,
-            Action = action,
-            EntityType = nameof(Ticket),
-            EntityId = ticketId,
-            Details = $"session {session.Id} of user {session.UserId}: {session.StartedAtUtc:O} - {session.EndedAtUtc?.ToString("O") ?? "running"}"
-        });
 
     /// <summary>Logs a stretch of work on the ticket, for the person it is assigned to.</summary>
     [HttpPost("{id:guid}/work-sessions")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    public async Task<ActionResult<TicketDetailDto>> AddWorkSession(Guid id, WorkSessionRequest request)
-    {
-        var ticket = await _db.Tickets.FirstOrDefaultAsync(t => t.Id == id);
-        if (ticket is null) return NotFound();
-        if (!CanAccess(ticket)) return Forbid();
-        var primaryId = await PrimaryAssigneeIdAsync(id);
-        if (primaryId is null)
-            return BadRequest(new { message = "Assign the ticket to somebody before logging work time on it." });
-
-        var started = AsUtc(request.StartedAtUtc!.Value);
-        var ended = request.EndedAtUtc.HasValue ? AsUtc(request.EndedAtUtc.Value) : (DateTime?)null;
-        var error = WorkSessionRules.Validate(started, ended, UtcNow, await OtherSessionsAsync(id, null))
-            ?? WorkSessionRules.ValidateAgainstOtherWork(started, ended, await _db.OtherWorkOfAsync(primaryId.Value, id, null));
-        if (error is not null) return BadRequest(new { message = error });
-
-        var session = new TicketWorkSession { TicketId = id, UserId = primaryId.Value, StartedAtUtc = started, EndedAtUtc = ended };
-        _db.TicketWorkSessions.Add(session);
-        AuditWorkSession("WorkSessionAdded", id, session);
-        await _db.SaveChangesAsync();
-
-        return Ok(await BuildDetailDto(id));
-    }
+    public async Task<ActionResult<TicketDetailDto>> AddWorkSession(Guid id, WorkSessionRequest request) =>
+        this.ToActionResult(await _workSessions.AddAsync(id, request));
 
     /// <summary>Changes the times of a session. It stays with the person who did the work, whoever the ticket belongs to now.</summary>
     [HttpPut("{id:guid}/work-sessions/{sessionId:guid}")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    public async Task<ActionResult<TicketDetailDto>> UpdateWorkSession(Guid id, Guid sessionId, WorkSessionRequest request)
-    {
-        var ticket = await _db.Tickets.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id);
-        if (ticket is null) return NotFound();
-        if (!CanAccess(ticket)) return Forbid();
-
-        var session = await _db.TicketWorkSessions.FirstOrDefaultAsync(s => s.Id == sessionId && s.TicketId == id);
-        if (session is null) return NotFound();
-        if (!await MayChangeSessionAsync(session)) return Forbid();
-
-        var started = AsUtc(request.StartedAtUtc!.Value);
-        var ended = request.EndedAtUtc.HasValue ? AsUtc(request.EndedAtUtc.Value) : (DateTime?)null;
-        var error = WorkSessionRules.Validate(started, ended, UtcNow, await OtherSessionsAsync(id, sessionId))
-            ?? WorkSessionRules.ValidateAgainstOtherWork(started, ended, await _db.OtherWorkOfAsync(session.UserId, id, null));
-        if (error is not null) return BadRequest(new { message = error });
-
-        session.StartedAtUtc = started;
-        session.EndedAtUtc = ended;
-        AuditWorkSession("WorkSessionChanged", id, session);
-        await _db.SaveChangesAsync();
-
-        return Ok(await BuildDetailDto(id));
-    }
-
-    /// <summary>The time somebody logged is theirs: they may change it, an Admin may, and so may the person the ticket is assigned to now
-    /// (who answers for it). A colleague who merely has access to the ticket may not.</summary>
-    private async Task<bool> MayChangeSessionAsync(TicketWorkSession session)
-    {
-        if (_currentUser.Role == UserRole.Admin || session.UserId == _currentUser.UserId) return true;
-        return _currentUser.UserId.HasValue && await PrimaryAssigneeIdAsync(session.TicketId) == _currentUser.UserId;
-    }
+    public async Task<ActionResult<TicketDetailDto>> UpdateWorkSession(Guid id, Guid sessionId, WorkSessionRequest request) =>
+        this.ToActionResult(await _workSessions.UpdateAsync(id, sessionId, request));
 
     [HttpDelete("{id:guid}/work-sessions/{sessionId:guid}")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    public async Task<ActionResult<TicketDetailDto>> DeleteWorkSession(Guid id, Guid sessionId)
-    {
-        var ticket = await _db.Tickets.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id);
-        if (ticket is null) return NotFound();
-        if (!CanAccess(ticket)) return Forbid();
-
-        var session = await _db.TicketWorkSessions.FirstOrDefaultAsync(s => s.Id == sessionId && s.TicketId == id);
-        if (session is null) return NotFound();
-        if (!await MayChangeSessionAsync(session)) return Forbid();
-
-        _db.TicketWorkSessions.Remove(session);
-        AuditWorkSession("WorkSessionDeleted", id, session);
-        await _db.SaveChangesAsync();
-
-        return Ok(await BuildDetailDto(id));
-    }
+    public async Task<ActionResult<TicketDetailDto>> DeleteWorkSession(Guid id, Guid sessionId) =>
+        this.ToActionResult(await _workSessions.DeleteAsync(id, sessionId));
 
     [HttpPost("{id:guid}/messages")]
-    public async Task<ActionResult<TicketMessageDto>> AddMessage(Guid id, AddTicketMessageRequest request)
-    {
-        var ticket = await _db.Tickets.FirstOrDefaultAsync(t => t.Id == id);
-        if (ticket is null) return NotFound();
-        if (!CanAccess(ticket)) return Forbid();
-
-        if (request.Type == MessageType.SystemEvent)
-            return BadRequest(new { message = "System events are recorded automatically and cannot be posted directly." });
-        if (HtmlText.IsBlank(request.BodyHtml))
-            return BadRequest(new { message = "The message is empty." });
-        if (_currentUser.Role == UserRole.Client && request.Type != MessageType.Response)
-            return Forbid();
-        // The screens already hide the reply box on a closed ticket; the API now enforces it too.
-        if (ticket.Status == TicketStatus.Closed)
-            return BadRequest(new { message = "This ticket is closed. Reopen it to add a message." });
-
-        // The same message sent twice (a double click, a retry after a timeout) must be one message: a request that carries
-        // an Idempotency-Key the server has already seen gets the first answer back instead of a second copy.
-        var authorId = _currentUser.UserId!.Value;
-        var (idempotencyKey, keyError) = ReadIdempotencyKey();
-        if (keyError is not null) return keyError;
-        if (idempotencyKey is not null && await FindPreviousResultAsync(authorId, idempotencyKey, TicketMessageScope) is { } earlierId)
-            return Ok(await BuildMessageDtoAsync(earlierId));
-
-        var message = new TicketMessage
-        {
-            TicketId = id,
-            AuthorId = authorId,
-            Type = request.Type,
-            BodyHtml = _html.Sanitize(request.BodyHtml)
-        };
-        _db.TicketMessages.Add(message);
-        var raced = await SaveCreatedAsync(authorId, idempotencyKey, message.Id, TicketMessageScope);
-        if (raced is { } winner) return Ok(await BuildMessageDtoAsync(winner));
-
-        if (request.Type == MessageType.Response)
-        {
-            // A client's reply goes to everyone working on the ticket, not just the primary assignee; a staff reply goes to the client.
-            var recipientIds = _currentUser.Role == UserRole.Client
-                ? await StaffToNotifyAsync(ticket)
-                : new List<Guid> { ticket.ClientId };
-
-            var recipients = await _db.Users.Where(u => recipientIds.Contains(u.Id) && u.IsActive).ToListAsync();
-            foreach (var recipient in recipients)
-            {
-                _db.Notifications.Add(new Notification { UserId = recipient.Id, Type = NotificationType.NewResponse, Message = $"New reply on ticket #{ticket.TicketNumber}", TicketId = ticket.Id });
-            }
-            if (recipients.Count > 0) await _db.SaveChangesAsync();
-
-            foreach (var recipient in recipients)
-            {
-                await _emailSender.SendAsync(recipient.Email!, $"New reply on ticket #{ticket.TicketNumber}", EmailTemplates.NewResponse(recipient.FirstName, ticket.TicketNumber));
-                await _notificationPublisher.PushToUserAsync(recipient.Id, "newResponse", new { ticket.Id, ticket.TicketNumber });
-            }
-        }
-
-        // Only worth embedding once the ticket is past triage (search never returns New/Open tickets), and the
-        // embedding call is an external dependency: its failure must not fail a message that is already saved.
-        if (request.Type == MessageType.InternalNote && ticket.Status is not (TicketStatus.New or TicketStatus.Open))
-            _indexQueue.Enqueue(ticket.Id);
-
-        return Ok(await BuildMessageDtoAsync(message.Id));
-    }
-
-    private async Task<TicketMessageDto> BuildMessageDtoAsync(Guid messageId)
-    {
-        var message = await _db.TicketMessages.AsNoTracking().FirstAsync(m => m.Id == messageId);
-        var author = await _db.Users.AsNoTracking().FirstAsync(u => u.Id == message.AuthorId);
-        return new TicketMessageDto(message.Id, message.Type.ToString(), message.BodyHtml, message.AuthorId,
-            $"{author.FirstName} {author.LastName}", message.CreatedAt, new List<TicketAttachmentDto>());
-    }
-
-    private async Task<bool> AssigneeExistsAsync(Guid ticketId, Guid userId)
-    {
-        _db.ChangeTracker.Clear();
-        return await _db.TicketAssignees.AnyAsync(a => a.TicketId == ticketId && a.UserId == userId);
-    }
-
-    /// <summary>The person the ticket is assigned to (the primary one on its list), or null when nobody is on it.</summary>
-    private Task<Guid?> PrimaryAssigneeIdAsync(Guid ticketId) =>
-        _db.TicketAssignees.Where(a => a.TicketId == ticketId && a.IsPrimary).Select(a => (Guid?)a.UserId).FirstOrDefaultAsync();
-
-    /// <summary>Who should hear about a client's reply: every assignee. A ticket with nobody on it falls back to the staff of its
-    /// branch, so a reply is never addressed to no one.</summary>
-    private async Task<List<Guid>> StaffToNotifyAsync(Ticket ticket)
-    {
-        var ids = await _db.TicketAssignees.Where(a => a.TicketId == ticket.Id).Select(a => a.UserId).ToListAsync();
-
-        if (ids.Count == 0 && ticket.DepartmentId.HasValue)
-            ids = await _db.Users.Where(u => u.Role == UserRole.Employee && u.IsActive && u.DepartmentId == ticket.DepartmentId).Select(u => u.Id).ToListAsync();
-
-        return ids;
-    }
-
-    /// <summary>A branch with sub-branches requires picking exactly one of them; a branch without any must not receive one.</summary>
-    private async Task<string?> ValidateSubBranchAsync(Guid departmentId, Guid? subBranchId)
-    {
-        var activeSubBranches = await _db.SubBranches.Where(s => s.DepartmentId == departmentId && s.IsActive).ToListAsync();
-        if (activeSubBranches.Count == 0)
-            return subBranchId.HasValue ? "This branch has no sub-branches." : null;
-
-        if (subBranchId is null) return "A sub-branch must be selected for this branch.";
-        if (!activeSubBranches.Any(s => s.Id == subBranchId.Value)) return "Sub-branch not found for this branch.";
-        return null;
-    }
-
-    private bool CanAccess(Ticket ticket) => _currentUser.Role switch
-    {
-        UserRole.Admin => true,
-        // Branches are isolated, strictly: an employee reaches only their own branch's tickets.
-        UserRole.Employee => ticket.DepartmentId != null && ticket.DepartmentId == _currentUser.DepartmentId,
-        UserRole.Client => ticket.ClientId == _currentUser.UserId,
-        _ => false
-    };
-
-    /// <summary>The link handed to the browser is a signed, expiring download URL — never the raw storage path.</summary>
-    private TicketAttachmentDto ToAttachmentDto(TicketAttachment a) =>
-        new(a.Id, a.FileName, _links.ToDownloadUrl(a.FileUrl) ?? string.Empty, a.FileSizeBytes, a.ContentType, a.CreatedAt);
-
-    private async Task<TicketDetailDto> BuildDetailDto(Guid ticketId, CancellationToken ct = default)
-    {
-        var t = await _db.Tickets.AsNoTracking()
-            .Include(x => x.Company)
-            .Include(x => x.HelpTopic)
-            .Include(x => x.Category)
-            .Include(x => x.Department)
-            .Include(x => x.SubBranch)
-            .Include(x => x.SlaPlan)
-            .Include(x => x.Attachments)
-            .FirstAsync(x => x.Id == ticketId, ct);
-
-        var messages = await _db.TicketMessages.AsNoTracking()
-            .Include(m => m.Attachments)
-            .Where(m => m.TicketId == ticketId)
-            .OrderBy(m => m.CreatedAt)
-            .ToListAsync(ct);
-
-        // Clients never see InternalNote or SystemEvent entries — only the Response conversation.
-        if (_currentUser.Role == UserRole.Client)
-            messages = messages.Where(m => m.Type == MessageType.Response).ToList();
-
-        var assignees = await _db.TicketAssignees.AsNoTracking().Where(a => a.TicketId == ticketId).ToListAsync(ct);
-
-        // How long staff worked is internal: the client gets an empty list.
-        var sessions = _currentUser.Role == UserRole.Client
-            ? new List<TicketWorkSession>()
-            : await _db.TicketWorkSessions.AsNoTracking().Where(s => s.TicketId == ticketId).OrderBy(s => s.StartedAtUtc).ToListAsync(ct);
-
-        var primaryId = assignees.FirstOrDefault(a => a.IsPrimary)?.UserId;
-        var relevantUserIds = new List<Guid> { t.ClientId };
-        relevantUserIds.AddRange(sessions.Select(s => s.UserId));
-        relevantUserIds.AddRange(assignees.Select(a => a.UserId));
-        relevantUserIds.AddRange(messages.Select(m => m.AuthorId));
-        var users = await _db.Users.Where(u => relevantUserIds.Contains(u.Id))
-            .ToDictionaryAsync(u => u.Id, u => u, ct);
-
-        string NameOf(Guid userId) => users.TryGetValue(userId, out var u) ? $"{u.FirstName} {u.LastName}" : "";
-
-        var messageDtos = messages.Select(m => new TicketMessageDto(
-            m.Id, m.Type.ToString(), _html.Sanitize(m.BodyHtml), m.AuthorId, NameOf(m.AuthorId), m.CreatedAt,
-            m.Attachments.Select(ToAttachmentDto).ToList()
-        )).ToList();
-
-        // A file attached to the ticket itself (not to a message) is whatever staff put there, internal papers included: a client sees only
-        // what they uploaded themselves. Files on a message follow the message, and a client sees only the replies.
-        var ticketLevelAttachments = t.Attachments
-            .Where(a => a.MessageId == null && (_currentUser.Role != UserRole.Client || a.UploadedByUserId == _currentUser.UserId))
-            .Select(ToAttachmentDto).ToList();
-
-        var assigneeDtos = assignees.Select(a => new TicketAssigneeDto(a.UserId, NameOf(a.UserId))).ToList();
-        var sessionDtos = sessions.Select(s => new TicketWorkSessionDto(s.Id, s.UserId, NameOf(s.UserId), s.StartedAtUtc, s.EndedAtUtc)).ToList();
-
-        users.TryGetValue(t.ClientId, out var clientUser);
-
-        return new TicketDetailDto(
-            t.Id, t.TicketNumber, t.Title, _html.Sanitize(t.Description), t.Status.ToString(),
-            t.ClientId, NameOf(t.ClientId), clientUser?.Email, clientUser?.PhoneNumber,
-            t.CompanyId, t.Company?.Name ?? "",
-            t.Source?.ToString(), t.HelpTopicId, t.HelpTopic?.Name, t.DepartmentId, t.Department?.Name,
-            t.SubBranchId, t.SubBranch?.Name,
-            _currentUser.Role == UserRole.Client ? null : t.SlaPlanId,
-            _currentUser.Role == UserRole.Client ? null : t.SlaPlan?.Name,
-            t.Priority?.ToString(), t.DueDateUtc,
-            _currentUser.Role == UserRole.Client ? null : t.CategoryId,
-            _currentUser.Role == UserRole.Client ? null : t.Category?.Name,
-            primaryId,
-            primaryId.HasValue ? NameOf(primaryId.Value) : null,
-            assigneeDtos, sessionDtos,
-            t.OpenedAtUtc, t.ClosedAtUtc, t.ResolutionSummary, t.CreatedAt,
-            ticketLevelAttachments, messageDtos
-        );
-    }
+    public async Task<ActionResult<TicketMessageDto>> AddMessage(Guid id, AddTicketMessageRequest request) =>
+        this.ToActionResult(await _messages.AddAsync(id, request, RawIdempotencyKey()));
 }

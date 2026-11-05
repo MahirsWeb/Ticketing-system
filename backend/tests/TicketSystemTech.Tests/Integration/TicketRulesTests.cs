@@ -175,6 +175,75 @@ public class TicketRulesTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task Nobody_is_added_to_a_ticket_that_is_not_open_yet_or_is_already_closed()
+    {
+        foreach (var status in new[] { TicketStatus.New, TicketStatus.Closed })
+        {
+            var id = await TicketAsync(status);
+
+            var added = await _world.Post(_world.Admin, $"/api/tickets/{id}/assignees", new { userId = _world.EmpA1.Id });
+
+            Assert.Equal(400, added.Code);
+            Assert.Contains("must be open", added.Text);
+            Assert.Empty(await _world.Db(db => db.TicketAssignees.Where(a => a.TicketId == id).ToListAsync()));
+        }
+    }
+
+    [SqlFact]
+    public async Task A_ticket_is_closed_only_when_it_is_open_and_says_how_it_was_resolved()
+    {
+        var live = await TicketAsync(TicketStatus.InProgress, _world.EmpA1);
+        foreach (var summary in new[] { "", "   ", null })
+        {
+            var refused = await _world.Post(_world.Admin, $"/api/tickets/{live}/close", new { resolutionSummary = summary });
+            Assert.Equal(400, refused.Code);
+            Assert.Contains("resolution", refused.Text, StringComparison.OrdinalIgnoreCase); // a missing field is refused by the model binder in its own words
+        }
+        Assert.Equal(TicketStatus.InProgress, await _world.Db(db => db.Tickets.Where(t => t.Id == live).Select(t => t.Status).SingleAsync()));
+
+        var notOpenedYet = await TicketAsync(TicketStatus.New);
+        Assert.Equal(400, (await _world.Post(_world.Admin, $"/api/tickets/{notOpenedYet}/close", new { resolutionSummary = "done" })).Code);
+
+        var alreadyClosed = await TicketAsync(TicketStatus.Closed, _world.EmpA1);
+        Assert.Equal(400, (await _world.Post(_world.Admin, $"/api/tickets/{alreadyClosed}/close", new { resolutionSummary = "done" })).Code);
+
+        Assert.Equal(200, (await _world.Post(_world.Admin, $"/api/tickets/{live}/close", new { resolutionSummary = "Zamijenjen toner" })).Code);
+        Assert.Equal(TicketStatus.Closed, await _world.Db(db => db.Tickets.Where(t => t.Id == live).Select(t => t.Status).SingleAsync()));
+    }
+
+    [SqlFact]
+    public async Task Who_may_write_what_on_a_ticket()
+    {
+        var id = await TicketAsync(TicketStatus.InProgress, _world.EmpA1);
+        string Reply(string text) => $"<p>{text}</p>";
+
+        // a client writes replies, never internal notes, and nobody writes the automatic entries
+        Assert.Equal(200, (await _world.Post(_world.CliX, $"/api/tickets/{id}/messages", new { type = "Response", bodyHtml = Reply("Hvala") })).Code);
+        Assert.Equal(403, (await _world.Post(_world.CliX, $"/api/tickets/{id}/messages", new { type = "InternalNote", bodyHtml = Reply("interno") })).Code);
+        var systemEvent = await _world.Post(_world.EmpA1, $"/api/tickets/{id}/messages", new { type = "SystemEvent", bodyHtml = Reply("fake") });
+        Assert.Equal(400, systemEvent.Code);
+        Assert.Contains("automatically", systemEvent.Text);
+
+        // staff of another branch and other clients do not reach the ticket at all
+        Assert.Equal(403, (await _world.Post(_world.EmpB1, $"/api/tickets/{id}/messages", new { type = "Response", bodyHtml = Reply("tudje") })).Code);
+        Assert.Equal(403, (await _world.Post(_world.CliY, $"/api/tickets/{id}/messages", new { type = "Response", bodyHtml = Reply("tudje") })).Code);
+        Assert.Equal(404, (await _world.Post(_world.EmpA1, $"/api/tickets/{Guid.NewGuid()}/messages", new { type = "Response", bodyHtml = Reply("x") })).Code);
+
+        // staff write both kinds
+        Assert.Equal(200, (await _world.Post(_world.EmpA1, $"/api/tickets/{id}/messages", new { type = "Response", bodyHtml = Reply("Pozdrav") })).Code);
+        Assert.Equal(200, (await _world.Post(_world.EmpA1, $"/api/tickets/{id}/messages", new { type = "InternalNote", bodyHtml = Reply("bilješka") })).Code);
+
+        // a closed ticket takes no more messages from anybody until it is reopened
+        var closed = await TicketAsync(TicketStatus.Closed, _world.EmpA1);
+        foreach (var author in new[] { _world.CliX, _world.EmpA1, _world.Admin })
+        {
+            var refused = await _world.Post(author, $"/api/tickets/{closed}/messages", new { type = "Response", bodyHtml = Reply("kasno") });
+            Assert.Equal(400, refused.Code);
+            Assert.Contains("closed", refused.Text);
+        }
+    }
+
+    [SqlFact]
     public async Task A_file_staff_put_on_the_ticket_itself_is_not_shown_to_the_client_but_the_clients_own_is()
     {
         var id = await TicketAsync(TicketStatus.InProgress, _world.EmpA1);

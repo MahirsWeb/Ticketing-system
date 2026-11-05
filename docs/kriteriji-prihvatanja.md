@@ -4,7 +4,7 @@ Ovaj dokument kaže **šta znači „prošlo“**, šta je u drugom krugu testir
 i čime, šta nije moguće dokazati na ovom računaru i šta je svjesno ostalo otvoreno. Cilj je da se pri sljedećem krugu ponovo
 provjerava **samo razlika**, a ne cijeli skup.
 
-Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 650 backend i 155 frontend testova.
+Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 659 backend i 155 frontend testova.
 
 ## 1. Statusi
 
@@ -153,3 +153,5 @@ Grupa 2 iz izvještaja o preostalom (TS-15.2, 34.2, 10.3, 11.2, 31.3, dio 02.3) 
 Mjerenje na sintetičkoj bazi od 20.000 tiketa (izvoz u Excel oko 3 s, ostalo ispod 0,1 s; ARC-07, 08, OPS-05, 06, 11 nisu pokriveni), T-40 zatvoren (svaka GET akcija prima token zahtjeva: `ReadActionsCancellationTests` i pravilo CA2016), dio T-58 (pravila CA1305, CA1068, CA1001 za `src`; naziv mjeseca u Excel izvozu više ne zavisi od jezika servera), ARC-13 (reindeks ne staje zbog pet tiketa koje davalac odbija pojedinačno; `ReindexFailureTests`), ograničenje teksta za embedding na 6.000 znakova (dio T-38) i ARC-06, HOST-04, OPS-08 pomjereni u riješene poslije čitanja koda. Pregled je u `IZVJESTAJ_ISPRAVKI.md`, odjeljak 9.12.
 
 T-41 je zatvoren: `docs/openapi.json` čuva `ApiContractTests`, frontend generiše tipove (`npm run gen:api`) i `contract.check.ts` pri buildu provjerava ručno pisane tipove protiv servera.
+
+T-15 (prvi komad): kontroler tiketa je sveden na 160 linija, a pravila su u servisima u `Api/Tickets/`; ponašanje je isto (ugovor API-ja i svi raniji testovi nepromijenjeni).

@@ -219,6 +219,14 @@ builder.Services.AddScoped<ITemporaryPasswordGenerator, TemporaryPasswordGenerat
 builder.Services.AddScoped<IFileStorage, LocalFileStorage>();
 builder.Services.AddScoped<IFileLinkService, FileLinkService>();
 builder.Services.AddScoped<ITicketAssignmentService, TicketAssignmentService>();
+builder.Services.AddScoped<TicketSystemTech.Api.Tickets.ITicketQueries, TicketSystemTech.Api.Tickets.TicketQueries>();
+builder.Services.AddScoped<TicketSystemTech.Api.Tickets.ITicketAssigneeService, TicketSystemTech.Api.Tickets.TicketAssigneeService>();
+builder.Services.AddScoped<TicketSystemTech.Api.Tickets.ITicketWorkSessionService, TicketSystemTech.Api.Tickets.TicketWorkSessionService>();
+builder.Services.AddScoped<TicketSystemTech.Api.Tickets.ITicketRouting, TicketSystemTech.Api.Tickets.TicketRouting>();
+builder.Services.AddScoped<TicketSystemTech.Api.Tickets.ITicketIdempotency, TicketSystemTech.Api.Tickets.TicketIdempotency>();
+builder.Services.AddScoped<TicketSystemTech.Api.Tickets.ITicketCreationService, TicketSystemTech.Api.Tickets.TicketCreationService>();
+builder.Services.AddScoped<TicketSystemTech.Api.Tickets.ITicketMessageService, TicketSystemTech.Api.Tickets.TicketMessageService>();
+builder.Services.AddScoped<TicketSystemTech.Api.Tickets.ITicketLifecycleService, TicketSystemTech.Api.Tickets.TicketLifecycleService>();
 builder.Services.AddSingleton<TicketSystemTech.Api.BackgroundJobs.BackgroundEmailSender>();
 builder.Services.AddSingleton<IBackgroundEmailQueue>(sp => sp.GetRequiredService<TicketSystemTech.Api.BackgroundJobs.BackgroundEmailSender>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<TicketSystemTech.Api.BackgroundJobs.BackgroundEmailSender>());

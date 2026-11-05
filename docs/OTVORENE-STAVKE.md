@@ -1,7 +1,7 @@
 # Otvorene stavke: šta nije ispravljeno i šta je ispravljeno samo djelimično
 
 **Stanje:** poslije šestog kruga ispravki (2026-11-05). Detalji i dokazi su u `IZVJESTAJ_ISPRAVKI.md` (odjeljci 9.8 do 9.12).
-**Testovi:** 650 backend i 155 frontend testova prolaze, bez preskočenih. Format, ranjivi paketi, migracije u odnosu na model, lint, `tsc`, build i `npm audit` (visoke) su čisti.
+**Testovi:** 659 backend i 155 frontend testova prolaze, bez preskočenih. Format, ranjivi paketi, migracije u odnosu na model, lint, `tsc`, build i `npm audit` (visoke) su čisti.
 **Izvor:** analiza `ANALYSIS_1` (T-01 … T-64), ponovno testiranje commita `7af778a` (149 scenarija) i moje ponovno izvođenje scenarija na izoliranoj kopiji.
 
 ## 1. Sažetak
@@ -34,7 +34,7 @@ Isključeno odlukom vlasnika: **T-28 MFA**.
 
 | Stavka | Šta je urađeno | Šta je ostalo |
 |---|---|---|
-| **T-15** poslovna logika | Nekorišteni MediatR i FluentValidation uklonjeni; pravilo dodjele je na jednom mjestu (`TicketAssignment`); sva vremena idu kroz `TimeProvider` (TS-15.2 zatvoren, uz test koji brani da se sistemski sat ne vrati); novi dijelovi su zasebne klase | Poslovna logika i pristup podacima su i dalje u kontrolerima (TS-15.1) |
+| **T-15** poslovna logika | Nekorišteni MediatR i FluentValidation uklonjeni; pravilo dodjele je na jednom mjestu (`TicketAssignment`); sva vremena idu kroz `TimeProvider` (TS-15.2 zatvoren, uz test koji brani da se sistemski sat ne vrati); novi dijelovi su zasebne klase; **tiketi su izdvojeni iz kontrolera u servise** (vidi ispod) | UsersController (693 linije), KnowledgeBaseController (552), LookupsController (394), WorkTasksController (390), ReportsController (382), AuthController (301) i EmailIntegrationController (144) i dalje sadrže poslovnu logiku (TS-15.1) |
 | **T-10** GDPR | Admin izvozi sve podatke o osobi i anonimizira osobu (API i dugmad na stranici osobe, isprobano u pregledniku); ime se uklanja i iz rečenica koje je aplikacija sama napisala (TS-10.3 zatvoren); audit log za osjetljive radnje | Period čuvanja i automatsko brisanje; imena koja su drugi ukucali u tekst svojih poruka; kopije u backupima |
 | **T-11** AI i lični podaci | Davalac je podešavanje; maskiraju se email, telefon i lozinke/tokeni uz riječ koja ih imenuje, prije slanja i već pri upisu u bazu znanja (TS-11.2 zatvoren; stari chunkovi se maskiraju pri pokretanju); ograničenja dužine | Ugovor o obradi podataka s davaocem (vlasnik). Imena i slobodan tekst odlaze vanjskom davaocu. U samim tiketima i porukama tekst stoji kako je kucan. Isključenje po kompaniji ne postoji |
 | **T-18** sesije | Opoziv tokena, hub se gasi pri odjavi | JWT je u `localStorage`, nema refresh tokena (TS-18.1) |
@@ -46,6 +46,8 @@ Isključeno odlukom vlasnika: **T-28 MFA**.
 | **T-52** licenca | `CONTRIBUTING.md`, `.mailmap` | **Odluka o licenci i vlasništvu (vlasnik, pravno)**; `THIRD-PARTY-NOTICES` |
 | **T-53** README | Prepisan prema stvarnom stanju | Nisam ga prošao od nule na čistom računaru |
 | **T-58** sitnice | Uklonjeni ostaci, brojevi tiketa se sortiraju kao brojevi; pravila analizatora CA2016 (token se prosljeđuje), te za `src` CA1305 (kultura pri formatiranju), CA1068 i CA1001 su upozorenja, a CI ih pretvara u greške | Ostala pravila analizatora (npr. CA1848 poruke loga preko `LoggerMessage`, CA1861 nizovi konstanti), magični stringovi, struktura foldera |
+
+**T-15, prvi komad (tiketi).** TicketsController je sveden sa 1.101 na 160 linija. Pravila su u `backend/src/TicketSystemTech.Api/Tickets/`: čitanje (`TicketQueries`), kreiranje (`TicketCreationService`), životni ciklus (`TicketLifecycleService`: otvaranje, premještaj, zatvaranje, status, ponovno otvaranje), zaduženi (`TicketAssigneeService`), radne sesije (`TicketWorkSessionService`), poruke (`TicketMessageService`), provjere usmjeravanja (`TicketRouting`), idempotentnost (`TicketIdempotency`) i ko smije do tiketa (`TicketAccess`). Servis ne zna za HTTP: vraća `Outcome<T>` (uspjeh, nije nađeno, zabranjeno, neispravno, sukob), a kontroler ga pretvara u isti odgovor kakav je API uvijek davao. Ugovor API-ja je nepromijenjen (`ApiContractTests`), svi raniji testovi prolaze bez izmjene.
 
 **Zatvoreno u šestom krugu: T-41.** Opis API-ja (OpenAPI) je u `docs/openapi.json`, a backend test `ApiContractTests` pada čim se zahtjev ili odgovor promijeni bez osvježenja tog fajla. Frontend iz njega generiše tipove (`npm run gen:api` → `src/types/api.generated.ts`, CI provjerava da je generisani fajl svjež), a `src/types/contract.check.ts` pri svakom `tsc`/build provjerava 37 ručno pisanih tipova i 6 lista dozvoljenih vrijednosti protiv onoga što server stvarno šalje: polje koje server više ne šalje ili je preimenovao, polje koje server može poslati kao `null` a tip ga drži obaveznim, tekst tamo gdje ekran očekuje broj, i lista dozvoljenih vrijednosti koja se razlikuje. Ručno pisani tipovi su ostali (ekranima treba preciznije, npr. `status` kao skup poznatih statusa), ali ih kompajler sada drži uz server. Danas se svi slažu. Ne hvata: polje koje je server dodao a ekran ne zna (bezopasno), niti zahtjeve koje ekran šalje, niti šta tačno vraćaju liste u šifarnicima, jer su deklarisane kao `List<object>`.
 
