@@ -251,7 +251,7 @@ public class WorkTaskSessionTests : IAsyncLifetime
             DepartmentId = _world.BranchA,
             Priority = TicketPriority.Medium,
             Source = TicketSource.TicketSystem,
-            AssignedToUserId = _world.EmpA1.Id,
+            Assignees = { new TicketAssignee { UserId = _world.EmpA1.Id, IsPrimary = true } },
             OpenedAtUtc = DateTime.UtcNow.AddDays(-3)
         };
         await _world.Db(async db => { db.Tickets.Add(ticket); return await db.SaveChangesAsync(); });
@@ -279,7 +279,7 @@ public class WorkTaskSessionTests : IAsyncLifetime
             DepartmentId = _world.BranchA,
             Priority = TicketPriority.Medium,
             Source = TicketSource.TicketSystem,
-            AssignedToUserId = _world.EmpA1.Id,
+            Assignees = { new TicketAssignee { UserId = _world.EmpA1.Id, IsPrimary = true } },
             OpenedAtUtc = new DateTime(2026, 1, 12, 8, 0, 0, DateTimeKind.Utc),
             ClosedAtUtc = new DateTime(2026, 1, 12, 12, 0, 0, DateTimeKind.Utc)
         };
@@ -308,10 +308,9 @@ public class WorkTaskSessionTests : IAsyncLifetime
             DepartmentId = _world.BranchA,
             Priority = TicketPriority.Medium,
             Source = TicketSource.TicketSystem,
-            AssignedToUserId = worker.Id,
             OpenedAtUtc = DateTime.UtcNow.AddDays(-3)
         };
-        ticket.Assignees.Add(new TicketAssignee { UserId = worker.Id });
+        ticket.Assignees.Add(new TicketAssignee { UserId = worker.Id, IsPrimary = true });
         await _world.Db(async db => { db.Tickets.Add(ticket); return await db.SaveChangesAsync(); });
         _tickets.Add(ticket.Id);
         return ticket.Id;

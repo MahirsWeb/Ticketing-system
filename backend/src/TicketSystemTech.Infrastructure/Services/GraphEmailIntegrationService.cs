@@ -27,11 +27,16 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
     private readonly IDataProtector _protector;
     private readonly IHtmlSanitizerService _html;
 
+    private readonly TimeProvider _time;
+    private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
+
     public GraphEmailIntegrationService(
         AppDbContext db, HttpClient http, IFileStorage fileStorage,
         IOptions<MicrosoftGraphOptions> options, ILogger<GraphEmailIntegrationService> logger,
-        IDataProtectionProvider dataProtectionProvider, IHtmlSanitizerService html)
+        IDataProtectionProvider dataProtectionProvider, IHtmlSanitizerService html,
+        TimeProvider time)
     {
+        _time = time;
         _db = db;
         _http = http;
         _fileStorage = fileStorage;
@@ -125,8 +130,8 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
         conn.ConnectedEmail = mail ?? "";
         conn.AccessToken = Protect(accessToken);
         conn.RefreshToken = Protect(refreshToken);
-        conn.AccessTokenExpiresAtUtc = DateTime.UtcNow.AddSeconds(expiresIn);
-        conn.UpdatedAt = DateTime.UtcNow;
+        conn.AccessTokenExpiresAtUtc = UtcNow.AddSeconds(expiresIn);
+        conn.UpdatedAt = UtcNow;
 
         // Who connected which branch's mailbox, and when. Recorded without the address itself.
         _db.AuditLogs.Add(new AuditLog
@@ -263,6 +268,7 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
         var url = $"{GraphBase}/me/messages/{Uri.EscapeDataString(messageId)}/attachments";
         var doc = await GetGraphAsync(conn, url, ct);
 
+        var storedHere = new List<string>(); // so that a failed save does not leave files behind that no row points to
         foreach (var a in doc.RootElement.GetProperty("value").EnumerateArray())
         {
             if (!a.TryGetProperty("contentBytes", out var contentBytesProp)) continue; // skip non-file (e.g. item) attachments
@@ -273,11 +279,15 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
             if (!AttachmentPolicy.IsAllowedExtension(Path.GetExtension(name))) continue;
 
             var contentType = a.TryGetProperty("contentType", out var ct2) ? ct2.GetString() ?? "application/octet-stream" : "application/octet-stream";
-            var bytes = Convert.FromBase64String(contentBytesProp.GetString()!);
+            // The size is judged from the length of the text BEFORE it is decoded: decoding a huge attachment only to throw it away is the cost.
+            var base64 = contentBytesProp.GetString()!;
+            if ((long)base64.Length * 3 / 4 > AttachmentPolicy.MaxFileSizeBytes + 3) continue;
+            var bytes = Convert.FromBase64String(base64);
             if (bytes.LongLength > AttachmentPolicy.MaxFileSizeBytes) continue;
 
             using var stream = new MemoryStream(bytes);
             var fileUrl = await _fileStorage.SaveAsync(name, contentType, stream, ct);
+            storedHere.Add(fileUrl);
 
             _db.TicketAttachments.Add(new TicketAttachment
             {
@@ -289,7 +299,16 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
                 UploadedByUserId = uploadedByUserId
             });
         }
-        await _db.SaveChangesAsync(ct);
+
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch
+        {
+            foreach (var stored in storedHere) await _fileStorage.DeleteAsync(stored, CancellationToken.None);
+            throw;
+        }
     }
 
     // ---------------- helpers ----------------
@@ -299,8 +318,19 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
         var conn = await _db.EmailConnections.FirstOrDefaultAsync(c => c.DepartmentId == departmentId, ct)
             ?? throw new MailboxNotConnectedException();
 
-        if (conn.AccessTokenExpiresAtUtc <= DateTime.UtcNow.AddMinutes(1))
+        if (!NeedsNewAccessToken(conn)) return conn;
+
+        // Two requests that find the token expired at the same moment must not both go to Microsoft: a refresh token can be
+        // single-use, so the second answer could invalidate the first, and the last save would win with a token that no longer
+        // works. One refresh at a time per mailbox; whoever comes second looks again and finds the new token already there.
+        // (Several instances of the application are covered by RowVersion on the row: the loser gets a 409, not a silent overwrite.)
+        var gate = RefreshGates.GetOrAdd(departmentId, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(ct);
+        try
         {
+            await _db.Entry(conn).ReloadAsync(ct);
+            if (!NeedsNewAccessToken(conn)) return conn;
+
             var form = new Dictionary<string, string>
             {
                 ["client_id"] = _options.ClientId,
@@ -313,13 +343,21 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
             conn.AccessToken = Protect(tokenResponse.GetProperty("access_token").GetString()!);
             if (tokenResponse.TryGetProperty("refresh_token", out var rt))
                 conn.RefreshToken = Protect(rt.GetString()!);
-            conn.AccessTokenExpiresAtUtc = DateTime.UtcNow.AddSeconds(tokenResponse.GetProperty("expires_in").GetInt32());
-            conn.UpdatedAt = DateTime.UtcNow;
+            conn.AccessTokenExpiresAtUtc = UtcNow.AddSeconds(tokenResponse.GetProperty("expires_in").GetInt32());
+            conn.UpdatedAt = UtcNow;
             await _db.SaveChangesAsync(ct);
+        }
+        finally
+        {
+            gate.Release();
         }
 
         return conn;
     }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, SemaphoreSlim> RefreshGates = new();
+
+    private bool NeedsNewAccessToken(EmailConnection conn) => conn.AccessTokenExpiresAtUtc <= UtcNow.AddMinutes(1);
 
     /// <summary>Reads are repeated a couple of times when Microsoft cannot be reached or says it is busy; they change nothing,
     /// so repeating them is harmless. (The OAuth token POST is deliberately not repeated.)</summary>

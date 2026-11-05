@@ -1,7 +1,7 @@
 **Projekat:** Ticket System Tech (React 19 + TypeScript, .NET, SQL Server)
 **Analiza:** `ANALYSIS_1`, 2026-10-16, analizirani commit `9deba79`, 64 stavke (T-01 … T-64)
 **Ispravke:** prvi krug 2026-10-19 (13 commitova `0553433` … `b91bade`, pa `1a9072c`); **drugi krug 2026-11-04** (odjeljak 9), nastao iz ponovnog testiranja commita `7af778a`, koji u trenutku pisanja čeka commit; rad izveo Claude (AI asistent) na zahtjev vlasnika projekta, koji sve commitove i pushove radi sam
-**Stanje na kraju:** .NET 10, **582 backend + 120 frontend testova** (svi prolaze, nijedan preskočen), CI na GitHub Actions (4 posla; posljednje viđeno pokretanje je bilo zeleno, a `1a9072c` i serija iz drugog kruga još nisu pushovani pa CI nad njima nije viđen)
+**Stanje na kraju:** .NET 10, **641 backend + 155 frontend testova** (svi prolaze, nijedan preskočen), CI na GitHub Actions (4 posla; posljednje viđeno pokretanje je bilo zeleno, a `1a9072c` i serija iz drugog kruga još nisu pushovani pa CI nad njima nije viđen)
 
 Svaka tvrdnja u ovom izvještaju je ili vezana za test koji se može ponovo pokrenuti (odjeljak 7) ili je izričito označena kao nepotvrđena (odjeljak 5).
 
@@ -13,7 +13,7 @@ Svaka tvrdnja u ovom izvještaju je ili vezana za test koji se može ponovo pokr
 | ----------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | Stavke iz analize             | 64 (1 kritična, 21 visoka, 37 srednjih, 5 niskih)                                           | ✅ riješeno **41** · 🟡 djelimično **13** · ⬜ nije rađeno **9** · ➖ isključeno odlukom **1** (poslije četvrtog kruga; poslije trećeg: 41 / 12 / 10 / 1; prije drugog: 35 / 13 / 15 / 1) |
 | Kritična i visoka (22 stavke) | otvorene                                                                                    | ✅ 16 · 🟡 3 · ⬜ 3, a jedina kritična (T-01, XSS) je riješena (prije četvrtog kruga: 16 / 2 / 4; prije drugog: 14 / 4 / 4) |
-| Automatski testovi            | 4 testa, oko 3,6 % pokrivenosti                                                             | **582 backend testova** (jedinični + integracijski nad pravom bazom, nijedan preskočen) i **120 frontend testova**, svi prolaze              |
+| Automatski testovi            | 4 testa, oko 3,6 % pokrivenosti                                                             | **641 backend testova** (jedinični + integracijski nad pravom bazom, nijedan preskočen) i **155 frontend testova**, svi prolaze              |
 | CI                            | ne postoji                                                                                  | GitHub Actions, 4 posla (Windows, Linux sa SQL Serverom, Docker image, frontend); zadnje viđeno pokretanje **zeleno** |
 | Platforma                     | .NET 8 (podrška prestaje 2026-11-10), 21 zakrpa zaostatka                                   | **.NET 10 LTS**, svi paketi aktuelni, SDK i EF alat zakucani                                     |
 | Ranjivi NuGet paketi          | tranzitivni paketi visoke ozbiljnosti (13 upozorenja za `System.Security.Cryptography.Xml`) | **0** (uključujući tranzitivne)                                                                  |
@@ -43,7 +43,7 @@ U svakom redu lijevo je propust kako ga opisuje analiza, a desno šta je urađen
 | T-09 | UTC vremena stižu bez `Z`, pa svako vrijeme odstupa 1-2 h.                                                                                                              | UTC konverter u EF-u: sva vremena iz baze označena kao UTC. Testovi: `UtcDateTimeConverterTests`.                                                                                                                                                                                                                                                                                                                                                                                        | ✅  |
 | T-10 | GDPR: nema brisanja, izvoza ni perioda čuvanja; audit log se nikad ne upisuje. | **Djelimično (treći krug).** Admin može **izvesti sve podatke o osobi** (`GET /api/users/{id}/export`, JSON: profil, tiketi, napisane poruke, radno vrijeme, obavijesti, zapisi u audit logu) i **anonimizirati osobu** (`POST /api/users/{id}/anonymize`): ime postaje "Obrisan korisnik", email zamjenski bez ikoga ko ga prima, telefon i slika se brišu, lozinka se uklanja, nalog se trajno zaključava, sesije završavaju, obavijesti se brišu; tiketi, poruke i radno vrijeme ostaju. Sebe nije moguće anonimizirati; radnja se ne može poništiti; audit log čuva da se desila, bez ličnih podataka. Dugmad su na stranici osobe (samo Admin). Audit log se upisuje i za osjetljive radnje (nalozi, tiketi, izvršioci, poslovnice). Testovi: `PersonalDataTests` (4, mutacijski provjereni: 8 od 8). **Nije rađeno:** period čuvanja i automatsko brisanje; imena koja su drugi ljudi ukucali u tekst svojih poruka; kopije u backupima; dugmad nisu isprobana u pregledniku. | 🟡 |
 | T-11 | Sadržaj tiketa i lični podaci idu u Google AI Studio bez minimizacije. | **Djelimično.** Prije slanja iz pitanja i teksta za embedding se **uklanjaju email adrese i brojevi telefona** (može se isključiti), a količina teksta je ograničena (pitanje 2.000 znakova, jedan izvor 6.000, ukupni kontekst 60.000). AI zaposlenika koristi isključivo tikete njegove poslovnice (T-27). **Davalac je sada podešavanje** (`Ai:Provider`: Gemini, OpenAI-kompatibilan endpoint poput Ollame, ili ništa), pa instalacija može raditi bez ijednog poziva napolje; README navodi tačno šta napušta sistem. **Nije rađeno:** ugovor o obradi podataka s davaocem (odluka vlasnika); imena i slobodan tekst iz tiketa i dalje odlaze vanjskom davaocu. Testovi: `AiGuardrailsTests`, `AiProviderRequestTests`, `AiSettingsTests`. | 🟡 |
-| T-12 | Nema CI-ja, a pokrivenost testovima je oko 3,6 %. | CI na GitHub Actions, **582 backend i 120 frontend testova** (odjeljak 9.3, 9.9 i 9.10). | ✅ |
+| T-12 | Nema CI-ja, a pokrivenost testovima je oko 3,6 %. | CI na GitHub Actions, **641 backend i 155 frontend testova** (odjeljak 9.3, 9.9, 9.10 i 9.11). | ✅ |
 | T-13 | .NET 8 prestaje biti podržan 2026-11-10, Microsoft paketi zaostaju 21 zakrpu, nema `global.json`.                                                                       | Prelazak na **.NET 10**: svi projekti `net10.0`, svi paketi aktuelni, `global.json` (SDK 10.0.100), `dotnet-tools.json` (EF alat 10.0.14), Docker slike, CI. EF 10 je zahtijevao dvije eksplicitne postavke (nivo SQL Servera i način slanja lista u upitima, vidjeti odjeljak 4.7). Verzije svih NuGet paketa su na jednom mjestu (`backend/Directory.Packages.props`); MediatR i FluentValidation su uklonjeni jer nijedan handler ni validator nikad nije postojao (odjeljak 9.10).                                                                                                                                                        | ✅  |
 | T-14 | Pri pokretanju se izvršavaju migracije, PII backfill i seed bez zaključavanja; health check je konstantno "ok".                                                         | SQL zaključak pri startu (više instanci ne migrira istovremeno), `Startup:Migrate=false` i `--migrate-only` za odvojen korak migracije, svaki korak se loguje sa trajanjem, pad pri startu ide u log kao Fatal, `/health/live` i `/health/ready` (baza + migracije).                                                                                                                                                                                                                     | ✅  |
 | T-15 | Aplikacijski sloj je prazan, poslovna logika je u kontrolerima.                                                                                                         | **Djelimično (četvrti krug).** Poslovna logika je i dalje u kontrolerima (veliki refaktor, nije rađen). Novi dijelovi su pisani kao zasebne testabilne klase (`WorkSessionRules`, `TicketWorkBlocks`, `ClientVisibility`, a sada i `TicketAssignment`: pravilo "zaduženi je agent iz iste poslovnice" bilo je ispisano tri puta, sada je na jednom mjestu); nekorišteni MediatR i FluentValidation uklonjeni. 53 direktna `DateTime.UtcNow` ostaju.                                                                                                                                                                                                                                                                                                                                        | 🟡  |
@@ -259,7 +259,7 @@ Sve komande su u PowerShellu. Integracijskim testovima treba SQL Server na kojem
 
 ```powershell
 cd backend
-dotnet test -c Release                         # 582 testova, sve zeleno, nijedan preskočen (treba SQL Server)
+dotnet test -c Release                         # 641 testova, sve zeleno, nijedan preskočen (treba SQL Server)
 dotnet format TicketSystemTech.sln --verify-no-changes
 dotnet list package --vulnerable --include-transitive   # očekuje se: nema ranjivih paketa
 dotnet tool restore
@@ -270,7 +270,7 @@ dotnet ef migrations has-pending-model-changes --project src/TicketSystemTech.In
 cd frontend
 npm run lint
 npx tsc -b
-npm test                # 120 testova
+npm test                # 155 testova
 npm run build          # uključuje provjeru TypeScript tipova
 npm audit --audit-level=high
 ```
@@ -337,8 +337,8 @@ Testerov ADR 0001 je bio napisan prije nekih odluka vlasnika. Primijenjeno je ov
 
 | Provjera | Rezultat |
 | -------- | -------- |
-| `dotnet test -c Release` (backend, protiv pravog SQL Servera) | **543 prošlo, 0 palo, 0 preskočeno** (poslije trećeg kruga: 571, poslije četvrtog: 582, odjeljak 9.10) |
-| `npm test` (frontend, 19 fajlova) | **111 prošlo** (poslije trećeg kruga: 117, poslije četvrtog: 120, odjeljak 9.10) |
+| `dotnet test -c Release` (backend, protiv pravog SQL Servera) | **543 prošlo, 0 palo, 0 preskočeno** (poslije trećeg kruga: 571, četvrtog: 582, petog: 641, odjeljak 9.11) |
+| `npm test` (frontend, 19 fajlova) | **111 prošlo** (poslije trećeg kruga: 117, četvrtog: 120, petog: 155, odjeljak 9.11) |
 | `dotnet format TicketSystemTech.sln --verify-no-changes` | bez izmjena |
 | `dotnet list package --vulnerable --include-transitive` | nema ranjivih paketa u svih 5 projekata |
 | `dotnet ef migrations has-pending-model-changes` | model odgovara migracijama |
@@ -449,3 +449,34 @@ Vlasnik je tražio da se **sve** iz paketa testera ponovo istestira, ispravi i p
 **Šta još nije dokazano ovdje i ne može se testiranjem:** Docker slika (nema engine-a; provjerava CI), IIS, pravi SMTP/Google/Ollama, pravi reverse proxy, čitač ekrana, opterećenje; zaštita grane `main` (podešava vlasnik na GitHubu).
 
 **Ostaje otvoreno** (razlozi i prijedlozi u `docs/OTVORENE-STAVKE.md`): T-15 (kontroleri, 53 `DateTime.UtcNow`), T-17, T-18.1 (JWT u `localStorage`), T-20 (jedna instanca), T-31 (atomska konverzija emaila, povezivanje u niti), T-41, T-42, T-45, T-47, T-48; T-51 i T-52 (odluke vlasnika, pravno); T-11 (ugovor o obradi podataka); TS-12.1, TS-OPS-04.2 i TS-54.1 (podešavanje GitHuba i historija); TS-ONP-01.2.
+
+### 9.11 Peti krug: srednji poslovi i `NOVO-*` nalazi (2026-11-04)
+
+Vlasnik je tražio da se krene od srednjih poslova (grupa 2 u izvještaju o preostalom) i da se uradi ostalo, uz redovno testiranje. Za svaku ispravku važi isti postupak: **test koji prvo pada, pa popravka, pa mutacijska provjera** (kvar se vrati u kod i test mora pasti; fajl se vraća bajt po bajt, uz provjeru kontrolnog zbira). U koracima gdje to nije izvedeno stoji izričito "bez testa".
+
+**A. Scenariji iz grupe 2**
+
+| Scenarij | Šta je urađeno | Dokaz |
+| -------- | -------------- | ----- |
+| TS-15.2 | Sva vremena idu kroz `TimeProvider` (jedan sat za cijelu aplikaciju); entiteti nemaju vlastiti sat, a `AppDbContext` upisuje vrijeme kreiranja kad ono nije zadano. Uklonjen i nekorišteni `IDateTimeProvider`. Izravnih poziva sistemskog sata u izvornom kodu: **0** (53 prije) | `ClockTests` (token istječe prema satu aplikacije; red dobija vrijeme od sata; test koji pada ako se sistemski sat vrati u kod), mutacije 6 od 6 |
+| TS-34.2 | **Zaduženje ima jedan izvor:** lista izvršilaca s oznakom `IsPrimary` (jedinstveni filtrirani indeks: najviše jedan glavni po tiketu). Kolona `Tickets.AssignedToUserId` je uklonjena (migracija `TicketPrimaryAssigneeOnTheList` prenosi podatke: glavni već na listi dobija oznaku, glavni kojeg nema na listi se dodaje, lista bez glavnog ostaje takva). Otvaranje, kreiranje u ime klijenta, dodavanje, uklanjanje, premještaj i deaktivacija drže pravilo "tačno jedan glavni ili nijedan". API se nije mijenjao (`assignedToUserId` se izvodi iz oznake) | `AssigneeListTests` (12), `TicketPrimaryAssigneeMigrationTests` (naprijed i nazad, 5 vrsta starih redova), mutacije 8 od 8. Migracija **nije probana na kopiji prave baze** (primjenjuje se pri prvom pokretanju) |
+| TS-10.3 | Strani ključevi prema korisnicima već postoje. Anonimizacija sada uklanja ime iz rečenica koje je aplikacija sama napisala (događaji na tiketu, tekst obavijesti), samo cijela imena i nikad tuđi ukucani tekst | `PersonalDataTests`, mutacije 5 od 5 |
+| TS-11.2 | Tekst u bazi znanja se maskira pri upisu (tiketi i dokumenti); već upisani chunkovi se jednom maskiraju pri pokretanju (idempotentno, po stranicama) | `KnowledgeBaseRedactionTests` (4), mutacije 5 od 5. Opt-out po kompaniji nije rađen (ne postoji takvo podešavanje) |
+| TS-31.3 | Istovremeno osvježavanje Graph tokena: jedan zahtjev po mailboxu osvježava, drugi vidi novi token. Bez popravke je drugi dobijao `409` | `GraphTokenRefreshTests` (pravi servis, prava baza, lažni Microsoft koji broji pozive), mutacije 4 od 4 |
+| TS-02.3 | `IFileStorage` je asinhron (`OpenReadAsync`, `DeleteAsync`, `DeletePublicImageAsync`). Blob ili zajednički storage nisu rađeni; linkove i dalje pravi `IFileLinkService` | `FileStorageTests` |
+
+**B. Nalazi iz paketa `full-2026-10-21` (`NOVO-*`)**
+
+*Riješeno u ovom krugu:* ARC-04 (429 više ne otvara prekidač kruga), ARC-05 (korisnik i otpuštanje tiketa u jednom spremanju, provjera `IdentityResult`; **bez novog testa**, pokriveno postojećim), ARC-10 (posao za rokove filtrira u SQL-u), ARC-11 (ispad Microsofta je `503`, ne `400`; **bez testa**), ARC-12 (= TS-31.3), ARC-15 (veličina priloga prije dekodiranja, siročad fajlovi se brišu, `complete-ticket` je idempotentan i odbija email koji je već drugi tiket), DOM-02 (premještaj u poslovnicu s podposlovnicama traži podposlovnicu; forma je prilagođena), DOM-04 (Resolved je živ status i za upozorenje o roku; jedna lista statusa), DOM-06 (sesiju mijenja vlasnik, Admin ili trenutni zaduženi; **postojeći test koji je tvrdio suprotno je izmijenjen**), DOM-07 (rok bez zone je UTC, ne zona servera), DOM-08 (zaduženi se ne uklanjaju sa zatvorenog tiketa), PRV-01 (red koji se ne može šifrovati zaustavlja start u produkciji), PRV-02 (klijent ne vidi priloge koje je osoblje stavilo na sam tiket), FE-01 (kasni odgovor ne vraća stanje tiketa na staro; usput nađen i ispravljen dupli `key`), FE-03, FE-05 (prazan odgovor `<p>&nbsp;</p>` odbijen i na serveru i u pregledniku), FE-07 (zumiranje grafikona uzima cijele lokalne dane), FE-08 i SEC-08 (povezivanje mailboxa odbijeno bez PKCE, tj. van https), FE-09, FE-10, FE-11, SEC-05 (stari `wwwroot/uploads` se ne poslužuje), SEC-10 (obavijest o zaključavanju najviše jednom dnevno), OPS-14 (CI pada ako audit nije izvještavao o svim projektima), OPS-15 (neispravna konfiguracija se piše kao `FTL` u log i fajl prije izlaza; **provjereno uživo**).
+
+*Riješeno ranije (provjereno u kodu):* ARC-01, 02, 03; DOM-01, 03 (komentar ispravljen), 05; DB-01; FE-02, 04, 06; HOST-01, 02, 03, 05, 06, 08, 09, 11; OPS-01, 02, 03, 04, 09, 10, 13, 16; SEC-07, 09.
+
+*Djelimično:* ARC-06, HOST-04 i OPS-08 (poruke koje ne smiju propasti idu kroz outbox u bazi, ali reset lozinke i obavijest o zaključavanju idu kroz red u memoriji koji se gubi pri restartu i odbacuje preko 200 poruka), SEC-03 (CSP je u gotovim primjerima za nginx i IIS, ali ga domaćin mora primijeniti).
+
+*Prihvaćeno uz obrazloženje:* ARC-09 i OPS-07 (oznaka "obaviješten" se zauzima prije slanja; cijena je jedno izgubljeno upozorenje pri prekidu, što je bolje od duplih), ARC-14 (pri neuspjelom embeddingu stari vektor ostaje; to je namjerno, TS-DEP-04.2), HOST-12 i OPS-17 (zaključavanje pri startu je najbolji napor, a EF 10 ima vlastito; dvije instance provjerene uživo, TS-14.4), SEC-01 i SEC-02 (potpisani linkovi važe 4 sata i nose token u adresi; promjena traži preradu preuzimanja), SEC-06 (PDF se otvara u pregledniku na istom originu).
+
+*Otvoreno:* ARC-07 (spisak klijenata poslovnice se računa pri svakom zahtjevu), ARC-08 (vršna memorija indeksa vektora), ARC-13 (pet neuspjeha zaredom prekida reindeks bez razlikovanja uzroka), OPS-05 (ponovno učitavanje vektora tokom reindeksa), OPS-06 (xlsx od 20 MB u memoriji), OPS-11 (`/similar-tickets` bez gornje granice), HOST-07 i OPS-12 (SQL Server 2017 ili 2019: odluka vlasnika), HOST-10 (frontend kao artefakt ili image), SEC-04 (ko smije resetovati klijentsku lozinku: odluka vlasnika).
+
+**Greške u mom radu u ovom krugu (ne u aplikaciji):** mutacijska skripta je vraćala izvorni fajl, ali je ostavljala izgrađen fajl s mutacijom, pa je jedan test pao u sljedećem punom pokretanju bez razloga (rješenje: poslije mutacija uvijek ponovo izgraditi); dva puta sam test napisao tako da bi prošao i sa kvarom (409 koji je i "mailbox nije povezan", i test koji nije imao ni jedan red za straničenje), uhvaćeno mutacijskom provjerom i pojačano; skripta za dokumentaciju je jednom prošla u originalnom obliku jer sam lančao dvije komande na odvojenim redovima.
+
+**Konačno stanje:** **641 backend** i **155 frontend** testova prolaze (bez preskočenih), `dotnet format --verify-no-changes`, `dotnet build -warnaserror` (Release), migracije u odnosu na model, NuGet 0 ranjivih / 0 zastarjelih / 0 deprecated, frontend lint, `tsc`, build, `npm audit --audit-level=high` i `npm audit --omit=dev` (0).

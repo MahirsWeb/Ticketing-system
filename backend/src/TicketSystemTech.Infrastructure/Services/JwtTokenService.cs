@@ -15,14 +15,18 @@ public class JwtTokenService : ITokenService
 
     private readonly JwtOptions _options;
 
-    public JwtTokenService(IOptions<JwtOptions> options)
+    private readonly TimeProvider _time;
+    private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
+
+    public JwtTokenService(IOptions<JwtOptions> options, TimeProvider time)
     {
+        _time = time;
         _options = options.Value;
     }
 
     public (string Token, DateTime ExpiresAtUtc) GenerateAccessToken(Guid userId, string email, string firstName, string lastName, UserRole role, Guid? companyId, Guid? departmentId, string securityStamp)
     {
-        var expiresAt = DateTime.UtcNow.AddMinutes(_options.AccessTokenMinutes);
+        var expiresAt = UtcNow.AddMinutes(_options.AccessTokenMinutes);
 
         var claims = new List<Claim>
         {

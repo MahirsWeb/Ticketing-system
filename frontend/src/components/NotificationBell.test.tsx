@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { NotificationBell } from './NotificationBell';
 import { notificationsApi, type NotificationDto } from '../api/notifications';
 
@@ -46,5 +46,47 @@ describe('the notification bell', () => {
     expect(bell).toHaveAttribute('aria-expanded', 'false');
     await userEvent.click(bell);
     expect(bell).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  // NOVO-FE-10: marking a notification read failed, and the click then did nothing at all.
+  describe('when a notification is clicked', () => {
+    const forTicket = (id: string, isRead: boolean): NotificationDto => ({ ...note(id, isRead), ticketId: 'ticket-9' });
+
+    function renderWithRoutes() {
+      return render(
+        <MemoryRouter initialEntries={['/']}>
+          <NotificationBell />
+          <Routes>
+            <Route path="/" element={<p>home</p>} />
+            <Route path="/tickets/:id" element={<p>the ticket</p>} />
+          </Routes>
+        </MemoryRouter>
+      );
+    }
+
+    it('opens the ticket even when marking it as read fails, and shows it as still unread', async () => {
+      vi.mocked(notificationsApi.list).mockResolvedValue([forTicket('1', false)]);
+      vi.mocked(notificationsApi.markRead).mockReset().mockRejectedValue(new Error('network'));
+      renderWithRoutes();
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Notifications, 1 unread' }));
+      await userEvent.click(await screen.findByText('Message 1'));
+
+      expect(await screen.findByText('the ticket')).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: 'Notifications, 1 unread' })).toBeInTheDocument();
+    });
+
+    it('marks it read and opens the ticket when everything works', async () => {
+      vi.mocked(notificationsApi.list).mockResolvedValue([forTicket('1', false)]);
+      vi.mocked(notificationsApi.markRead).mockReset().mockResolvedValue(undefined as never);
+      renderWithRoutes();
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Notifications, 1 unread' }));
+      await userEvent.click(await screen.findByText('Message 1'));
+
+      expect(await screen.findByText('the ticket')).toBeInTheDocument();
+      expect(notificationsApi.markRead).toHaveBeenCalledWith('1');
+      expect(await screen.findByRole('button', { name: 'Notifications' })).toBeInTheDocument();
+    });
   });
 });

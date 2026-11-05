@@ -27,7 +27,8 @@ public static class DbSeeder
         ILogger logger,
         IConfiguration configuration,
         ITemporaryPasswordGenerator passwordGenerator,
-        IOptions<TemporaryPasswordOptions> tempPasswordOptions)
+        IOptions<TemporaryPasswordOptions> tempPasswordOptions,
+        TimeProvider time)
     {
         var seedEmail = configuration["SeedAdmin:Email"];
         if (string.IsNullOrWhiteSpace(seedEmail))
@@ -57,7 +58,7 @@ public static class DbSeeder
             // Employee/Client accounts — closes the exposure window regardless of how this
             // initial password was set (configured or auto-generated).
             MustChangePassword = true,
-            TemporaryPasswordExpiresAtUtc = DateTime.UtcNow.AddMinutes(tempPasswordOptions.Value.ValidityMinutes)
+            TemporaryPasswordExpiresAtUtc = time.GetUtcNow().UtcDateTime.AddMinutes(tempPasswordOptions.Value.ValidityMinutes)
         };
 
         var result = await userManager.CreateAsync(admin, seedPassword);

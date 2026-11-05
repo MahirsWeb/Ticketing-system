@@ -34,7 +34,6 @@ public class Ticket : BaseEntity
     public Guid? SlaPlanId { get; set; }
     public SlaPlan? SlaPlan { get; set; }
     public DateTime? DueDateUtc { get; set; }
-    public Guid? AssignedToUserId { get; set; }
 
     /// <summary>Internal categorization set by staff when opening the ticket, picked from an Admin-managed list. Staff/Admin only — never shown to the client.</summary>
     public Guid? CategoryId { get; set; }
@@ -65,6 +64,10 @@ public class Ticket : BaseEntity
     public ICollection<TicketMessage> Messages { get; set; } = new List<TicketMessage>();
     public ICollection<TicketAttachment> Attachments { get; set; } = new List<TicketAttachment>();
     public ICollection<TicketAssignee> Assignees { get; set; } = new List<TicketAssignee>();
+
+    /// <summary>The person the ticket is assigned to (the primary one on <see cref="Assignees"/>), or null. Only meaningful when
+    /// <see cref="Assignees"/> has been loaded; a query asks the list itself.</summary>
+    public Guid? PrimaryAssigneeId => Assignees.FirstOrDefault(a => a.IsPrimary)?.UserId;
 
     /// <summary>The stretches of work done on the ticket (see <see cref="TicketWorkSession"/>).</summary>
     public ICollection<TicketWorkSession> WorkSessions { get; set; } = new List<TicketWorkSession>();

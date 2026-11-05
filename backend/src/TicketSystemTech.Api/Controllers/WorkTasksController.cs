@@ -37,9 +37,14 @@ public class WorkTasksController : ControllerBase
     /// <summary>One session of a task is a working stretch, not a week: anything longer is a typing mistake (or a timer left running).</summary>
     private static readonly TimeSpan LongestSession = TimeSpan.FromHours(24);
 
+    private readonly TimeProvider _time;
+    private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
+
     public WorkTasksController(AppDbContext db, ICurrentUserService currentUser, IEmailSender emailSender, INotificationPublisher notificationPublisher,
-        IOptions<SlaOptions> slaOptions)
+        IOptions<SlaOptions> slaOptions,
+        TimeProvider time)
     {
+        _time = time;
         _zone = new Lazy<TimeZoneInfo>(() => BusinessTimeZone.Resolve(slaOptions.Value.TimeZoneId));
         _db = db;
         _currentUser = currentUser;
@@ -197,7 +202,7 @@ public class WorkTasksController : ControllerBase
             DateTime? ended = request.EndedAtUtc is { } end ? BusinessTimeZone.AsUtc(end) : null;
 
             var others = task.Sessions.Where(s => s != latest).Select(s => new WorkSessionRules.Span(s.Id, s.StartedAtUtc, s.EndedAtUtc));
-            var problem = WorkSessionRules.Validate(started, ended, DateTime.UtcNow, others, LongestSession, subject: "task")
+            var problem = WorkSessionRules.Validate(started, ended, UtcNow, others, LongestSession, subject: "task")
                 ?? WorkSessionRules.ValidateAgainstOtherWork(started, ended, await _db.OtherWorkOfAsync(task.AssignedToUserId, null, task.Id));
             if (problem is not null) return BadRequest(new { message = problem });
 
@@ -233,7 +238,7 @@ public class WorkTasksController : ControllerBase
         if (await _db.WorkTaskSessions.AnyAsync(s => s.WorkTaskId == id && s.EndedAtUtc == null))
             return BadRequest(new { message = "Timer is already running." });
 
-        var now = DateTime.UtcNow;
+        var now = UtcNow;
         var busy = WorkSessionRules.ValidateAgainstOtherWork(now, null, await _db.OtherWorkOfAsync(task.AssignedToUserId, null, id));
         if (busy is not null) return BadRequest(new { message = busy });
 
@@ -255,7 +260,7 @@ public class WorkTasksController : ControllerBase
         var running = await _db.WorkTaskSessions.Where(s => s.WorkTaskId == id && s.EndedAtUtc == null).OrderByDescending(s => s.StartedAtUtc).FirstOrDefaultAsync();
         if (running is null) return BadRequest(new { message = "Timer is not currently running." });
 
-        var now = DateTime.UtcNow;
+        var now = UtcNow;
         running.EndedAtUtc = now > running.StartedAtUtc ? now : running.StartedAtUtc.AddMilliseconds(1);
         task.Status = WorkTaskStatus.Done;
         await _db.SaveChangesAsync();
@@ -275,7 +280,7 @@ public class WorkTasksController : ControllerBase
         if (_currentUser.Role != UserRole.Admin && targetUser.DepartmentId != _currentUser.DepartmentId)
             return Forbid();
 
-        var (from, to, localDay) = BusinessTimeZone.DayWindow(date, _zone.Value, DateTime.UtcNow);
+        var (from, to, localDay) = BusinessTimeZone.DayWindow(date, _zone.Value, UtcNow);
         var entries = await BuildGanttEntriesAsync(userId, from, to);
         return Ok(new GanttResponse(userId, $"{targetUser.FirstName} {targetUser.LastName}", DateTime.SpecifyKind(localDay.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc), entries));
     }
@@ -292,7 +297,7 @@ public class WorkTasksController : ControllerBase
         if (_currentUser.Role != UserRole.Admin && departmentId != _currentUser.DepartmentId)
             return Forbid();
 
-        var (from, to, localDay) = BusinessTimeZone.DayWindow(date, _zone.Value, DateTime.UtcNow);
+        var (from, to, localDay) = BusinessTimeZone.DayWindow(date, _zone.Value, UtcNow);
         var day = DateTime.SpecifyKind(localDay.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc);
         var employees = await _db.Users.AsNoTracking()
             .Where(u => u.Role == UserRole.Employee && u.DepartmentId == departmentId && u.IsActive)
@@ -316,7 +321,7 @@ public class WorkTasksController : ControllerBase
     /// </summary>
     private async Task<List<GanttEntryDto>> BuildGanttEntriesAsync(Guid userId, DateTime dayStart, DateTime dayEnd)
     {
-        var now = DateTime.UtcNow;
+        var now = UtcNow;
         var blocks = await Queries.TicketWorkBlocks.ForUserAsync(_db, userId, dayStart, dayEnd, null, now);
         var tickets = blocks
             .Select(b => new GanttEntryDto("Ticket", b.TicketId, $"#{b.TicketNumber} — {b.Title}", b.Status.ToString(), b.Start, b.End, b.Status.ToString(), b.IsLogged))

@@ -165,6 +165,49 @@ public class PersonalDataTests : IAsyncLifetime
         Assert.Equal(200, (await _world.Post(_world.Admin, $"/api/users/{client.Id}/anonymize")).Code);
     }
 
+    // TS-10.3: the application wrote the name of staff into the text of what it records. Making a person anonymous takes it out of
+    // those sentences, and only those.
+    [SqlFact]
+    public async Task The_name_of_an_anonymized_person_leaves_the_sentences_the_system_wrote_and_nothing_a_person_typed()
+    {
+        var person = await PersonAsync("gdprName", UserRole.Employee);
+        var name = await _world.Db(db => db.Users.Where(u => u.Id == person.Id).Select(u => u.FirstName + " " + u.LastName).SingleAsync());
+        var ticket = new Ticket
+        {
+            TicketNumber = "PD-" + Guid.NewGuid().ToString("N")[..8],
+            Title = "ime u tekstu",
+            Description = "<p>x</p>",
+            ClientId = _world.CliX.Id,
+            CompanyId = _world.CompanyId,
+            Status = TicketStatus.InProgress,
+            DepartmentId = _world.BranchA,
+            Priority = TicketPriority.Medium,
+            Source = TicketSource.TicketSystem
+        };
+        ticket.Assignees.Add(new TicketAssignee { UserId = _world.EmpA2.Id, IsPrimary = true });
+        ticket.Messages.Add(new TicketMessage { AuthorId = person.Id, Type = MessageType.SystemEvent, BodyHtml = $"<p>Ticket reopened by {name}.</p>" });
+        ticket.Messages.Add(new TicketMessage { AuthorId = person.Id, Type = MessageType.SystemEvent, BodyHtml = $"<p>Ticket closed by {name}extra.</p>" }); // someone with a longer name
+        ticket.Messages.Add(new TicketMessage { AuthorId = _world.EmpA2.Id, Type = MessageType.InternalNote, BodyHtml = $"<p>Pitaj {name} za detalje.</p>" });  // typed by a person
+        var notification = new Notification { UserId = _world.EmpA2.Id, Type = NotificationType.TicketAssigned, Message = $"{name} assigned you a task: \"izvještaj\"" };
+        await _world.Db(async db => { db.Tickets.Add(ticket); db.Notifications.Add(notification); return await db.SaveChangesAsync(); });
+        _tickets.Add(ticket.Id);
+
+        try
+        {
+            Assert.Equal(200, (await _world.Post(_world.Admin, $"/api/users/{person.Id}/anonymize")).Code);
+
+            var bodies = await _world.Db(db => db.TicketMessages.AsNoTracking().Where(m => m.TicketId == ticket.Id).Select(m => new { m.Type, m.BodyHtml }).ToListAsync());
+            Assert.Contains(bodies, b => b.BodyHtml == "<p>Ticket reopened by Obrisan korisnik.</p>");
+            Assert.Contains(bodies, b => b.BodyHtml == $"<p>Ticket closed by {name}extra.</p>");   // only whole names
+            Assert.Contains(bodies, b => b.Type == MessageType.InternalNote && b.BodyHtml == $"<p>Pitaj {name} za detalje.</p>"); // nobody's own words
+            Assert.Equal("Obrisan korisnik assigned you a task: \"izvještaj\"", await _world.Db(db => db.Notifications.Where(n => n.Id == notification.Id).Select(n => n.Message).SingleAsync()));
+        }
+        finally
+        {
+            await _world.Db(db => db.Notifications.Where(n => n.Id == notification.Id).ExecuteDeleteAsync());
+        }
+    }
+
     [SqlFact]
     public async Task An_Admin_cannot_anonymize_themselves_and_an_unknown_person_is_not_found()
     {

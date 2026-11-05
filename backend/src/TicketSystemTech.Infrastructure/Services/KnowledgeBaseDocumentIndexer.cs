@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using TicketSystemTech.Application.Common;
 using TicketSystemTech.Application.Common.Interfaces;
 using TicketSystemTech.Application.KnowledgeBase;
 using TicketSystemTech.Domain.Entities;
@@ -45,7 +46,7 @@ public class KnowledgeBaseDocumentIndexer : IKnowledgeBaseDocumentIndexer
         var text = await _textExtractor.ExtractTextAsync(fileName, content, ct);
         if (string.IsNullOrWhiteSpace(text))
         {
-            _fileStorage.Delete(fileUrl); // nothing was indexed, so the saved original must not be left behind
+            await _fileStorage.DeleteAsync(fileUrl, ct); // nothing was indexed, so the saved original must not be left behind
             return null;
         }
 
@@ -59,7 +60,7 @@ public class KnowledgeBaseDocumentIndexer : IKnowledgeBaseDocumentIndexer
         _db.KnowledgeBaseDocuments.Add(document);
         await _db.SaveChangesAsync(ct);
 
-        foreach (var chunkText in SplitIntoChunks(text))
+        foreach (var chunkText in SplitIntoChunks(text).Select(PiiRedactor.Redact))
         {
             var embedding = await _embeddingService.EmbedAsync(chunkText, EmbeddingPriority.Background, ct);
             _db.KnowledgeBaseChunks.Add(new KnowledgeBaseChunk
@@ -82,7 +83,7 @@ public class KnowledgeBaseDocumentIndexer : IKnowledgeBaseDocumentIndexer
         if (document is null) return new DocumentReindexResult(false, "The document no longer exists.", 0);
 
         var key = StoredFileKey.FromReference(document.FileUrl);
-        await using var original = key is null ? null : _fileStorage.OpenRead(key);
+        await using var original = key is null ? null : await _fileStorage.OpenReadAsync(key, ct);
         if (original is null)
             return new DocumentReindexResult(false,
                 "The original file was not kept (it was uploaded before originals were stored), so it cannot be read again. Upload it again instead.", 0);
@@ -91,7 +92,7 @@ public class KnowledgeBaseDocumentIndexer : IKnowledgeBaseDocumentIndexer
         if (string.IsNullOrWhiteSpace(text))
             return new DocumentReindexResult(false, "No text could be extracted from the stored file.", 0);
 
-        var pieces = SplitIntoChunks(text).ToList();
+        var pieces = SplitIntoChunks(text).Select(PiiRedactor.Redact).ToList();
         var embedded = new List<(string Text, float[] Vector)>();
         foreach (var piece in pieces)
         {

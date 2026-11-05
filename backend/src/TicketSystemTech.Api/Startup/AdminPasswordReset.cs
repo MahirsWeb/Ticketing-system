@@ -46,7 +46,7 @@ public static class AdminPasswordReset
         }
 
         admin.MustChangePassword = true;
-        admin.TemporaryPasswordExpiresAtUtc = DateTime.UtcNow.AddMinutes(minutes);
+        admin.TemporaryPasswordExpiresAtUtc = services.GetRequiredService<TimeProvider>().GetUtcNow().UtcDateTime.AddMinutes(minutes);
         admin.IsActive = true;
         await users.UpdateAsync(admin);
         await users.ResetAccessFailedCountAsync(admin);

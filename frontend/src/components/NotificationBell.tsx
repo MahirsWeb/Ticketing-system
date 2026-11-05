@@ -35,10 +35,18 @@ export function NotificationBell() {
   const unreadCount = items.filter((i) => !i.isRead).length;
 
   async function handleClick(n: NotificationDto) {
-    await notificationsApi.markRead(n.id);
-    setItems((prev) => prev.map((i) => (i.id === n.id ? { ...i, isRead: true } : i)));
+    // Opening what the notification is about does not wait for, or depend on, marking it read: if that fails (the network, a
+    // server error) the click used to do nothing at all.
     setOpen(false);
     if (n.ticketId) navigate(`/tickets/${n.ticketId}`);
+    if (n.isRead) return;
+    setItems((prev) => prev.map((i) => (i.id === n.id ? { ...i, isRead: true } : i)));
+    try {
+      await notificationsApi.markRead(n.id);
+    } catch {
+      // It was not marked after all: show it as unread again rather than pretend.
+      setItems((prev) => prev.map((i) => (i.id === n.id ? { ...i, isRead: false } : i)));
+    }
   }
 
   return (

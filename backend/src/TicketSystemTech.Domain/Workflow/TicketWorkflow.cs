@@ -33,7 +33,10 @@ public static class TicketWorkflow
     public static bool IsDirectlyAssignable(TicketStatus status) =>
         status is TicketStatus.Open or TicketStatus.InProgress or TicketStatus.Resolved;
 
+    /// <summary>The statuses of a ticket that is still being worked on. One list, so that the overdue warning, releasing a person's
+    /// tickets and the screens cannot disagree about whether a "Resolved" ticket is still live (it is: it can be reopened).</summary>
+    public static readonly TicketStatus[] ActiveStatuses = { TicketStatus.Open, TicketStatus.InProgress, TicketStatus.Resolved };
+
     /// <summary>A ticket still being worked on: the SLA clock is running and it can be transferred or reassigned.</summary>
-    public static bool IsActive(TicketStatus status) =>
-        status is TicketStatus.Open or TicketStatus.InProgress or TicketStatus.Resolved;
+    public static bool IsActive(TicketStatus status) => ActiveStatuses.Contains(status);
 }

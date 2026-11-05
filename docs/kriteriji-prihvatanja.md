@@ -4,7 +4,7 @@ Ovaj dokument kaže **šta znači „prošlo“**, šta je u drugom krugu testir
 i čime, šta nije moguće dokazati na ovom računaru i šta je svjesno ostalo otvoreno. Cilj je da se pri sljedećem krugu ponovo
 provjerava **samo razlika**, a ne cijeli skup.
 
-Stanje opisano ovdje: poslije četvrtog kruga (2026-11-04), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 582 backend i 120 frontend testova.
+Stanje opisano ovdje: poslije petog kruga (2026-11-04), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 641 backend i 155 frontend testova.
 
 ## 1. Statusi
 
@@ -55,6 +55,14 @@ Svaki red je jedan scenario testera. „Test“ je klasa u `backend/tests/Ticket
 | TS-19.4 | Meni "Tiketi" i redovi zadataka samo mišem | Disclosure dugme s `aria-expanded` i pravim linkovima; zaglavlja su dugmad s `aria-sort` | `AppLayout.test.tsx`, mutacije 4 od 4 |
 | TS-59.2 | NuGet: ranjivi, zastarjeli i *Legacy* paketi | 0 ranjivih, 0 zastarjelih, 0 deprecated; `xunit.v3.mtp-off`; verzije u `Directory.Packages.props` | CI (`dotnet list package`) i postupak iz odjeljka 7 |
 | TS-ONP-04.3 | Express bez backupa i upozorenja na 10 GB | `backend/ops/backup-database.ps1` | postupak iz odjeljka 7 (isprobano na probnoj bazi) |
+| TS-15.2 | Sistemski sat na 53 mjesta | Sve kroz `TimeProvider`; entiteti bez sata | `ClockTests` (uključujući test koji pada ako se sistemski sat vrati u izvorni kod), mutacije 6 od 6 |
+| TS-34.2 | Dva izvora zaduženja koja se razilaze | Jedan izvor: lista izvršilaca s oznakom `IsPrimary`, jedinstven indeks, migracija s prenosom podataka | `AssigneeListTests`, `TicketPrimaryAssigneeMigrationTests`, mutacije 8 od 8 |
+| TS-10.3 | Imena osoblja kopirana u tekst događaja | Anonimizacija ih uklanja iz generisanog teksta, samo cijela imena | `PersonalDataTests`, mutacije 5 od 5 |
+| TS-11.2 | Baza znanja čuva email, telefon i lozinke kako su ukucani | Maskiranje pri upisu, jednokratno maskiranje starih chunkova | `KnowledgeBaseRedactionTests`, mutacije 5 od 5 |
+| TS-31.3 | Dva istovremena osvježavanja Graph tokena | Jedan zahtjev po mailboxu osvježava | `GraphTokenRefreshTests`, mutacije 4 od 4 |
+| NOVO-ARC-04 | 429 od davaoca otvara prekidač kruga | Prekidač ne broji 429 | `OutboundHttpTests` (pada bez popravke) |
+| NOVO-DOM-06, 07, 08, PRV-02, SEC-05, FE-05 | Pravila o tiketima, prilozima, rokovima, sesijama i praznim porukama | Vidi `IZVJESTAJ_ISPRAVKI.md` 9.11 | `TicketRulesTests`, `WorkSessionTests`, `LegacyUploadsTests`, `HtmlTextTests`, `OverdueNotifierTests` |
+| NOVO-FE-01, 03, 05, 07, 08, 09, 10, 11, DOM-02 (forma) | Frontend: utrke, zastarjeli odgovori, ponovljeno slanje priloga, zumiranje, povezivanje mailboxa | Vidi 9.11 | `TicketDetailPage.test`, `OpenTicketForm.test`, `EmailsPage.test`, `NotificationBell.test`, `TransferBranchForm.test`, `chartRange.test`, `finishNewTicket.test`, `htmlText.test` (svi padaju bez popravke) |
 
 Slanje email-ova (SMTP): `SmtpEmailTransportTests` (stvaran MailKit prema malom SMTP serveru na `localhost`), `EmailOutboxTests`,
 `EmailRetryPolicyTests`. Format koda: provjerava CI (`dotnet format --verify-no-changes`).
@@ -135,3 +143,7 @@ Tester-ovi scenariji su izvedeni na izoliranoj kopiji (vlastita baza, objavljen 
 ## 9. Četvrti krug (2026-11-04)
 
 Svih 151 scenarija iz paketa testera ponovo je obrađeno; pregled po scenariju je u `IZVJESTAJ_ISPRAVKI.md`, odjeljak 9.10. Uživo ili u pregledniku izvedeni su, između ostalih, TS-14.4 (dvije instance nad praznom bazom), TS-ONP-02.3 (drugi `Pii:HashKey`), TS-17.2, 17.3, 17.4 (zastarjeli odgovori), TS-09.2 (vremena prema zoni), TS-01.1 (XSS proba) i GDPR dugmad. Pri tome su nađene i ispravljene dvije greške u aplikaciji (brisanje poslovnice sa osobljem; `Pii:HashKey` koji se tiho promijeni) i jedna rupa u testovima (prilog na poruci tuđeg tiketa), a testiranje skripte za backup je našlo dvije greške u samoj skripti. Scenariji koji nisu izvedeni uživo vezani su za kod i postojeće testove, što je slabiji dokaz i označeno je uz svaki.
+
+## 10. Peti krug (2026-11-04)
+
+Grupa 2 iz izvještaja o preostalom (TS-15.2, 34.2, 10.3, 11.2, 31.3, dio 02.3) i nalazi `NOVO-*` iz paketa `full-2026-10-21`. Postupak za svaku ispravku: test koji prvo pada, popravka, mutacijska provjera; pregled je u `IZVJESTAJ_ISPRAVKI.md`, odjeljak 9.11, a stanje svih 80 nalaza u `docs/OTVORENE-STAVKE.md`, odjeljak 7. Nije izvedeno: probna primjena migracije `TicketPrimaryAssigneeOnTheList` na kopiji prave baze (pokriva je test migracije s pet vrsta starih redova), pregled u pregledniku za nove forme (pokrivene Vitest testovima), pravi Graph za TS-31.3 (zamijenjen lažnim Microsoftom koji broji pozive).

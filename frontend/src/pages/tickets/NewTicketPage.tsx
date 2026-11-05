@@ -6,6 +6,7 @@ import type { DepartmentItemFull } from '../../types';
 import { Button, Card, ErrorText, Input, Label, Select, Field } from '../../components/ui';
 import { RichTextEditor } from '../../components/RichTextEditor';
 import { newIdempotencyKey } from '../../lib/idempotency';
+import { isBlankHtml } from '../../lib/htmlText';
 
 export default function NewTicketPage() {
   const navigate = useNavigate();
@@ -34,7 +35,7 @@ export default function NewTicketPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!title.trim() || !description.trim() || description === '<p></p>') {
+    if (!title.trim() || isBlankHtml(description)) {
       setError('Title and description are required.');
       return;
     }

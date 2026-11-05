@@ -32,6 +32,7 @@ public static class OutboundHttp
             {
                 Limits(o, attempt: TimeSpan.FromSeconds(30), total: TimeSpan.FromSeconds(40));
                 NoAutomaticRetry(o);
+                BreakerIgnoresRateLimits(o);
             });
 
         // Microsoft 365: the pipeline does not retry, because it cannot tell the harmless GET reads from the OAuth token POST
@@ -46,6 +47,16 @@ public static class OutboundHttp
 
         return services;
     }
+
+    /// <summary>
+    /// A 429 is the provider asking to slow down, not a provider that is down: the embedding service already backs off and honours
+    /// Retry-After. Counted as a failure it opened the breaker during every bulk reindex, and for the next 30 seconds every embedding
+    /// call (the question a person had just asked included) failed at once and silently.
+    /// </summary>
+    private static void BreakerIgnoresRateLimits(HttpStandardResilienceOptions o) =>
+        o.CircuitBreaker.ShouldHandle = args => ValueTask.FromResult(
+            args.Outcome.Exception is not null
+            || (args.Outcome.Result is { } response && (response.StatusCode == System.Net.HttpStatusCode.RequestTimeout || (int)response.StatusCode >= 500)));
 
     /// <summary>Keeps the timeouts and the circuit breaker but never repeats a request on its own.</summary>
     private static void NoAutomaticRetry(HttpStandardResilienceOptions o)

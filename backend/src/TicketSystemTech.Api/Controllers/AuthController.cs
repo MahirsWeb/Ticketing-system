@@ -8,6 +8,7 @@ using TicketSystemTech.Api.Contracts;
 using TicketSystemTech.Api.Emails;
 using TicketSystemTech.Api.Middleware;
 using TicketSystemTech.Api.Security;
+using TicketSystemTech.Application.Common;
 using TicketSystemTech.Application.Common.Interfaces;
 using TicketSystemTech.Application.Common.Options;
 using TicketSystemTech.Domain.Entities;
@@ -30,7 +31,11 @@ public class AuthController : ControllerBase
     private readonly INotificationPublisher _notificationPublisher;
     private readonly IMemoryCache _cache;
     private readonly IBackgroundEmailQueue _emailQueue;
+    private readonly NoticeThrottle _lockoutNotices;
     private readonly LoginAttemptLimiter _loginLimiter;
+
+    private readonly TimeProvider _time;
+    private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
 
     public AuthController(
         UserManager<ApplicationUser> userManager,
@@ -41,11 +46,15 @@ public class AuthController : ControllerBase
         INotificationPublisher notificationPublisher,
         IMemoryCache cache,
         IBackgroundEmailQueue emailQueue,
-        LoginAttemptLimiter loginLimiter)
+        NoticeThrottle lockoutNotices,
+        LoginAttemptLimiter loginLimiter,
+        TimeProvider time)
     {
+        _time = time;
         _loginLimiter = loginLimiter;
         _cache = cache;
         _emailQueue = emailQueue;
+        _lockoutNotices = lockoutNotices;
         _userManager = userManager;
         _tokenService = tokenService;
         _emailSender = emailSender;
@@ -95,7 +104,8 @@ public class AuthController : ControllerBase
             await _userManager.AccessFailedAsync(user); // increments the failure count; locks the account out once the threshold is reached
 
             // The account's owner learns about it by email (to the address on file), not from the sign-in screen.
-            if (await _userManager.IsLockedOutAsync(user))
+            // At most one such e-mail a day per person: otherwise anybody can lock the account again and again and fill its owner's mailbox.
+            if (await _userManager.IsLockedOutAsync(user) && _lockoutNotices.TryAcquire(user.Id, UtcNow, TimeSpan.FromHours(24)))
                 _emailQueue.Enqueue(user.Email!, "Your account was temporarily locked", EmailTemplates.AccountLocked(user.FirstName));
 
             return Unauthorized(new { message = InvalidCredentials });
@@ -104,7 +114,7 @@ public class AuthController : ControllerBase
 
         if (user.MustChangePassword)
         {
-            if (user.TemporaryPasswordExpiresAtUtc is null || user.TemporaryPasswordExpiresAtUtc < DateTime.UtcNow)
+            if (user.TemporaryPasswordExpiresAtUtc is null || user.TemporaryPasswordExpiresAtUtc < UtcNow)
             {
                 return Unauthorized(new
                 {
@@ -123,7 +133,7 @@ public class AuthController : ControllerBase
 
         var (token, expiresAt) = _tokenService.GenerateAccessToken(user.Id, user.Email!, user.FirstName, user.LastName, user.Role, user.CompanyId, user.DepartmentId, user.SecurityStamp ?? string.Empty);
 
-        user.LastLoginAtUtc = DateTime.UtcNow;
+        user.LastLoginAtUtc = UtcNow;
         await _userManager.UpdateAsync(user);
 
         return Ok(new LoginResponse(false, token, expiresAt, await ToSummaryAsync(user)));
@@ -147,7 +157,7 @@ public class AuthController : ControllerBase
             && user.IsActive
             && user.MustChangePassword
             && user.TemporaryPasswordExpiresAtUtc is not null
-            && user.TemporaryPasswordExpiresAtUtc >= DateTime.UtcNow
+            && user.TemporaryPasswordExpiresAtUtc >= UtcNow
             && !await _userManager.IsLockedOutAsync(user);
         if (!usable)
         {

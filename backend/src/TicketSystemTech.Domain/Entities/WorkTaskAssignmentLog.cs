@@ -10,5 +10,5 @@ public class WorkTaskAssignmentLog : BaseEntity
 
     public Guid AssignedByUserId { get; set; }
     public Guid AssignedToUserId { get; set; }
-    public DateTime AssignedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime AssignedAtUtc { get; set; }
 }

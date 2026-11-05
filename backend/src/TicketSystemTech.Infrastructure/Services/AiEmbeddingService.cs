@@ -34,8 +34,12 @@ public class AiEmbeddingService : IEmbeddingService
     private readonly IConfiguration _configuration;
     private readonly ILogger<AiEmbeddingService> _logger;
 
-    public AiEmbeddingService(HttpClient httpClient, IConfiguration configuration, ILogger<AiEmbeddingService> logger)
+    private readonly TimeProvider _time;
+    private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
+
+    public AiEmbeddingService(HttpClient httpClient, IConfiguration configuration, ILogger<AiEmbeddingService> logger, TimeProvider time)
     {
+        _time = time;
         _httpClient = httpClient;
         _configuration = configuration;
         _logger = logger;
@@ -156,16 +160,16 @@ public class AiEmbeddingService : IEmbeddingService
     }
 
     /// <summary>Enforces a process-wide minimum gap between background calls so a bulk loop can't outrun the provider's rate limit.</summary>
-    private static async Task SpaceOutBackgroundCallAsync(AiSettings settings, CancellationToken ct)
+    private async Task SpaceOutBackgroundCallAsync(AiSettings settings, CancellationToken ct)
     {
         if (settings.BackgroundMinIntervalSeconds <= 0) return;
 
         await BackgroundGate.WaitAsync(ct);
         try
         {
-            var wait = TimeSpan.FromSeconds(settings.BackgroundMinIntervalSeconds) - (DateTime.UtcNow - _lastBackgroundCallUtc);
+            var wait = TimeSpan.FromSeconds(settings.BackgroundMinIntervalSeconds) - (UtcNow - _lastBackgroundCallUtc);
             if (wait > TimeSpan.Zero) await Task.Delay(wait, ct);
-            _lastBackgroundCallUtc = DateTime.UtcNow;
+            _lastBackgroundCallUtc = UtcNow;
         }
         finally
         {

@@ -59,6 +59,18 @@ describe('the reply box of a ticket', () => {
     expect(addMessage).not.toHaveBeenCalled();
   });
 
+  // NOVO-FE-05: a reply that only looks empty (a space, a no-break space) used to be sent to the client.
+  it.each(['<p> </p>', '<p>&nbsp;</p>', '<p><br></p>'])('sends nothing for %s, which only looks empty', async (html) => {
+    renderFeed();
+
+    // userEvent.type treats "<" as the start of a key description, so the text goes in with paste.
+    await userEvent.click(screen.getByLabelText('editor'));
+    await userEvent.paste(html);
+    await userEvent.click(screen.getByRole('button', { name: 'Send reply' }));
+
+    expect(addMessage).not.toHaveBeenCalled();
+  });
+
   it('keeps the text and says why when the sending failed, and the next try is the SAME message (same key)', async () => {
     addMessage.mockRejectedValueOnce({ response: { data: { message: 'The server is busy.' } } }).mockResolvedValueOnce(sent(1));
     renderFeed();

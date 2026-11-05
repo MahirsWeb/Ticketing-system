@@ -67,7 +67,7 @@ public class EmailIntegrationController : ControllerBase
         {
             // Written to be shown. Anything else is a genuine fault and goes to the global handler (with a trace id)
             // instead of being echoed to the browser as raw exception text.
-            return BadRequest(new { message = ex.Message });
+            return StatusCode(ex.Unavailable ? StatusCodes.Status503ServiceUnavailable : StatusCodes.Status400BadRequest, new { message = ex.Message });
         }
     }
 
@@ -122,6 +122,15 @@ public class EmailIntegrationController : ControllerBase
             .FirstOrDefaultAsync();
         if (ticket is null) return NotFound();
         if (ticket.DepartmentId != departmentId) return Forbid();
+
+        // Saying "this e-mail is now that ticket" a second time (a retry after a dropped connection) must not copy its files onto the
+        // ticket again; and an e-mail that already became another ticket is not turned into a second one.
+        var convertedTo = await _db.EmailTicketMarks.AsNoTracking()
+            .Where(m => m.DepartmentId == departmentId && m.MessageId == messageId)
+            .Select(m => m.ConvertedTicketId)
+            .FirstOrDefaultAsync();
+        if (convertedTo == ticketId) return Ok();
+        if (convertedTo.HasValue) return Conflict(new { message = "This e-mail already became another ticket.", code = "CONFLICT" });
 
         await _emailService.ImportAttachmentsToTicketAsync(departmentId, _currentUser.UserId!.Value, messageId, ticketId);
         await _emailService.MarkConvertedAsync(departmentId, messageId, ticketId);

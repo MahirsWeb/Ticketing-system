@@ -50,7 +50,7 @@ public class AiSettingsTests
     };
 
     private static AiEmbeddingService Embedding(RecordingHandler handler, IConfiguration config) =>
-        new(new HttpClient(handler), config, NullLogger<AiEmbeddingService>.Instance);
+        new(new HttpClient(handler), config, NullLogger<AiEmbeddingService>.Instance, TimeProvider.System);
 
     private static AiChatCompletionService Chat(RecordingHandler handler, IConfiguration config) =>
         new(new HttpClient(handler), config, NullLogger<AiChatCompletionService>.Instance);

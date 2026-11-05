@@ -75,7 +75,7 @@ public static class KeyRingProtection
 
         using var rsa = RSA.Create(3072);
         var request = new CertificateRequest("CN=TicketSystemTech key ring", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-        using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddYears(10));
+        using var certificate = request.CreateSelfSigned(TimeProvider.System.GetUtcNow().AddMinutes(-5), TimeProvider.System.GetUtcNow().AddYears(10));
         File.WriteAllBytes(path, certificate.Export(X509ContentType.Pfx, password));
     }
 }

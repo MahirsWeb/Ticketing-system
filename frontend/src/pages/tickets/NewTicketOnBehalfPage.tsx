@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { usersApi } from '../../api/users';
 import { lookupsApi } from '../../api/lookups';
@@ -9,6 +9,8 @@ import { Button, Card, ErrorText, Input, Label, Select, Field } from '../../comp
 import { RichTextEditor } from '../../components/RichTextEditor';
 import { useAuthStore } from '../../store/authStore';
 import { newIdempotencyKey } from '../../lib/idempotency';
+import { isBlankHtml } from '../../lib/htmlText';
+import { finishNewTicket } from '../../lib/finishNewTicket';
 
 const SOURCES: TicketSource[] = ['Phone', 'Email', 'TicketSystem', 'Other'];
 const PRIORITIES: TicketPriority[] = ['Emergency', 'High', 'Medium', 'Low'];
@@ -49,6 +51,8 @@ export default function NewTicketOnBehalfPage() {
   const [dueDate, setDueDate] = useState('');
   // One key per visit to this form: a retry of the same submission gets the existing ticket back, not a duplicate.
   const [idempotencyKey] = useState(newIdempotencyKey);
+  // The files that went up already, kept between attempts so that a second attempt does not attach them again.
+  const uploadedFiles = useRef(new Set<File>());
   const [assignedToUserId, setAssignedToUserId] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -83,15 +87,24 @@ export default function NewTicketOnBehalfPage() {
       setSubBranchId('');
       return;
     }
-    lookupsApi.subBranches(departmentId).then((subs) => {
-      setSubBranches(subs);
-      const assignee = allEmployees.find((e) => e.id === assignedToUserId);
-      if (assignee?.departmentId === departmentId && assignee.subBranchId && subs.some((s) => s.id === assignee.subBranchId)) {
-        setSubBranchId(assignee.subBranchId);
-      } else {
-        setSubBranchId('');
-      }
-    });
+    // The answer for a branch that is no longer the chosen one is thrown away (see OpenTicketForm).
+    let current = true;
+    lookupsApi
+      .subBranches(departmentId)
+      .then((subs) => {
+        if (!current) return;
+        setSubBranches(subs);
+        const assignee = allEmployees.find((e) => e.id === assignedToUserId);
+        if (assignee?.departmentId === departmentId && assignee.subBranchId && subs.some((s) => s.id === assignee.subBranchId)) {
+          setSubBranchId(assignee.subBranchId);
+        } else {
+          setSubBranchId('');
+        }
+      })
+      .catch(() => current && setSubBranches([]));
+    return () => {
+      current = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sub-branches are loaded when the branch changes; picking an assignee must not reload them
   }, [departmentId]);
 
@@ -170,7 +183,7 @@ export default function NewTicketOnBehalfPage() {
     e.preventDefault();
     setError(null);
     if (!client) return;
-    if (!title.trim() || !description.trim() || description === '<p></p>') {
+    if (!title.trim() || isBlankHtml(description)) {
       setError('Title and description are required.');
       return;
     }
@@ -209,12 +222,10 @@ export default function NewTicketOnBehalfPage() {
     }
 
     try {
-      if (files.length > 0) {
-        await ticketsApi.uploadAttachments(ticket.id, files);
-      }
-      if (fromEmailMessageId) {
-        await emailIntegrationApi.completeTicket(fromEmailMessageId, ticket.id);
-      }
+      await finishNewTicket(ticket.id, files, fromEmailMessageId, uploadedFiles.current, {
+        upload: ticketsApi.uploadAttachments,
+        complete: emailIntegrationApi.completeTicket,
+      });
       navigate(`/tickets/${ticket.id}`);
     } catch (err: any) {
       // The ticket exists by now. Saying "could not create" here sent people to try again; the same idempotency key means that

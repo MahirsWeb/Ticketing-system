@@ -102,7 +102,7 @@ public class AiProviderRequestTests
     public async Task Text_to_be_embedded_is_masked_too()
     {
         var handler = new CapturingHandler("""{"embedding":{"values":[0.1,0.2,0.3]}}""");
-        var service = new AiEmbeddingService(new HttpClient(handler), Config(), NullLogger<AiEmbeddingService>.Instance);
+        var service = new AiEmbeddingService(new HttpClient(handler), Config(), NullLogger<AiEmbeddingService>.Instance, TimeProvider.System);
 
         var vector = await service.EmbedAsync("javio se ana@firma.ba, 061 123 456, ne radi štampa", TestContext.Current.CancellationToken);
 

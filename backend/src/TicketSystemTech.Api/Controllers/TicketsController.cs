@@ -33,6 +33,9 @@ public class TicketsController : ControllerBase
     private readonly ISlaCalculator _sla;
     private readonly ILogger<TicketsController> _logger;
 
+    private readonly TimeProvider _time;
+    private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
+
     public TicketsController(
         AppDbContext db,
         ICurrentUserService currentUser,
@@ -44,8 +47,10 @@ public class TicketsController : ControllerBase
         IHtmlSanitizerService html,
         IFileLinkService links,
         ISlaCalculator sla,
-        ILogger<TicketsController> logger)
+        ILogger<TicketsController> logger,
+        TimeProvider time)
     {
+        _time = time;
         _links = links;
         _sla = sla;
         _logger = logger;
@@ -78,6 +83,8 @@ public class TicketsController : ControllerBase
         var companyId = _currentUser.CompanyId;
         if (companyId is null)
             return BadRequest(new { message = "Your account is not linked to a company." });
+
+        if (HtmlText.IsBlank(request.Description)) return BadRequest(new { message = "Please describe the problem." });
 
         var department = await _db.Departments.FirstOrDefaultAsync(d => d.Id == request.DepartmentId && d.IsActive);
         if (department is null) return BadRequest(new { message = "Please select a valid branch." });
@@ -147,6 +154,7 @@ public class TicketsController : ControllerBase
         // Non-admin staff can only route a ticket into their own branch; moving it elsewhere later requires an explicit transfer.
         if (_currentUser.Role != UserRole.Admin && request.DepartmentId != _currentUser.DepartmentId)
             return BadRequest(new { message = "You can only open tickets into your own branch." });
+        if (HtmlText.IsBlank(request.Description)) return BadRequest(new { message = "Please describe the problem." });
 
         var lookupError = await ValidateLookupsAsync(request.HelpTopicId, request.CategoryId, request.DepartmentId);
         if (lookupError is not null) return BadRequest(new { message = lookupError });
@@ -160,7 +168,7 @@ public class TicketsController : ControllerBase
         var assigneeError = TicketAssignment.Check(assignee.DepartmentId, assignee.SubBranchId, request.DepartmentId, request.SubBranchId);
         if (assigneeError is not null) return BadRequest(new { message = assigneeError });
 
-        var openedAtUtc = DateTime.UtcNow;
+        var openedAtUtc = UtcNow;
         var (dueDateUtc, slaError) = await ResolveDueDateAsync(request.SlaPlanId, request.DueDateUtc, openedAtUtc);
         if (slaError is not null) return BadRequest(new { message = slaError });
 
@@ -180,12 +188,11 @@ public class TicketsController : ControllerBase
             Priority = request.Priority,
             DueDateUtc = dueDateUtc,
             CategoryId = request.CategoryId,
-            AssignedToUserId = request.AssignedToUserId,
             OpenedByUserId = _currentUser.UserId,
             OpenedAtUtc = openedAtUtc
         };
         _db.Tickets.Add(ticket);
-        _db.TicketAssignees.Add(new TicketAssignee { Ticket = ticket, UserId = assignee.Id });
+        _db.TicketAssignees.Add(new TicketAssignee { Ticket = ticket, UserId = assignee.Id, IsPrimary = true });
 
         var openedBy = await _db.Users.FirstAsync(u => u.Id == _currentUser.UserId);
         _db.TicketMessages.Add(new TicketMessage
@@ -306,7 +313,7 @@ public class TicketsController : ControllerBase
         if (companyId.HasValue) query = query.Where(t => t.CompanyId == companyId.Value);
         if (clientId.HasValue) query = query.Where(t => t.ClientId == clientId.Value);
         if (assignedToUserId.HasValue)
-            query = query.Where(t => t.AssignedToUserId == assignedToUserId.Value || t.Assignees.Any(a => a.UserId == assignedToUserId.Value));
+            query = query.Where(t => t.Assignees.Any(a => a.UserId == assignedToUserId.Value));
         if (departmentId.HasValue) query = query.Where(t => t.DepartmentId == departmentId.Value);
         if (subBranchId.HasValue) query = query.Where(t => t.SubBranchId == subBranchId.Value);
         if (!string.IsNullOrWhiteSpace(search))
@@ -353,7 +360,7 @@ public class TicketsController : ControllerBase
                 t.Priority,
                 t.CompanyId,
                 t.ClientId,
-                t.AssignedToUserId,
+                AssignedToUserId = t.Assignees.Where(a => a.IsPrimary).Select(a => (Guid?)a.UserId).FirstOrDefault(),
                 t.CreatedAt,
                 t.DueDateUtc,
                 t.ClosedAtUtc,
@@ -410,8 +417,7 @@ public class TicketsController : ControllerBase
 
         var openedStatuses = new[] { TicketStatus.Open, TicketStatus.InProgress, TicketStatus.Resolved };
         var mineCount = _currentUser.UserId.HasValue
-            ? await query.CountAsync(t => openedStatuses.Contains(t.Status) &&
-                (t.AssignedToUserId == _currentUser.UserId.Value || t.Assignees.Any(a => a.UserId == _currentUser.UserId.Value)))
+            ? await query.CountAsync(t => openedStatuses.Contains(t.Status) && t.Assignees.Any(a => a.UserId == _currentUser.UserId.Value))
             : 0;
 
         return Ok(new TicketCountsDto(newCount + openedCount + closedCount, newCount, openedCount, closedCount, mineCount));
@@ -448,8 +454,9 @@ public class TicketsController : ControllerBase
         var lookupError = await ValidateLookupsAsync(request.HelpTopicId, request.CategoryId, request.DepartmentId);
         if (lookupError is not null) return BadRequest(new { message = lookupError });
 
-        // The client's branch pick is only a suggestion — any staff member (not just Admin) can correct it
-        // here, since clients don't always know which branch actually owns their issue.
+        // The client's branch pick is only a suggestion, and it is corrected here by whoever opens the ticket: Admin, or staff of the
+        // branch the ticket sits in. Staff of another branch cannot see it at all (that is the point of branches); if the pick was
+        // wrong, the branch that received it moves it on with "transfer".
         var subBranchError = await ValidateSubBranchAsync(request.DepartmentId, request.SubBranchId);
         if (subBranchError is not null) return BadRequest(new { message = subBranchError });
 
@@ -459,7 +466,7 @@ public class TicketsController : ControllerBase
         var assigneeError = TicketAssignment.Check(assignee.DepartmentId, assignee.SubBranchId, request.DepartmentId, request.SubBranchId);
         if (assigneeError is not null) return BadRequest(new { message = assigneeError });
 
-        var openedAtUtc = DateTime.UtcNow;
+        var openedAtUtc = UtcNow;
         var (dueDateUtc, slaError) = await ResolveDueDateAsync(request.SlaPlanId, request.DueDateUtc, openedAtUtc);
         if (slaError is not null) return BadRequest(new { message = slaError });
 
@@ -471,11 +478,10 @@ public class TicketsController : ControllerBase
         ticket.Priority = request.Priority;
         ticket.DueDateUtc = dueDateUtc;
         ticket.CategoryId = request.CategoryId;
-        ticket.AssignedToUserId = request.AssignedToUserId;
         ticket.Status = TicketStatus.Open;
         ticket.OpenedByUserId = _currentUser.UserId;
         ticket.OpenedAtUtc = openedAtUtc;
-        _db.TicketAssignees.Add(new TicketAssignee { TicketId = ticket.Id, UserId = assignee.Id });
+        _db.TicketAssignees.Add(new TicketAssignee { TicketId = ticket.Id, UserId = assignee.Id, IsPrimary = true });
 
         var client = await _db.Users.FirstAsync(u => u.Id == ticket.ClientId);
         var openedBy = await _db.Users.FirstAsync(u => u.Id == _currentUser.UserId);
@@ -518,15 +524,18 @@ public class TicketsController : ControllerBase
         var toDepartment = await _db.Departments.FirstOrDefaultAsync(d => d.Id == request.DepartmentId && d.IsActive);
         if (toDepartment is null) return BadRequest(new { message = "Destination branch not found." });
         if (toDepartment.Id == ticket.DepartmentId) return BadRequest(new { message = "Ticket is already in this branch." });
+        // A branch that has sub-branches needs one chosen, as everywhere else a ticket is routed: leaving it empty put the ticket outside
+        // every sub-branch filter and past the check that assignees belong to the ticket's sub-branch, with no way to set it afterwards.
+        var subBranchError = await ValidateSubBranchAsync(toDepartment.Id, request.SubBranchId);
+        if (subBranchError is not null) return BadRequest(new { message = subBranchError });
 
         var transferredBy = await _db.Users.FirstAsync(u => u.Id == _currentUser.UserId);
 
         ticket.DepartmentId = toDepartment.Id;
-        ticket.SubBranchId = null; // the sub-branch belonged to the old branch; staff can re-pick one for the new branch via the assignees/open flow
-        ticket.AssignedToUserId = null; // the previous assignee(s) likely don't belong to the destination branch
+        ticket.SubBranchId = request.SubBranchId; // the old one belonged to the old branch; this is the one chosen in the new branch (or none, if it has none)
         var oldAssignees = await _db.TicketAssignees.Where(a => a.TicketId == ticket.Id).ToListAsync();
         _db.TicketAssignees.RemoveRange(oldAssignees);
-        await _db.EndRunningSessionsAsync(new[] { ticket.Id }, null, DateTime.UtcNow); // nobody is working it any more
+        await _db.EndRunningSessionsAsync(new[] { ticket.Id }, null, UtcNow); // nobody is working it any more
         _db.TicketMessages.Add(new TicketMessage
         {
             TicketId = ticket.Id,
@@ -581,7 +590,7 @@ public class TicketsController : ControllerBase
         ticket.Status = TicketStatus.Closed;
         ticket.ResolutionSummary = request.ResolutionSummary;
         ticket.ClosedByUserId = _currentUser.UserId;
-        ticket.ClosedAtUtc = DateTime.UtcNow;
+        ticket.ClosedAtUtc = UtcNow;
         await _db.EndRunningSessionsAsync(new[] { ticket.Id }, null, ticket.ClosedAtUtc.Value);
 
         var client = await _db.Users.FirstAsync(u => u.Id == ticket.ClientId);
@@ -657,7 +666,7 @@ public class TicketsController : ControllerBase
 
         if (requested.HasValue)
         {
-            var requestedUtc = requested.Value.ToUniversalTime();
+            var requestedUtc = AsUtc(requested.Value); // no zone means UTC (the same rule as work sessions and reports), not the host's zone
             if (requestedUtc <= startUtc) return (null, "The due date must be in the future.");
             return (requestedUtc, null);
         }
@@ -724,10 +733,9 @@ public class TicketsController : ControllerBase
         var alreadyAssigned = await _db.TicketAssignees.AnyAsync(a => a.TicketId == id && a.UserId == request.UserId);
         if (alreadyAssigned) return BadRequest(new { message = "This person is already assigned to the ticket." });
 
-        _db.TicketAssignees.Add(new TicketAssignee { TicketId = id, UserId = user.Id });
-        // The first person added to a ticket that has nobody becomes its primary assignee: AssignedToUserId and the
-        // assignee list used to drift apart, leaving "assigned to" empty on a ticket that did have assignees.
-        ticket.AssignedToUserId ??= user.Id;
+        // The first person added to a ticket that has nobody becomes the one it is "assigned to"; everybody after is help.
+        var hasPrimary = await _db.TicketAssignees.AnyAsync(a => a.TicketId == id && a.IsPrimary);
+        _db.TicketAssignees.Add(new TicketAssignee { TicketId = id, UserId = user.Id, IsPrimary = !hasPrimary });
 
         var addedBy = await _db.Users.FirstAsync(u => u.Id == _currentUser.UserId);
         _db.TicketMessages.Add(new TicketMessage
@@ -748,8 +756,12 @@ public class TicketsController : ControllerBase
         {
             // Two identical requests (a double click) raced past the check above; the unique index stopped the second.
             // Anything else that made the save fail is a real error.
-            if (!await AssigneeExistsAsync(id, user.Id)) throw;
-            return BadRequest(new { message = "This person is already assigned to the ticket." });
+            if (await AssigneeExistsAsync(id, user.Id))
+                return BadRequest(new { message = "This person is already assigned to the ticket." });
+            // Two people were added as the first assignee at the same moment; the unique index lets only one be the main one.
+            if (!hasPrimary)
+                return Conflict(new { message = "Somebody else changed the assignees of this ticket a moment ago. Reload it and try again.", code = "CONFLICT" });
+            throw;
         }
 
         await _emailSender.SendAsync(user.Email!, $"Ticket #{ticket.TicketNumber} assigned to you", EmailTemplates.TicketAssigned(user.FirstName, ticket.TicketNumber, ticket.Title));
@@ -765,17 +777,20 @@ public class TicketsController : ControllerBase
         var ticket = await _db.Tickets.FirstOrDefaultAsync(t => t.Id == id);
         if (ticket is null) return NotFound();
         if (!CanAccess(ticket)) return Forbid();
+        if (ticket.Status is TicketStatus.New or TicketStatus.Closed)
+            return BadRequest(new { message = "The ticket must be open to change its assignees." }); // who worked a closed ticket is history
 
         var assignment = await _db.TicketAssignees.FirstOrDefaultAsync(a => a.TicketId == id && a.UserId == userId);
         if (assignment is null) return NotFound();
 
         _db.TicketAssignees.Remove(assignment);
         _db.Audit(_currentUser.UserId, "TicketAssigneeRemoved", nameof(Ticket), ticket.Id, $"Removed {userId}");
-        await _db.EndRunningSessionsAsync(new[] { id }, userId, DateTime.UtcNow); // the person stops working it
-        if (ticket.AssignedToUserId == userId)
+        await _db.EndRunningSessionsAsync(new[] { id }, userId, UtcNow); // the person stops working it
+        if (assignment.IsPrimary)
         {
-            var remaining = await _db.TicketAssignees.Where(a => a.TicketId == id && a.UserId != userId).FirstOrDefaultAsync();
-            ticket.AssignedToUserId = remaining?.UserId;
+            // The one the ticket was assigned to leaves: whoever has been on it longest of the others takes over, if anyone is left.
+            var next = await _db.TicketAssignees.Where(a => a.TicketId == id && a.UserId != userId).OrderBy(a => a.AssignedAtUtc).FirstOrDefaultAsync();
+            if (next is not null) next.IsPrimary = true;
         }
         await _db.SaveChangesAsync();
 
@@ -817,16 +832,17 @@ public class TicketsController : ControllerBase
         var ticket = await _db.Tickets.FirstOrDefaultAsync(t => t.Id == id);
         if (ticket is null) return NotFound();
         if (!CanAccess(ticket)) return Forbid();
-        if (ticket.AssignedToUserId is null)
+        var primaryId = await PrimaryAssigneeIdAsync(id);
+        if (primaryId is null)
             return BadRequest(new { message = "Assign the ticket to somebody before logging work time on it." });
 
         var started = AsUtc(request.StartedAtUtc!.Value);
         var ended = request.EndedAtUtc.HasValue ? AsUtc(request.EndedAtUtc.Value) : (DateTime?)null;
-        var error = WorkSessionRules.Validate(started, ended, DateTime.UtcNow, await OtherSessionsAsync(id, null))
-            ?? WorkSessionRules.ValidateAgainstOtherWork(started, ended, await _db.OtherWorkOfAsync(ticket.AssignedToUserId.Value, id, null));
+        var error = WorkSessionRules.Validate(started, ended, UtcNow, await OtherSessionsAsync(id, null))
+            ?? WorkSessionRules.ValidateAgainstOtherWork(started, ended, await _db.OtherWorkOfAsync(primaryId.Value, id, null));
         if (error is not null) return BadRequest(new { message = error });
 
-        var session = new TicketWorkSession { TicketId = id, UserId = ticket.AssignedToUserId.Value, StartedAtUtc = started, EndedAtUtc = ended };
+        var session = new TicketWorkSession { TicketId = id, UserId = primaryId.Value, StartedAtUtc = started, EndedAtUtc = ended };
         _db.TicketWorkSessions.Add(session);
         AuditWorkSession("WorkSessionAdded", id, session);
         await _db.SaveChangesAsync();
@@ -845,10 +861,11 @@ public class TicketsController : ControllerBase
 
         var session = await _db.TicketWorkSessions.FirstOrDefaultAsync(s => s.Id == sessionId && s.TicketId == id);
         if (session is null) return NotFound();
+        if (!await MayChangeSessionAsync(session)) return Forbid();
 
         var started = AsUtc(request.StartedAtUtc!.Value);
         var ended = request.EndedAtUtc.HasValue ? AsUtc(request.EndedAtUtc.Value) : (DateTime?)null;
-        var error = WorkSessionRules.Validate(started, ended, DateTime.UtcNow, await OtherSessionsAsync(id, sessionId))
+        var error = WorkSessionRules.Validate(started, ended, UtcNow, await OtherSessionsAsync(id, sessionId))
             ?? WorkSessionRules.ValidateAgainstOtherWork(started, ended, await _db.OtherWorkOfAsync(session.UserId, id, null));
         if (error is not null) return BadRequest(new { message = error });
 
@@ -858,6 +875,14 @@ public class TicketsController : ControllerBase
         await _db.SaveChangesAsync();
 
         return Ok(await BuildDetailDto(id));
+    }
+
+    /// <summary>The time somebody logged is theirs: they may change it, an Admin may, and so may the person the ticket is assigned to now
+    /// (who answers for it). A colleague who merely has access to the ticket may not.</summary>
+    private async Task<bool> MayChangeSessionAsync(TicketWorkSession session)
+    {
+        if (_currentUser.Role == UserRole.Admin || session.UserId == _currentUser.UserId) return true;
+        return _currentUser.UserId.HasValue && await PrimaryAssigneeIdAsync(session.TicketId) == _currentUser.UserId;
     }
 
     [HttpDelete("{id:guid}/work-sessions/{sessionId:guid}")]
@@ -870,6 +895,7 @@ public class TicketsController : ControllerBase
 
         var session = await _db.TicketWorkSessions.FirstOrDefaultAsync(s => s.Id == sessionId && s.TicketId == id);
         if (session is null) return NotFound();
+        if (!await MayChangeSessionAsync(session)) return Forbid();
 
         _db.TicketWorkSessions.Remove(session);
         AuditWorkSession("WorkSessionDeleted", id, session);
@@ -887,6 +913,8 @@ public class TicketsController : ControllerBase
 
         if (request.Type == MessageType.SystemEvent)
             return BadRequest(new { message = "System events are recorded automatically and cannot be posted directly." });
+        if (HtmlText.IsBlank(request.BodyHtml))
+            return BadRequest(new { message = "The message is empty." });
         if (_currentUser.Role == UserRole.Client && request.Type != MessageType.Response)
             return Forbid();
         // The screens already hide the reply box on a closed ticket; the API now enforces it too.
@@ -955,12 +983,15 @@ public class TicketsController : ControllerBase
         return await _db.TicketAssignees.AnyAsync(a => a.TicketId == ticketId && a.UserId == userId);
     }
 
-    /// <summary>Who should hear about a client's reply: every assignee, plus the primary assignee if the list lacks them.
-    /// A ticket with nobody on it falls back to the staff of its branch, so a reply is never addressed to no one.</summary>
+    /// <summary>The person the ticket is assigned to (the primary one on its list), or null when nobody is on it.</summary>
+    private Task<Guid?> PrimaryAssigneeIdAsync(Guid ticketId) =>
+        _db.TicketAssignees.Where(a => a.TicketId == ticketId && a.IsPrimary).Select(a => (Guid?)a.UserId).FirstOrDefaultAsync();
+
+    /// <summary>Who should hear about a client's reply: every assignee. A ticket with nobody on it falls back to the staff of its
+    /// branch, so a reply is never addressed to no one.</summary>
     private async Task<List<Guid>> StaffToNotifyAsync(Ticket ticket)
     {
         var ids = await _db.TicketAssignees.Where(a => a.TicketId == ticket.Id).Select(a => a.UserId).ToListAsync();
-        if (ticket.AssignedToUserId.HasValue && !ids.Contains(ticket.AssignedToUserId.Value)) ids.Add(ticket.AssignedToUserId.Value);
 
         if (ids.Count == 0 && ticket.DepartmentId.HasValue)
             ids = await _db.Users.Where(u => u.Role == UserRole.Employee && u.IsActive && u.DepartmentId == ticket.DepartmentId).Select(u => u.Id).ToListAsync();
@@ -1022,9 +1053,9 @@ public class TicketsController : ControllerBase
             ? new List<TicketWorkSession>()
             : await _db.TicketWorkSessions.AsNoTracking().Where(s => s.TicketId == ticketId).OrderBy(s => s.StartedAtUtc).ToListAsync();
 
+        var primaryId = assignees.FirstOrDefault(a => a.IsPrimary)?.UserId;
         var relevantUserIds = new List<Guid> { t.ClientId };
         relevantUserIds.AddRange(sessions.Select(s => s.UserId));
-        if (t.AssignedToUserId.HasValue) relevantUserIds.Add(t.AssignedToUserId.Value);
         relevantUserIds.AddRange(assignees.Select(a => a.UserId));
         relevantUserIds.AddRange(messages.Select(m => m.AuthorId));
         var users = await _db.Users.Where(u => relevantUserIds.Contains(u.Id))
@@ -1037,7 +1068,11 @@ public class TicketsController : ControllerBase
             m.Attachments.Select(ToAttachmentDto).ToList()
         )).ToList();
 
-        var ticketLevelAttachments = t.Attachments.Where(a => a.MessageId == null).Select(ToAttachmentDto).ToList();
+        // A file attached to the ticket itself (not to a message) is whatever staff put there, internal papers included: a client sees only
+        // what they uploaded themselves. Files on a message follow the message, and a client sees only the replies.
+        var ticketLevelAttachments = t.Attachments
+            .Where(a => a.MessageId == null && (_currentUser.Role != UserRole.Client || a.UploadedByUserId == _currentUser.UserId))
+            .Select(ToAttachmentDto).ToList();
 
         var assigneeDtos = assignees.Select(a => new TicketAssigneeDto(a.UserId, NameOf(a.UserId))).ToList();
         var sessionDtos = sessions.Select(s => new TicketWorkSessionDto(s.Id, s.UserId, NameOf(s.UserId), s.StartedAtUtc, s.EndedAtUtc)).ToList();
@@ -1055,8 +1090,8 @@ public class TicketsController : ControllerBase
             t.Priority?.ToString(), t.DueDateUtc,
             _currentUser.Role == UserRole.Client ? null : t.CategoryId,
             _currentUser.Role == UserRole.Client ? null : t.Category?.Name,
-            t.AssignedToUserId,
-            t.AssignedToUserId.HasValue ? NameOf(t.AssignedToUserId.Value) : null,
+            primaryId,
+            primaryId.HasValue ? NameOf(primaryId.Value) : null,
             assigneeDtos, sessionDtos,
             t.OpenedAtUtc, t.ClosedAtUtc, t.ResolutionSummary, t.CreatedAt,
             ticketLevelAttachments, messageDtos

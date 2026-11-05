@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using TicketSystemTech.Application.Common;
 using TicketSystemTech.Application.Common.Interfaces;
 using TicketSystemTech.Application.KnowledgeBase;
 using TicketSystemTech.Domain.Entities;
@@ -46,7 +47,9 @@ public class KnowledgeBaseIndexer : IKnowledgeBaseIndexer
         if (!string.IsNullOrWhiteSpace(ticket.ResolutionSummary))
             sb.AppendLine(ticket.ResolutionSummary);
 
-        var content = sb.ToString().Trim();
+        // What is stored is what the search shows and what goes to the AI provider, so it is made safe here, once: an e-mail
+        // address, a telephone number or a "password: ..." that somebody typed into a note must not be kept in the knowledge base.
+        var content = PiiRedactor.Redact(sb.ToString().Trim());
         if (content.Length == 0) return false;
 
         var chunk = await _db.KnowledgeBaseChunks.FirstOrDefaultAsync(c => c.TicketId == ticketId, ct);

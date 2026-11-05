@@ -34,8 +34,12 @@ public sealed class VectorIndex : IVectorIndex
     private long _version;
     private long _loadedVersion = -1;
 
-    public VectorIndex(IServiceScopeFactory scopeFactory, ILogger<VectorIndex> logger)
+    private readonly TimeProvider _time;
+    private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
+
+    public VectorIndex(IServiceScopeFactory scopeFactory, ILogger<VectorIndex> logger, TimeProvider time)
     {
+        _time = time;
         _scopeFactory = scopeFactory;
         _logger = logger;
     }
@@ -57,7 +61,7 @@ public sealed class VectorIndex : IVectorIndex
             var loaded = await LoadAsync(CancellationToken.None);
             ct.ThrowIfCancellationRequested();
             _entries = loaded;
-            _loadedAtUtc = DateTime.UtcNow;
+            _loadedAtUtc = UtcNow;
             _loadedVersion = versionAtStart; // an Invalidate() during the load leaves the copy stale, as it should
             return loaded;
         }
@@ -72,7 +76,7 @@ public sealed class VectorIndex : IVectorIndex
         entries = _entries!;
         if (_entries is null) return false;
 
-        var age = DateTime.UtcNow - _loadedAtUtc;
+        var age = UtcNow - _loadedAtUtc;
         if (age >= TimeToLive) return false;
         return _loadedVersion == Interlocked.Read(ref _version) || age < MinReloadInterval;
     }

@@ -22,7 +22,10 @@ namespace TicketSystemTech.Infrastructure.Persistence;
 /// </summary>
 public static class PiiBackfillMigration
 {
-    public static async Task RunAsync(AppDbContext db, IPiiProtector piiProtector, ILogger logger, CancellationToken ct = default)
+    /// <param name="refuseToStartWithPlaintextLeft">When a row cannot be encrypted (usually two old accounts with the same user name) it stays in plain text
+    /// and the application used to carry on regardless, with the e-mail address, telephone number or address of a person readable in the database. With this
+    /// set (the application sets it in production) that stops the start, with the number of such rows, until somebody has dealt with them.</param>
+    public static async Task RunAsync(AppDbContext db, IPiiProtector piiProtector, ILogger logger, CancellationToken ct = default, bool refuseToStartWithPlaintextLeft = false)
     {
         var connection = (SqlConnection)db.Database.GetDbConnection();
         var ownsConnection = connection.State != System.Data.ConnectionState.Open;
@@ -30,8 +33,10 @@ public static class PiiBackfillMigration
 
         try
         {
-            var (undecryptable, hashMismatch) = await BackfillUsersAsync(connection, piiProtector, logger, ct);
-            undecryptable += await BackfillCompanyAddressesAsync(connection, piiProtector, logger, ct);
+            var (undecryptable, hashMismatch, failedUsers) = await BackfillUsersAsync(connection, piiProtector, logger, ct);
+            var (undecryptableAddresses, failedAddresses) = await BackfillCompanyAddressesAsync(connection, piiProtector, logger, ct);
+            undecryptable += undecryptableAddresses;
+            var failedToEncrypt = failedUsers + failedAddresses;
 
             if (undecryptable > 0)
                 throw new InvalidOperationException(
@@ -46,6 +51,11 @@ public static class PiiBackfillMigration
                     "Pii:HashKey was changed, or does not belong to this database: those people could not sign in, and signing up " +
                     "would create duplicates of accounts that already exist. " +
                     "Set Pii__HashKey back to the value this database was created with before starting the application.");
+
+            if (failedToEncrypt > 0 && refuseToStartWithPlaintextLeft)
+                throw new InvalidOperationException(
+                    $"{failedToEncrypt} row(s) could not be encrypted and still hold personal data (e-mail address, telephone number or address) in plain text. " +
+                    "The errors above say which rows; the usual cause is two old accounts with the same user name. Fix those rows, then start the application again.");
         }
         finally
         {
@@ -53,7 +63,7 @@ public static class PiiBackfillMigration
         }
     }
 
-    private static async Task<(int Undecryptable, int HashMismatch)> BackfillUsersAsync(SqlConnection connection, IPiiProtector piiProtector, ILogger logger, CancellationToken ct)
+    private static async Task<(int Undecryptable, int HashMismatch, int Failed)> BackfillUsersAsync(SqlConnection connection, IPiiProtector piiProtector, ILogger logger, CancellationToken ct)
     {
         var toMigrate = new List<(Guid Id, string? Email, string? UserName, string? PhoneNumber)>();
         var undecryptable = 0;
@@ -93,7 +103,7 @@ public static class PiiBackfillMigration
         if (toMigrate.Count == 0)
         {
             logger.LogInformation("PII backfill: AspNetUsers already fully encrypted, nothing to do.");
-            return (undecryptable, hashMismatch);
+            return (undecryptable, hashMismatch, 0);
         }
 
         logger.LogWarning("PII backfill: encrypting Email/UserName/PhoneNumber for {Count} AspNetUsers row(s)...", toMigrate.Count);
@@ -123,7 +133,7 @@ public static class PiiBackfillMigration
             }
         }
         logger.LogWarning("PII backfill: AspNetUsers encryption complete ({Count} row(s), {Failures} failed).", toMigrate.Count - failures, failures);
-        return (undecryptable, hashMismatch);
+        return (undecryptable, hashMismatch, failures);
     }
 
     private static bool CanDecrypt(IPiiProtector piiProtector, string value)
@@ -139,7 +149,7 @@ public static class PiiBackfillMigration
         }
     }
 
-    private static async Task<int> BackfillCompanyAddressesAsync(SqlConnection connection, IPiiProtector piiProtector, ILogger logger, CancellationToken ct)
+    private static async Task<(int Undecryptable, int Failed)> BackfillCompanyAddressesAsync(SqlConnection connection, IPiiProtector piiProtector, ILogger logger, CancellationToken ct)
     {
         var toMigrate = new List<(Guid Id, string Address)>();
         var undecryptable = 0;
@@ -168,7 +178,7 @@ public static class PiiBackfillMigration
         if (toMigrate.Count == 0)
         {
             logger.LogInformation("PII backfill: Companies.Address already fully encrypted, nothing to do.");
-            return undecryptable;
+            return (undecryptable, 0);
         }
 
         logger.LogWarning("PII backfill: encrypting Address for {Count} Companies row(s)...", toMigrate.Count);
@@ -190,6 +200,6 @@ public static class PiiBackfillMigration
             }
         }
         logger.LogWarning("PII backfill: Companies.Address encryption complete ({Count} row(s), {Failures} failed).", toMigrate.Count - failures, failures);
-        return undecryptable;
+        return (undecryptable, failures);
     }
 }

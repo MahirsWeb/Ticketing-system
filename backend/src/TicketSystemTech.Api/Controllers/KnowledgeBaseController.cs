@@ -310,7 +310,7 @@ public class KnowledgeBaseController : ControllerBase
         _db.KnowledgeBaseDocuments.Remove(doc); // cascades to its chunks
         await _db.SaveChangesAsync();
         _vectorIndex.Invalidate();
-        _fileStorage.Delete(doc.FileUrl); // the stored original goes with it; it used to stay on disk with no owner
+        await _fileStorage.DeleteAsync(doc.FileUrl); // the stored original goes with it; it used to stay on disk with no owner
         return NoContent();
     }
 

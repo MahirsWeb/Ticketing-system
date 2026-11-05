@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 import { lookupsApi } from '../../api/lookups';
 import { ticketsApi } from '../../api/tickets';
-import type { DepartmentItemFull, TicketDetailDto } from '../../types';
+import type { DepartmentItemFull, SubBranchItemFull, TicketDetailDto } from '../../types';
 import { Button, ErrorText, Select } from '../../components/ui';
 
 export function TransferBranchForm({ ticket, onTransferred }: { ticket: TicketDetailDto; onTransferred: (t: TicketDetailDto) => void }) {
   const [expanded, setExpanded] = useState(false);
   const [departments, setDepartments] = useState<DepartmentItemFull[]>([]);
   const [departmentId, setDepartmentId] = useState('');
+  const [subBranches, setSubBranches] = useState<SubBranchItemFull[]>([]);
+  const [subBranchId, setSubBranchId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -16,6 +18,23 @@ export function TransferBranchForm({ ticket, onTransferred }: { ticket: TicketDe
     lookupsApi.departments().then((depts) => setDepartments(depts.filter((d) => d.id !== ticket.departmentId)));
   }, [expanded, ticket.departmentId]);
 
+  // A branch that has sub-branches needs one chosen too. The answer for a branch that is no longer the chosen one is thrown away.
+  useEffect(() => {
+    setSubBranchId('');
+    if (!departmentId) {
+      setSubBranches([]);
+      return;
+    }
+    let current = true;
+    lookupsApi
+      .subBranches(departmentId)
+      .then((list) => current && setSubBranches(list))
+      .catch(() => current && setSubBranches([]));
+    return () => {
+      current = false;
+    };
+  }, [departmentId]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -23,9 +42,13 @@ export function TransferBranchForm({ ticket, onTransferred }: { ticket: TicketDe
       setError('Select a destination branch.');
       return;
     }
+    if (subBranches.length > 0 && !subBranchId) {
+      setError('Select a sub-branch of the destination branch.');
+      return;
+    }
     setLoading(true);
     try {
-      const updated = await ticketsApi.transferBranch(ticket.id, departmentId);
+      const updated = await ticketsApi.transferBranch(ticket.id, departmentId, subBranchId || undefined);
       setDepartmentId('');
       setExpanded(false);
       onTransferred(updated);
@@ -61,6 +84,18 @@ export function TransferBranchForm({ ticket, onTransferred }: { ticket: TicketDe
             ))}
           </Select>
         </div>
+        {subBranches.length > 0 && (
+          <div className="w-52">
+            <Select value={subBranchId} onChange={(e) => setSubBranchId(e.target.value)} className="text-xs" aria-label="Destination sub-branch">
+              <option value="">Select a sub-branch…</option>
+              {subBranches.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+        )}
         <Button type="submit" variant="secondary" disabled={loading} className="text-xs">
           {loading ? 'Transferring…' : 'Transfer'}
         </Button>

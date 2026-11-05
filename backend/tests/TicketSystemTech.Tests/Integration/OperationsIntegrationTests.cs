@@ -140,7 +140,7 @@ public class OperationsIntegrationTests
             await DbSeeder.SeedAsync(
                 scope.ServiceProvider.GetRequiredService<AppDbContext>(), scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>(),
                 log, configuration, scope.ServiceProvider.GetRequiredService<ITemporaryPasswordGenerator>(),
-                scope.ServiceProvider.GetRequiredService<IOptions<TemporaryPasswordOptions>>());
+                scope.ServiceProvider.GetRequiredService<IOptions<TemporaryPasswordOptions>>(), TimeProvider.System);
         }
         finally
         {

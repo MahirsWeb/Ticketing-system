@@ -328,7 +328,8 @@ AI je podešavanje, ne ugrađena stavka. `Ai:Provider` bira davaoca:
 
 **Šta napušta sistem kad je AI uključen i davalac je vani (Gemini):** tekst pitanja i dijelovi tiketa i dokumentacije
 koji su potrebni za odgovor, uz ograničenja: pitanje najviše 2.000 znakova, jedan izvor 6.000, cijeli kontekst 60.000, a
-odgovor ima gornju granicu. **Email adrese, brojevi telefona i lozinke ili tokeni napisani uz riječ koja ih imenuje** (`lozinka: …`, `password=…`, `token: …`, `Bearer …`) **se maskiraju** prije slanja (`Ai:RedactPersonalData`); imena
+odgovor ima gornju granicu. **Email adrese, brojevi telefona i lozinke ili tokeni napisani uz riječ koja ih imenuje** (`lozinka: …`, `password=…`, `token: …`, `Bearer …`) **se maskiraju** prije slanja (`Ai:RedactPersonalData`) i **već pri upisu u bazu znanja**, pa se ni tamo ne čuvaju
+(`[email]`, `[phone]`, `lozinka: [secret]`; chunkovi koji su ranije upisani maskiraju se pri pokretanju); imena
 i slobodan tekst iz tiketa ne. Ključ ide u zaglavlje, nikad u adresu. Besplatni nivo Google AI Studija može koristiti
 poslani tekst za poboljšanje modela; za pravu upotrebu treba plaćeni nivo ili Vertex AI uz ugovor o obradi podataka, ili
 lokalni model, od kojeg ništa ne izlazi. Odluku o tome donosi vlasnik instalacije.
@@ -372,7 +373,8 @@ Ostalo što vrijedi znati:
   (`X-Correlation-Id`) koja je u svakoj liniji loga i u svakom audit zapisu tog zahtjeva.
 - **Lični podaci na zahtjev:** Admin na stranici osobe (Users) ima dugmad **Export personal data** (JSON sa svim što sistem
   drži o osobi: profil, tiketi, napisane poruke, radno vrijeme, obavijesti) i **Anonymize…** (ime postaje „Obrisan korisnik“,
-  email zamjenski, telefon i slika se brišu, nalog se trajno zaključava; tiketi, poruke i radno vrijeme ostaju). Anonimizacija se
+  email zamjenski, telefon i slika se brišu, nalog se trajno zaključava; tiketi, poruke i radno vrijeme ostaju). Ime se uklanja i iz rečenica koje je
+  sama aplikacija napisala o osobi („Ticket closed by …“, „… assigned you a task“); anonimizacija se
   ne može poništiti, ne važi za sebe, a ne dira imena koja su drugi ukucali u tekst svojih poruka niti kopije u backupima. API:
   `GET /api/users/{id}/export` i `POST /api/users/{id}/anonymize`.
 - **Audit log** (`AuditLogs`) bilježi osjetljive radnje: ko, šta, nad čim, kada, s koje adrese i kojeg zahtjeva (kreiranje,

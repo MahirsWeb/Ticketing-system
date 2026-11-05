@@ -27,7 +27,7 @@ public class EmailOutboxItem : BaseEntity
 
     public EmailOutboxStatus Status { get; set; } = EmailOutboxStatus.Pending;
     public int Attempts { get; set; }
-    public DateTime NextAttemptAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime NextAttemptAtUtc { get; set; }
 
     /// <summary>While a worker is sending this message nobody else picks it up; if that worker dies the lease simply runs out.</summary>
     public DateTime? LeasedUntilUtc { get; set; }

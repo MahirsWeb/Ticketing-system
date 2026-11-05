@@ -34,7 +34,7 @@ public class FilesController : ControllerBase
     {
         if (!_links.IsValid(key, token)) return NotFound();
 
-        var stream = _storage.OpenRead(key);
+        var stream = await _storage.OpenReadAsync(key);
         if (stream is null) return NotFound();
 
         // Never let the browser guess a type: an uploaded .html/.svg must not be rendered in this origin.

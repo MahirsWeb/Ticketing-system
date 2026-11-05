@@ -45,15 +45,22 @@ public class LocalFileStorage : IFileStorage
         return $"/avatars/{key}";
     }
 
-    public Stream? OpenRead(string key)
+    public Task<Stream?> OpenReadAsync(string key, CancellationToken ct = default)
     {
-        if (!StoredFileKey.IsSafe(key)) return null;
+        if (!StoredFileKey.IsSafe(key)) return Task.FromResult<Stream?>(null);
 
         var path = Path.Combine(_privateDir, key);
-        return File.Exists(path) ? new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read) : null;
+        Stream? stream = File.Exists(path)
+            ? new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous)
+            : null;
+        return Task.FromResult(stream);
     }
 
-    public bool Delete(string? reference)
+    public Task<bool> DeleteAsync(string? reference, CancellationToken ct = default) => Task.FromResult(DeletePrivate(reference));
+
+    public Task<bool> DeletePublicImageAsync(string? url, CancellationToken ct = default) => Task.FromResult(DeleteAvatar(url));
+
+    private bool DeletePrivate(string? reference)
     {
         var key = StoredFileKey.FromReference(reference);
         if (key is null) return false;
@@ -64,7 +71,7 @@ public class LocalFileStorage : IFileStorage
         return true;
     }
 
-    public bool DeletePublicImage(string? url)
+    private bool DeleteAvatar(string? url)
     {
         // Only ever a file this class wrote into the avatars folder: the URL must be in that folder and a well-formed key.
         if (url is null || !url.Contains("/avatars/", StringComparison.Ordinal)) return false;

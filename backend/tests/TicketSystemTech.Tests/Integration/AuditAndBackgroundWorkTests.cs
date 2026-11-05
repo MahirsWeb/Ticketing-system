@@ -60,9 +60,10 @@ public class AuditAndBackgroundWorkTests : IAsyncLifetime
             DepartmentId = branch ?? _world.BranchA,
             Priority = TicketPriority.Medium,
             Source = TicketSource.TicketSystem,
-            AssignedToUserId = _world.EmpA1.Id,
             OpenedAtUtc = DateTime.UtcNow.AddHours(-1)
         };
+        // A ticket nobody has opened yet has nobody on it; every other one is assigned to the first person of branch A.
+        if (status != TicketStatus.New) ticket.Assignees.Add(new TicketAssignee { UserId = _world.EmpA1.Id, IsPrimary = true });
         customise?.Invoke(ticket);
         await _world.Db(async db => { db.Tickets.Add(ticket); return await db.SaveChangesAsync(); });
         _tickets.Add(ticket.Id);

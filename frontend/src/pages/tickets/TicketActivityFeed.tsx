@@ -8,6 +8,7 @@ import { SafeHtml } from '../../components/SafeHtml';
 import { sanitizeHtml } from '../../lib/sanitizeHtml';
 import { newIdempotencyKey } from '../../lib/idempotency';
 import { clearDraft, draftKey, loadDraft, saveDraft } from '../../lib/drafts';
+import { isBlankHtml } from '../../lib/htmlText';
 
 /// Unified chat-like feed: Response, Internal Note, and system lifecycle events (opened/assigned/transferred/closed)
 /// all shown together in one chronological stream, distinguished by bubble color — no more switching tabs to see everything.
@@ -59,7 +60,7 @@ export function TicketActivityFeed({
   }
 
   async function handleSend() {
-    if (!body.trim() || body === '<p></p>') return;
+    if (isBlankHtml(body)) return;
     setSending(true);
     setSendError(null);
     try {

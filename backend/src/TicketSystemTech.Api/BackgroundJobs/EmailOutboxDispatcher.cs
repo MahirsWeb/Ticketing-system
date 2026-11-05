@@ -31,8 +31,12 @@ public sealed class EmailOutboxDispatcher : BackgroundService
     private readonly EmailOutboxOptions _options;
     private readonly ILogger<EmailOutboxDispatcher> _logger;
 
-    public EmailOutboxDispatcher(IServiceScopeFactory scopes, IOptions<EmailOutboxOptions> options, ILogger<EmailOutboxDispatcher> logger)
+    private readonly TimeProvider _time;
+    private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
+
+    public EmailOutboxDispatcher(IServiceScopeFactory scopes, IOptions<EmailOutboxOptions> options, ILogger<EmailOutboxDispatcher> logger, TimeProvider time)
     {
+        _time = time;
         _scopes = scopes;
         _options = options.Value;
         _logger = logger;
@@ -54,7 +58,7 @@ public sealed class EmailOutboxDispatcher : BackgroundService
             var more = false;
             try
             {
-                var now = DateTime.UtcNow;
+                var now = UtcNow;
                 var handled = await ProcessOnceAsync(now, stoppingToken);
                 more = handled >= BatchSize; // a full round usually means more is waiting: do not sleep in between
 

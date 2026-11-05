@@ -39,12 +39,11 @@ public class WorkSessionTests : IAsyncLifetime
             CompanyId = _world.CompanyId,
             Status = TicketStatus.InProgress,
             DepartmentId = _world.BranchA,
-            AssignedToUserId = mainWorker?.Id,
             OpenedAtUtc = DateTime.UtcNow.AddDays(-3),
             Priority = TicketPriority.Medium,
             Source = TicketSource.TicketSystem
         };
-        if (mainWorker is not null) ticket.Assignees.Add(new TicketAssignee { UserId = mainWorker.Id });
+        if (mainWorker is not null) ticket.Assignees.Add(new TicketAssignee { UserId = mainWorker.Id, IsPrimary = true });
         foreach (var helper in helpers) ticket.Assignees.Add(new TicketAssignee { UserId = helper.Id });
 
         await _world.Db(async db =>
@@ -194,6 +193,46 @@ public class WorkSessionTests : IAsyncLifetime
 
     // ---------------- changing and deleting ----------------
 
+    // NOVO-DOM-06: the time somebody logged is theirs. A colleague who only has access to the ticket may not change or delete it.
+    [SqlFact]
+    public async Task A_colleague_who_is_neither_the_owner_nor_the_assignee_cannot_change_or_delete_a_session()
+    {
+        var ticket = await NewTicketAsync(_world.EmpA1);
+        await AddSession(_world.EmpA1, ticket, Yesterday(9), Yesterday(10));
+        var session = Assert.Single(await StoredSessions(ticket));
+
+        var changed = await _world.Send(_world.EmpA2, HttpMethod.Put, $"/api/tickets/{ticket}/work-sessions/{session.Id}",
+            new { startedAtUtc = Yesterday(8), endedAtUtc = Yesterday(12) });
+        var deleted = await _world.Send(_world.EmpA2, HttpMethod.Delete, $"/api/tickets/{ticket}/work-sessions/{session.Id}");
+
+        Assert.Equal(403, changed.Code);
+        Assert.Equal(403, deleted.Code);
+        var kept = Assert.Single(await StoredSessions(ticket));
+        Assert.Equal(Yesterday(9), kept.Start);
+        Assert.Equal(Yesterday(10), kept.End);
+    }
+
+    // ... but the person the ticket is assigned to NOW answers for it, so they may correct what an earlier assignee logged.
+    [SqlFact]
+    public async Task The_person_the_ticket_is_assigned_to_now_may_correct_what_an_earlier_assignee_logged()
+    {
+        var ticket = await NewTicketAsync(_world.EmpA1);
+        await AddSession(_world.EmpA1, ticket, Yesterday(9), Yesterday(10));
+        var session = Assert.Single(await StoredSessions(ticket));
+        await _world.Db(async db =>
+        {
+            await db.TicketAssignees.Where(a => a.TicketId == ticket).ExecuteDeleteAsync();
+            db.TicketAssignees.Add(new TicketAssignee { TicketId = ticket, UserId = _world.EmpA2.Id, IsPrimary = true });
+            return await db.SaveChangesAsync();
+        });
+
+        var changed = await _world.Send(_world.EmpA2, HttpMethod.Put, $"/api/tickets/{ticket}/work-sessions/{session.Id}",
+            new { startedAtUtc = Yesterday(9), endedAtUtc = Yesterday(11) });
+
+        Assert.True(changed.Code == 200, changed.Code + " " + changed.Text);
+        Assert.Equal(_world.EmpA1.Id, Assert.Single(await StoredSessions(ticket)).UserId); // still the first person's time
+    }
+
     [SqlFact]
     public async Task A_session_can_be_corrected_and_deleted_and_each_change_leaves_an_audit_row()
     {
@@ -202,7 +241,7 @@ public class WorkSessionTests : IAsyncLifetime
         await AddSession(_world.EmpA1, ticket, Yesterday(14), Yesterday(15));
         var first = (await StoredSessions(ticket))[0];
 
-        var corrected = await _world.Send(_world.EmpA2, HttpMethod.Put, $"/api/tickets/{ticket}/work-sessions/{first.Id}",
+        var corrected = await _world.Send(_world.Admin, HttpMethod.Put, $"/api/tickets/{ticket}/work-sessions/{first.Id}",
             new { startedAtUtc = Yesterday(8, 30), endedAtUtc = Yesterday(10, 15) });
         var clash = await _world.Send(_world.EmpA1, HttpMethod.Put, $"/api/tickets/{ticket}/work-sessions/{first.Id}",
             new { startedAtUtc = Yesterday(9), endedAtUtc = Yesterday(14, 30) });
@@ -215,7 +254,7 @@ public class WorkSessionTests : IAsyncLifetime
         var remaining = await StoredSessions(ticket);
         Assert.Single(remaining);
         Assert.Equal(Yesterday(14), remaining[0].Start);
-        Assert.Equal(_world.EmpA1.Id, remaining[0].UserId); // a colleague's correction did not take the session over
+        Assert.Equal(_world.EmpA1.Id, remaining[0].UserId); // an Admin's correction did not take the session over
 
         var actions = await _world.Db(db => db.AuditLogs.AsNoTracking().Where(a => a.EntityId == ticket).Select(a => a.Action).ToListAsync());
         Assert.Contains("WorkSessionAdded", actions);

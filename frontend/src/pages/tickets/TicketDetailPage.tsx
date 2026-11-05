@@ -126,8 +126,8 @@ export default function TicketDetailPage() {
           </div>
           {isStaff && (
             <div className="mt-4 space-y-4 border-t border-slate-100 pt-4">
-              <TicketAssigneesPanel key={ticket.id} ticket={ticket} onChanged={setTicket} />
-              <WorkTimeEditor key={ticket.id} ticket={ticket} onChanged={setTicket} />
+              <TicketAssigneesPanel key={`assignees-${ticket.id}`} ticket={ticket} onChanged={setTicket} />
+              <WorkTimeEditor key={`worktime-${ticket.id}`} ticket={ticket} onChanged={setTicket} />
             </div>
           )}
           {canTransfer && (
@@ -183,7 +183,9 @@ export default function TicketDetailPage() {
           messages={ticket.messages}
           canReplyResponse={canReplyResponse}
           canReplyInternal={canReplyInternal}
-          onMessageAdded={(m) => setTicket({ ...ticket, messages: [...ticket.messages, m] })}
+          // Built from the ticket as it is when the reply ARRIVES, not as it was when the reply box was drawn: the agent may have
+          // pressed "Start work" or changed the assignees in the meantime, and that must stay.
+          onMessageAdded={(m) => setTicket((current) => (current && current.id === ticket.id ? { ...current, messages: [...current.messages, m] } : current))}
         />
       </Card>
 

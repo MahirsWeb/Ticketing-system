@@ -27,7 +27,7 @@ public class CancellationTests
     public async Task A_cancelled_embedding_request_propagates_instead_of_returning_null()
     {
         var handler = new HangingHandler();
-        var service = new AiEmbeddingService(new HttpClient(handler), ConfigWithKey(), NullLogger<AiEmbeddingService>.Instance);
+        var service = new AiEmbeddingService(new HttpClient(handler), ConfigWithKey(), NullLogger<AiEmbeddingService>.Instance, TimeProvider.System);
         using var cts = new CancellationTokenSource();
 
         var pending = service.EmbedAsync("printer ne štampa", cts.Token);

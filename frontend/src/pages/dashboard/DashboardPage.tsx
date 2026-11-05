@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { format, subDays } from 'date-fns';
+import { zoomRange } from '../../lib/chartRange';
 import { reportsApi } from '../../api/reports';
 import { lookupsApi } from '../../api/lookups';
 import { usersApi } from '../../api/users';
@@ -225,13 +226,11 @@ export default function DashboardPage() {
   }
   function handleChartMouseUp() {
     if (refAreaLeft && refAreaRight) {
-      let start = new Date(refAreaLeft);
-      let end = new Date(refAreaRight);
-      if (start.getTime() > end.getTime()) [start, end] = [end, start];
-      if (start.getTime() !== end.getTime()) {
+      const range = zoomRange(refAreaLeft, refAreaRight);
+      if (range) {
         setZoomStack((s) => [...s, { from, to }]);
-        setFrom(start);
-        setTo(end);
+        setFrom(range.from);
+        setTo(range.to);
       }
     }
     setRefAreaLeft(null);

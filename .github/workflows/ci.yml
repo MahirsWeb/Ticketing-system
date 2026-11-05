@@ -58,6 +58,14 @@ jobs:
             echo "::error::A package with a high or critical advisory is referenced. See the output above."
             exit 1
           fi
+          # An audit that could not reach the advisory source prints warnings and no advisories, which would pass the check above.
+          # So every project must also have been reported on: either "has no vulnerable packages" or a list of them.
+          expected=$(dotnet sln TicketSystemTech.sln list | tail -n +3 | wc -l)
+          reported=$(grep -Ec 'has no vulnerable packages|has the following vulnerable packages' audit.txt)
+          if [ "$reported" -lt "$expected" ]; then
+            echo "::error::The audit reported on $reported of $expected projects. Is the package source (nuget.org) reachable?"
+            exit 1
+          fi
 
       - name: Upload test results
         if: always()

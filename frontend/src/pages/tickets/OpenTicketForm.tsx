@@ -55,8 +55,17 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
       setSubBranchId('');
       return;
     }
-    lookupsApi.subBranches(departmentId).then(setSubBranches);
+    // The answer for a branch that is no longer the chosen one is thrown away: changing the branch quickly used to let the slower answer
+    // for the old branch replace the list for the new one.
+    let current = true;
     setSubBranchId('');
+    lookupsApi
+      .subBranches(departmentId)
+      .then((list) => current && setSubBranches(list))
+      .catch(() => current && setSubBranches([]));
+    return () => {
+      current = false;
+    };
   }, [departmentId]);
 
   useEffect(() => {
@@ -64,10 +73,17 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
       setAssignees([]);
       return;
     }
+    let current = true;
     setAssignedToUserId('');
-    usersApi.list({ role: 'Employee', departmentId, subBranchId: subBranchId || undefined }).then((employees) => {
-      setAssignees(employees.map((u) => ({ id: u.id, name: `${u.firstName} ${u.lastName}` })));
-    });
+    usersApi
+      .list({ role: 'Employee', departmentId, subBranchId: subBranchId || undefined })
+      .then((employees) => {
+        if (current) setAssignees(employees.map((u) => ({ id: u.id, name: `${u.firstName} ${u.lastName}` })));
+      })
+      .catch(() => current && setAssignees([]));
+    return () => {
+      current = false;
+    };
   }, [departmentId, subBranchId]);
 
   async function handleSubmit(e: React.FormEvent) {

@@ -88,7 +88,8 @@ public record TicketListItem(
 );
 
 public record TransferTicketBranchRequest(
-    [Required] Guid DepartmentId
+    [Required] Guid DepartmentId,
+    Guid? SubBranchId // Required if the destination branch has sub-branches defined.
 );
 
 public record PagedResult<T>(List<T> Items, int Page, int PageSize, int TotalCount);

@@ -29,8 +29,12 @@ public sealed class KnowledgeBaseReindexService : BackgroundService, IKnowledgeB
     private readonly object _gate = new();
     private ReindexStatus _status = new(ReindexState.Idle, 0, 0, 0, 0, null, null, null);
 
-    public KnowledgeBaseReindexService(IServiceScopeFactory scopeFactory, ILogger<KnowledgeBaseReindexService> logger)
+    private readonly TimeProvider _time;
+    private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
+
+    public KnowledgeBaseReindexService(IServiceScopeFactory scopeFactory, ILogger<KnowledgeBaseReindexService> logger, TimeProvider time)
     {
+        _time = time;
         _scopeFactory = scopeFactory;
         _logger = logger;
     }
@@ -49,7 +53,7 @@ public sealed class KnowledgeBaseReindexService : BackgroundService, IKnowledgeB
         lock (_gate)
         {
             if (_status.State == ReindexState.Running) return false;
-            _status = new ReindexStatus(ReindexState.Running, 0, 0, 0, 0, DateTime.UtcNow, null, message);
+            _status = new ReindexStatus(ReindexState.Running, 0, 0, 0, 0, UtcNow, null, message);
         }
 
         _requests.Writer.TryWrite(request);
@@ -69,12 +73,12 @@ public sealed class KnowledgeBaseReindexService : BackgroundService, IKnowledgeB
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
-                    Update(s => s with { State = ReindexState.Failed, FinishedAtUtc = DateTime.UtcNow, Message = "Stopped because the application is shutting down. Run it again to continue." });
+                    Update(s => s with { State = ReindexState.Failed, FinishedAtUtc = UtcNow, Message = "Stopped because the application is shutting down. Run it again to continue." });
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Knowledge-base reindex failed");
-                    Update(s => s with { State = ReindexState.Failed, FinishedAtUtc = DateTime.UtcNow, Message = "Reindex failed: " + ex.Message });
+                    Update(s => s with { State = ReindexState.Failed, FinishedAtUtc = UtcNow, Message = "Reindex failed: " + ex.Message });
                 }
             }
         }
@@ -95,7 +99,7 @@ public sealed class KnowledgeBaseReindexService : BackgroundService, IKnowledgeB
         Update(s => s with
         {
             State = result.Succeeded ? ReindexState.Completed : ReindexState.Failed,
-            FinishedAtUtc = DateTime.UtcNow,
+            FinishedAtUtc = UtcNow,
             Message = result.Message
         });
         _logger.LogInformation("Document reindex finished: {Succeeded}, {Message}", result.Succeeded, result.Message);
@@ -195,7 +199,7 @@ public sealed class KnowledgeBaseReindexService : BackgroundService, IKnowledgeB
                 Update(s => s with
                 {
                     State = ReindexState.Failed,
-                    FinishedAtUtc = DateTime.UtcNow,
+                    FinishedAtUtc = UtcNow,
                     Message = $"Stopped after {ConsecutiveFailureLimit} failures in a row: the embedding provider returned nothing. " +
                               "Check the AI settings (Ai:Provider, Ai:ApiKey / Ai:Endpoint, Ai:Enabled) and that the quota is not exhausted, then run the reindex again — it continues where it stopped."
                 });
@@ -218,7 +222,7 @@ public sealed class KnowledgeBaseReindexService : BackgroundService, IKnowledgeB
         Update(s => s with
         {
             State = ReindexState.Completed,
-            FinishedAtUtc = DateTime.UtcNow,
+            FinishedAtUtc = UtcNow,
             Message = failed == 0
                 ? (documentsRebuilt == 0 ? "Done." : $"Done ({documentsRebuilt} document(s) rebuilt for the current model).")
                 : $"Done, but {failed} item(s) could not be embedded. Run it again to retry them."

@@ -3,19 +3,24 @@ using Microsoft.EntityFrameworkCore;
 using TicketSystemTech.Application.Common.Interfaces;
 using TicketSystemTech.Domain.Entities;
 using TicketSystemTech.Domain.Enums;
+using TicketSystemTech.Domain.Workflow;
 using TicketSystemTech.Infrastructure.Persistence;
 
 namespace TicketSystemTech.Infrastructure.Services;
 
 public class TicketAssignmentService : ITicketAssignmentService
 {
-    private static readonly TicketStatus[] LiveStatuses = { TicketStatus.Open, TicketStatus.InProgress, TicketStatus.Resolved };
+    private static readonly TicketStatus[] LiveStatuses = TicketWorkflow.ActiveStatuses;
 
     private readonly AppDbContext _db;
     private readonly INotificationPublisher _publisher;
 
-    public TicketAssignmentService(AppDbContext db, INotificationPublisher publisher)
+    private readonly TimeProvider _time;
+    private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
+
+    public TicketAssignmentService(AppDbContext db, INotificationPublisher publisher, TimeProvider time)
     {
+        _time = time;
         _db = db;
         _publisher = publisher;
     }
@@ -29,27 +34,25 @@ public class TicketAssignmentService : ITicketAssignmentService
         var tickets = await _db.Tickets
             .Include(t => t.Assignees)
             .Where(t => LiveStatuses.Contains(t.Status) &&
-                        (t.AssignedToUserId == userId || t.Assignees.Any(a => a.UserId == userId)))
+                        t.Assignees.Any(a => a.UserId == userId))
             .ToListAsync(ct);
         if (tickets.Count == 0) return 0;
 
         // They stop working these tickets now: a session left running would keep counting after they have gone.
-        await _db.EndRunningSessionsAsync(tickets.Select(t => t.Id).ToList(), userId, DateTime.UtcNow, ct);
+        await _db.EndRunningSessionsAsync(tickets.Select(t => t.Id).ToList(), userId, UtcNow, ct);
 
         var orphaned = new List<Ticket>();
         foreach (var ticket in tickets)
         {
+            var wasPrimary = ticket.Assignees.Any(a => a.UserId == userId && a.IsPrimary);
             foreach (var assignment in ticket.Assignees.Where(a => a.UserId == userId).ToList())
                 _db.TicketAssignees.Remove(assignment);
 
-            if (ticket.AssignedToUserId == userId)
+            if (wasPrimary)
             {
-                // The primary assignee is the first of the others still on the ticket, if there is one.
-                ticket.AssignedToUserId = ticket.Assignees
-                    .Where(a => a.UserId != userId)
-                    .OrderBy(a => a.AssignedAtUtc)
-                    .Select(a => (Guid?)a.UserId)
-                    .FirstOrDefault();
+                // The one who has been on the ticket longest of the others still on it takes over, if there is one.
+                var next = ticket.Assignees.Where(a => a.UserId != userId).OrderBy(a => a.AssignedAtUtc).FirstOrDefault();
+                if (next is not null) next.IsPrimary = true;
             }
 
             var nobodyLeft = !ticket.Assignees.Any(a => a.UserId != userId);

@@ -49,9 +49,20 @@ var builder = WebApplication.CreateBuilder(args);
 Log.Logger = LoggingSetup.Configure(new LoggerConfiguration(), builder.Configuration, builder.Environment.ContentRootPath).CreateLogger();
 builder.Host.UseSerilog();
 
-// Fail fast, listing everything that is missing, instead of dying later inside token validation.
-TicketSystemTech.Api.Configuration.StartupConfigurationValidator.ThrowIfInvalid(
-    builder.Configuration, builder.Environment.IsDevelopment(), builder.Environment.IsProduction());
+// Fail fast, listing everything that is missing, instead of dying later inside token validation. The reason goes to the log as well
+// (and the log is flushed), so that an application that keeps being restarted leaves a record of why in the file and not only on stderr.
+try
+{
+    TicketSystemTech.Api.Configuration.StartupConfigurationValidator.ThrowIfInvalid(
+        builder.Configuration, builder.Environment.IsDevelopment(), builder.Environment.IsProduction());
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "The configuration is not valid; the application will not start");
+    await Log.CloseAndFlushAsync();
+    Environment.ExitCode = 1;
+    return;
+}
 
 // ---- Options ----
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
@@ -199,7 +210,9 @@ builder.Services.Configure<SlaOptions>(builder.Configuration.GetSection("Sla"));
 builder.Services.AddSingleton<ISlaCalculator>(sp =>
     new TicketSystemTech.Application.Sla.SlaCalculator(sp.GetRequiredService<IOptions<SlaOptions>>().Value));
 builder.Services.AddScoped<ITicketNumberGenerator, TicketNumberGenerator>();
-builder.Services.AddScoped<IDateTimeProvider, DateTimeProvider>();
+// One clock for the whole application, so anything that depends on the time can be tested with a fixed one.
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<TicketSystemTech.Application.Common.NoticeThrottle>();
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
 builder.Services.AddSingleton<TicketSystemTech.Api.Security.LoginAttemptLimiter>();
 builder.Services.AddScoped<ITemporaryPasswordGenerator, TemporaryPasswordGenerator>();
@@ -382,6 +395,17 @@ app.Use(async (context, next) =>
     await next();
 });
 
+// Uploads are private and go through /api/files with a signed link. An older installation may still have files in wwwroot/uploads
+// (they were public before); the static file middleware would serve those to anybody who knew the name, so that folder is not served.
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/uploads"))
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        return;
+    }
+    await next();
+});
 app.UseStaticFiles();
 app.UseCors("Frontend");
 app.UseMiddleware<TicketSystemTech.Api.Middleware.ApiExceptionMiddleware>();

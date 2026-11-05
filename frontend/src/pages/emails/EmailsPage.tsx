@@ -9,7 +9,7 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { useAuthStore } from '../../store/authStore';
 import { createPkce, randomToken } from '../../lib/oauth';
 
-function buildMicrosoftAuthUrl(clientId: string, redirectUri: string, state: string, codeChallenge: string | null) {
+function buildMicrosoftAuthUrl(clientId: string, redirectUri: string, state: string, codeChallenge: string) {
   const params = new URLSearchParams({
     client_id: clientId,
     response_type: 'code',
@@ -21,7 +21,8 @@ function buildMicrosoftAuthUrl(clientId: string, redirectUri: string, state: str
     // Microsoft account already has an active browser session, which isn't necessarily the
     // branch mailbox account the person meant to sign in with.
     prompt: 'select_account',
-    ...(codeChallenge ? { code_challenge: codeChallenge, code_challenge_method: 'S256' } : {}),
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
   });
   return `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params.toString()}`;
 }
@@ -62,19 +63,32 @@ export default function EmailsPage() {
 
   async function handleConnect() {
     setConnecting(true);
-    const { clientId } = await emailIntegrationApi.getConfig();
-    if (!clientId) {
-      setError('Outlook integration is not configured yet (missing Client ID). Ask an admin to finish setup.');
-      setConnecting(false);
-      return;
+    setError(null);
+    let leaving = false;
+    try {
+      const { clientId } = await emailIntegrationApi.getConfig();
+      if (!clientId) {
+        setError('Outlook integration is not configured yet (missing Client ID). Ask an admin to finish setup.');
+        return;
+      }
+      // PKCE makes a stolen authorization code useless without the secret that stays in this tab. The browser can make it only on a
+      // secure connection (https, or localhost); on a plain-http page the flow used to carry on without it, and silently.
+      const pkce = await createPkce();
+      if (!pkce) {
+        setError('A mailbox can only be connected over a secure connection (https). Open the application at its https address and try again.');
+        return;
+      }
+      const redirectUri = `${window.location.origin}/emails/callback`;
+      const state = randomToken(16);
+      sessionStorage.setItem('ms_oauth_state', state);
+      sessionStorage.setItem('ms_oauth_verifier', pkce.verifier);
+      leaving = true; // the page is about to be replaced by Microsoft's; the button stays as it is until then
+      window.location.href = buildMicrosoftAuthUrl(clientId, redirectUri, state, pkce.challenge);
+    } catch {
+      setError('The connection to Microsoft could not be started. Check the connection and try again.');
+    } finally {
+      if (!leaving) setConnecting(false);
     }
-    const redirectUri = `${window.location.origin}/emails/callback`;
-    const state = randomToken(16);
-    const pkce = await createPkce();
-    sessionStorage.setItem('ms_oauth_state', state);
-    if (pkce) sessionStorage.setItem('ms_oauth_verifier', pkce.verifier);
-    else sessionStorage.removeItem('ms_oauth_verifier');
-    window.location.href = buildMicrosoftAuthUrl(clientId, redirectUri, state, pkce?.challenge ?? null);
   }
 
   async function handleDisconnectConfirmed() {

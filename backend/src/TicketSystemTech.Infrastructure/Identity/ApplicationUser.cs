@@ -24,7 +24,7 @@ public class ApplicationUser : IdentityUser<Guid>
     public Guid? SubBranchId { get; set; }
 
     public bool IsActive { get; set; } = true;
-    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAtUtc { get; set; }
     public DateTime? LastLoginAtUtc { get; set; }
 
     /// <summary>True right after an admin/consultant creates the account; forces the user to set their own password on first login.</summary>

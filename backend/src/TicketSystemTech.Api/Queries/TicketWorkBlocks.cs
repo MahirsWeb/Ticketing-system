@@ -35,7 +35,7 @@ public static class TicketWorkBlocks
         // it was closed, so a ticket does not vanish from the chart just because nobody typed in a time. It is not a measure
         // of effort (the export leaves its hours empty).
         var standIn = await db.Tickets.AsNoTracking()
-            .Where(t => t.AssignedToUserId == userId && !t.WorkSessions.Any()
+            .Where(t => t.Assignees.Any(a => a.IsPrimary && a.UserId == userId) && !t.WorkSessions.Any()
                 && t.OpenedAtUtc != null && t.OpenedAtUtc < to && (t.ClosedAtUtc ?? nowUtc) >= from)
             .Where(t => onlyBranch == null || t.DepartmentId == onlyBranch)
             .Select(t => new TicketWorkBlock(t.Id, t.TicketNumber, t.Title, t.Status, t.OpenedAtUtc!.Value, t.ClosedAtUtc, false))

@@ -1,7 +1,7 @@
 # Otvorene stavke: šta nije ispravljeno i šta je ispravljeno samo djelimično
 
-**Stanje:** poslije četvrtog kruga ispravki (2026-11-04). Detalji i dokazi su u `IZVJESTAJ_ISPRAVKI.md` (odjeljci 9.8, 9.9 i 9.10).
-**Testovi:** 582 backend i 120 frontend testova prolaze, bez preskočenih. Format, ranjivi paketi, migracije u odnosu na model, lint, `tsc`, build i `npm audit` (visoke) su čisti.
+**Stanje:** poslije petog kruga ispravki (2026-11-04). Detalji i dokazi su u `IZVJESTAJ_ISPRAVKI.md` (odjeljci 9.8 do 9.11).
+**Testovi:** 641 backend i 155 frontend testova prolaze, bez preskočenih. Format, ranjivi paketi, migracije u odnosu na model, lint, `tsc`, build i `npm audit` (visoke) su čisti.
 **Izvor:** analiza `ANALYSIS_1` (T-01 … T-64), ponovno testiranje commita `7af778a` (149 scenarija) i moje ponovno izvođenje scenarija na izoliranoj kopiji.
 
 ## 1. Sažetak
@@ -35,9 +35,9 @@ Isključeno odlukom vlasnika: **T-28 MFA**.
 
 | Stavka | Šta je urađeno | Šta je ostalo |
 |---|---|---|
-| **T-15** poslovna logika | Nekorišteni MediatR i FluentValidation uklonjeni; pravilo dodjele je na jednom mjestu (`TicketAssignment`); novi dijelovi su zasebne klase | Poslovna logika i pristup podacima su i dalje u kontrolerima (TS-15.1); 53 direktna `DateTime.UtcNow` (TS-15.2, kriterij traži 0 izvan implementacije) |
-| **T-10** GDPR | Admin izvozi sve podatke o osobi i anonimizira osobu (API i dugmad na stranici osobe); audit log za osjetljive radnje | Period čuvanja i automatsko brisanje; imena koja su drugi ukucali u tekst svojih poruka; kopije u backupima |
-| **T-11** AI i lični podaci | Davalac je podešavanje; maskiraju se email, telefon i lozinke/tokeni uz riječ koja ih imenuje; ograničenja dužine | Ugovor o obradi podataka s davaocem (vlasnik). Imena i slobodan tekst odlaze vanjskom davaocu. U bazi tekst stoji nemaskiran (TS-11.2) |
+| **T-15** poslovna logika | Nekorišteni MediatR i FluentValidation uklonjeni; pravilo dodjele je na jednom mjestu (`TicketAssignment`); sva vremena idu kroz `TimeProvider` (TS-15.2 zatvoren, uz test koji brani da se sistemski sat ne vrati); novi dijelovi su zasebne klase | Poslovna logika i pristup podacima su i dalje u kontrolerima (TS-15.1) |
+| **T-10** GDPR | Admin izvozi sve podatke o osobi i anonimizira osobu (API i dugmad na stranici osobe, isprobano u pregledniku); ime se uklanja i iz rečenica koje je aplikacija sama napisala (TS-10.3 zatvoren); audit log za osjetljive radnje | Period čuvanja i automatsko brisanje; imena koja su drugi ukucali u tekst svojih poruka; kopije u backupima |
+| **T-11** AI i lični podaci | Davalac je podešavanje; maskiraju se email, telefon i lozinke/tokeni uz riječ koja ih imenuje, prije slanja i već pri upisu u bazu znanja (TS-11.2 zatvoren; stari chunkovi se maskiraju pri pokretanju); ograničenja dužine | Ugovor o obradi podataka s davaocem (vlasnik). Imena i slobodan tekst odlaze vanjskom davaocu. U samim tiketima i porukama tekst stoji kako je kucan. Isključenje po kompaniji ne postoji |
 | **T-18** sesije | Opoziv tokena, hub se gasi pri odjavi | JWT je u `localStorage`, nema refresh tokena (TS-18.1) |
 | **T-23** zaglavlja | API šalje zaglavlja; `AllowedHosts` ograničen; gotovi primjeri za nginx i IIS | Primjena na stvarnom serveru |
 | **T-37** upiti i indeksi | Novi indeksi, paginirana lista korisnika | Izvještaji učitavaju cijele tikete; N+1 u izvozu |
@@ -49,7 +49,7 @@ Isključeno odlukom vlasnika: **T-28 MFA**.
 | **T-53** README | Prepisan prema stvarnom stanju | Nisam ga prošao od nule na čistom računaru |
 | **T-58** sitnice | Uklonjeni ostaci, brojevi tiketa se sortiraju kao brojevi | Upozorenja analizatora, magični stringovi, struktura foldera |
 
-Iz scenarija testera, još otvoreno: **TS-34.2** (dva izvora zaduženja), **TS-02.3** (`IFileStorage` bez async metoda), **TS-10.3** (imena osoblja kopirana u tekst događaja), **TS-12.1** (zaštitu grane `main` podešava vlasnik na GitHubu), **TS-54.1** (nema drugog autora ni recenzenta u historiji, što kod ne može riješiti).
+Iz scenarija testera, još otvoreno: **TS-02.3** (`IFileStorage` je sada asinhron, ali blob ili zajednički storage nisu rađeni), **TS-12.1** (zaštitu grane `main` podešava vlasnik na GitHubu), **TS-54.1** (nema drugog autora ni recenzenta u historiji, što kod ne može riješiti).
 
 ## 4. Nalazi testera
 
@@ -73,9 +73,21 @@ Provjereni u kodu i **riješeni** u ovom krugu: preklapanje vremena (NOVO-DOM-01
 - **T-18:** da li se token prebacuje iz `localStorage` u kolačić (veća izmjena).
 - **Zaštita grane `main`** na GitHubu (Settings → Branches): zahtijevati pull request i provjere *Backend (Windows)*, *Backend (Linux, with SQL Server)* i *Frontend*.
 
-## 7. Šta bih uradio sljedeće
+## 7. Nalazi iz paketa `full-2026-10-21` (`NOVO-*`)
 
-1. **Odluke vlasnika** iz odjeljka 6; bez njih se T-51 i T-52 ne mogu zatvoriti. Zaštita grane `main` je pet minuta posla na GitHubu.
-2. **Preostali statički nalazi testera** (~60 `NOVO-*`), jedan po jedan: test koji pada, popravka, mutacijska provjera.
-3. **Srednji poslovi koji se mogu raditi odvojeno:** T-40 (otkazivanje u svim akcijama, mehanički), T-37 (izvještaji bez učitavanja cijelih tiketa), T-58 (analizator), TS-10.3 (strukturirani događaji umjesto imena u tekstu), TS-15.2 (`TimeProvider` umjesto 53 poziva `DateTime.UtcNow`, mehanički i uz testove s fiksnim vremenom).
+Pregled svih 80 nalaza po stanju (detalji u `IZVJESTAJ_ISPRAVKI.md`, odjeljak 9.11).
+
+| Stanje | Nalazi |
+|---|---|
+| Riješeno (ovaj krug) | ARC-04, 05, 10, 11, 12, 15; DOM-02, 04, 06, 07, 08; PRV-01, 02; FE-01, 03, 05, 07, 08, 09, 10, 11; SEC-05, 08, 10; OPS-14, 15 |
+| Riješeno (ranije, provjereno) | ARC-01, 02, 03; DOM-01, 03, 05; DB-01; FE-02, 04, 06; HOST-01, 02, 03, 05, 06, 08, 09, 11; OPS-01, 02, 03, 04, 09, 10, 13, 16; SEC-07, 09 |
+| Djelimično | ARC-06, HOST-04, OPS-08 (poruke za reset lozinke i obavijest o zaključavanju idu kroz red u memoriji); SEC-03 (CSP samo u primjerima za server) |
+| Prihvaćeno uz obrazloženje | ARC-09, OPS-07, ARC-14, HOST-12, OPS-17, SEC-01, SEC-02, SEC-06 |
+| Otvoreno | ARC-07, 08, 13; OPS-05, 06, 11 (opterećenje i memorija, nije mjereno); HOST-07, OPS-12 (SQL Server 2017 ili 2019, odluka vlasnika); HOST-10; SEC-04 (odluka vlasnika) |
+
+## 8. Šta bih uradio sljedeće
+
+1. **Odluke vlasnika** iz odjeljka 6 i dvije nove: minimum SQL Servera (HOST-07) i ko smije resetovati klijentsku lozinku (SEC-04). Zaštita grane `main` je pet minuta posla na GitHubu.
+2. **Mjerenje prije optimizacije:** ARC-07, ARC-08, OPS-05, 06, 11 su pretpostavke o opterećenju; treba ih izmjeriti na pravoj bazi (21.712 tiketa) prije bilo kakve izmjene.
+3. **Srednji poslovi:** T-40 (otkazivanje u svim akcijama, mehanički), T-37 (izvještaji bez učitavanja cijelih tiketa), T-58 (analizator), ARC-13 (razlikovati grešku jednog tiketa od nedostupnog davaoca), ARC-06 (reset lozinke kroz outbox).
 4. **Veliki refaktori** (T-15, T-17, T-31, T-47, T-45) tek poslije toga, svaki kao zaseban zadatak, jer svaki mijenja način rada cijele aplikacije.

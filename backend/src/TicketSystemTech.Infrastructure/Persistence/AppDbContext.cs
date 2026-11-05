@@ -24,21 +24,48 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     // simply carry no address or reference.
     private readonly Microsoft.AspNetCore.Http.IHttpContextAccessor? _httpContextAccessor;
 
+    // The clock of the application (the container supplies it; a context built by hand gets the system one). Entities carry no
+    // clock of their own: a time that is still unset when a row is first saved is set here, from this one.
+    private readonly TimeProvider _time;
+
     public AppDbContext(DbContextOptions<AppDbContext> options, IPiiProtector piiProtector,
-        Microsoft.AspNetCore.Http.IHttpContextAccessor? httpContextAccessor = null) : base(options)
+        Microsoft.AspNetCore.Http.IHttpContextAccessor? httpContextAccessor = null, TimeProvider? timeProvider = null) : base(options)
     {
         _piiProtector = piiProtector;
         _httpContextAccessor = httpContextAccessor;
+        _time = timeProvider ?? TimeProvider.System;
+    }
+
+    /// <summary>The columns that say "when was this row made" and start out as "now" for every new row.</summary>
+    private static readonly string[] StampedOnInsert = { "CreatedAt", "CreatedAtUtc", "UpdatedAt", "AssignedAtUtc", "NextAttemptAtUtc" };
+
+    private void StampCreationTimes()
+    {
+        DateTime? now = null;
+        foreach (var entry in ChangeTracker.Entries().Where(e => e.State == EntityState.Added))
+        {
+            foreach (var name in StampedOnInsert)
+            {
+                var property = entry.Metadata.FindProperty(name);
+                if (property is null || property.ClrType != typeof(DateTime)) continue;
+
+                var member = entry.Property(name);
+                if (member.CurrentValue is DateTime value && value == default)
+                    member.CurrentValue = now ??= _time.GetUtcNow().UtcDateTime;
+            }
+        }
     }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
+        StampCreationTimes();
         StampAuditRows();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
 
     public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
+        StampCreationTimes();
         StampAuditRows();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
@@ -155,7 +182,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
             e.Property(t => t.Title).HasMaxLength(300).IsRequired();
             e.HasIndex(t => t.Status);
             e.HasIndex(t => t.CompanyId);
-            e.HasIndex(t => t.AssignedToUserId);
             e.HasIndex(t => t.ClientId);
             e.HasIndex(t => t.CreatedAt);
             e.HasIndex(t => t.SubBranchId);
@@ -243,6 +269,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
         builder.Entity<TicketAssignee>(e =>
         {
             e.HasIndex(a => new { a.TicketId, a.UserId }).IsUnique();
+            // At most one person is the one the ticket is "assigned to".
+            e.Property(a => a.IsPrimary).HasDefaultValue(false);
+            e.HasIndex(a => a.TicketId).IsUnique().HasFilter("[IsPrimary] = 1").HasDatabaseName("UX_TicketAssignees_OnePrimaryPerTicket");
             // "My tickets", the Gantt and the timeline export start from a person, not from a ticket.
             e.HasIndex(a => new { a.UserId, a.TicketId });
             e.HasOne(a => a.Ticket).WithMany(t => t.Assignees).HasForeignKey(a => a.TicketId).OnDelete(DeleteBehavior.Cascade);
@@ -338,7 +367,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
             builder.Entity<T>().HasOne<ApplicationUser>().WithMany().HasForeignKey(key).OnDelete(DeleteBehavior.Restrict);
 
         ToUser<Ticket>(t => t.ClientId);
-        ToUser<Ticket>(t => t.AssignedToUserId);
         ToUser<Ticket>(t => t.OpenedByUserId);
         ToUser<Ticket>(t => t.ClosedByUserId);
         ToUser<TicketMessage>(m => m.AuthorId);

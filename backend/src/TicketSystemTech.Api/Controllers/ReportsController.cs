@@ -33,8 +33,12 @@ public class ReportsController : ControllerBase
     private readonly IChatCompletionService _chatCompletionService;
     private readonly Lazy<TimeZoneInfo> _zone;
 
-    public ReportsController(AppDbContext db, ICurrentUserService currentUser, IChatCompletionService chatCompletionService, IOptions<SlaOptions> slaOptions)
+    private readonly TimeProvider _time;
+    private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
+
+    public ReportsController(AppDbContext db, ICurrentUserService currentUser, IChatCompletionService chatCompletionService, IOptions<SlaOptions> slaOptions, TimeProvider time)
     {
+        _time = time;
         _db = db;
         _currentUser = currentUser;
         _chatCompletionService = chatCompletionService;
@@ -53,10 +57,9 @@ public class ReportsController : ControllerBase
     {
         var query = _db.Tickets.AsNoTracking().AsQueryable();
 
-        // "Tickets of agent X" means the ones they are (co-)assigned to, not only those where they are the primary
-        // assignee — the ticket list already works this way, so the two screens now agree.
+        // "Tickets of agent X" means the ones they are on (as the main assignee or as help); the ticket list works the same way.
         if (agentId.HasValue)
-            query = query.Where(t => t.AssignedToUserId == agentId.Value || t.Assignees.Any(a => a.UserId == agentId.Value));
+            query = query.Where(t => t.Assignees.Any(a => a.UserId == agentId.Value));
 
         if (companyId.HasValue) query = query.Where(t => t.CompanyId == companyId.Value);
         if (subBranchId.HasValue) query = query.Where(t => t.SubBranchId == subBranchId.Value);
@@ -291,10 +294,11 @@ public class ReportsController : ControllerBase
     {
         var (f, t) = NormalizeRange(from, to);
         var tickets = await Scoped(f, t, companyId, agentId, departmentId, subBranchId)
+            .Include(x => x.Assignees)
             .OrderBy(x => x.CreatedAt)
             .ToListAsync(Ct);
 
-        var userIds = tickets.SelectMany(x => new[] { x.ClientId, x.AssignedToUserId, x.ClosedByUserId })
+        var userIds = tickets.SelectMany(x => new[] { x.ClientId, x.PrimaryAssigneeId, x.ClosedByUserId })
             .Where(id => id.HasValue).Select(id => id!.Value)
             .Concat(tickets.Select(x => x.ClientId)).Distinct().ToList();
         var names = await _db.Users.Where(u => userIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => $"{u.FirstName} {u.LastName}", Ct);
@@ -308,7 +312,7 @@ public class ReportsController : ControllerBase
             x.DepartmentId.HasValue ? departments.GetValueOrDefault(x.DepartmentId.Value, "") : "",
             companies.GetValueOrDefault(x.CompanyId, ""),
             names.GetValueOrDefault(x.ClientId, ""),
-            x.AssignedToUserId.HasValue ? names.GetValueOrDefault(x.AssignedToUserId.Value) : null,
+            x.PrimaryAssigneeId.HasValue ? names.GetValueOrDefault(x.PrimaryAssigneeId.Value) : null,
             x.CreatedAt,
             x.OpenedAtUtc,
             x.ClosedAtUtc,
@@ -319,7 +323,7 @@ public class ReportsController : ControllerBase
         var timelineRows = await BuildTimelineExportRowsAsync(f, t, agentId, departmentId);
 
         var bytes = TicketExcelExporter.Build(rows, f, t, timelineRows);
-        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"tickets-export-{DateTime.UtcNow:yyyyMMdd-HHmm}.xlsx");
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"tickets-export-{UtcNow:yyyyMMdd-HHmm}.xlsx");
     }
 
     /// <summary>
@@ -344,7 +348,7 @@ public class ReportsController : ControllerBase
 
             // Same blocks as the Gantt chart. Hours are only given for logged work; the stand-in for a ticket nobody logged time on
             // would otherwise report "opened to closed" as if it were effort.
-            var ticketBlocks = await Queries.TicketWorkBlocks.ForUserAsync(_db, employee.Id, from, to, isAdmin ? null : _currentUser.DepartmentId, DateTime.UtcNow, Ct);
+            var ticketBlocks = await Queries.TicketWorkBlocks.ForUserAsync(_db, employee.Id, from, to, isAdmin ? null : _currentUser.DepartmentId, UtcNow, Ct);
             foreach (var b in ticketBlocks)
             {
                 timelineRows.Add(new TimelineExportRow(
@@ -353,7 +357,7 @@ public class ReportsController : ControllerBase
             }
 
             // One row per stretch of work, as on the chart.
-            var now = DateTime.UtcNow;
+            var now = UtcNow;
             var taskBlocks = await _db.WorkTaskSessions.AsNoTracking()
                 .Where(x => x.UserId == employee.Id && x.StartedAtUtc < to && (x.EndedAtUtc ?? now) >= from)
                 .Select(x => new { x.WorkTask!.Title, x.StartedAtUtc, x.EndedAtUtc })
@@ -369,9 +373,9 @@ public class ReportsController : ControllerBase
         return timelineRows.OrderBy(r => r.Employee).ThenBy(r => r.StartUtc).ToList();
     }
 
-    private static (DateTime From, DateTime To) NormalizeRange(DateTime? from, DateTime? to)
+    private (DateTime From, DateTime To) NormalizeRange(DateTime? from, DateTime? to)
     {
-        var t = BusinessTimeZone.AsUtc(to ?? DateTime.UtcNow);
+        var t = BusinessTimeZone.AsUtc(to ?? UtcNow);
         var f = from.HasValue ? BusinessTimeZone.AsUtc(from.Value) : t.AddDays(-30);
         return (f, t);
     }

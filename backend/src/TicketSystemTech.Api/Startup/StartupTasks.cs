@@ -51,18 +51,22 @@ public static class StartupTasks
         await Step("Database migrations", logger, () => db.Database.MigrateAsync(ct));
 
         var piiProtector = scope.ServiceProvider.GetRequiredService<IPiiProtector>();
-        await Step("Encryption check", logger, () => PiiBackfillMigration.RunAsync(db, piiProtector, logger, ct));
+        var inProduction = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().IsProduction();
+        await Step("Encryption check", logger, () => PiiBackfillMigration.RunAsync(db, piiProtector, logger, ct, refuseToStartWithPlaintextLeft: inProduction));
 
         await Step("Embedding format", logger, () => EmbeddingFormatBackfill.RunAsync(db, AiSettings.DefaultGeminiEmbeddingModel, logger, ct));
 
         await Step("Avatar paths", logger, () => AvatarPathBackfill.RunAsync(db, logger, ct));
+
+        await Step("Knowledge base content", logger, () => ChunkContentRedactionBackfill.RunAsync(db, logger, ct));
 
         await Step("Seed", logger, () => DbSeeder.SeedAsync(
             db,
             scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>(),
             logger, configuration,
             scope.ServiceProvider.GetRequiredService<ITemporaryPasswordGenerator>(),
-            scope.ServiceProvider.GetRequiredService<IOptions<TemporaryPasswordOptions>>()));
+            scope.ServiceProvider.GetRequiredService<IOptions<TemporaryPasswordOptions>>(),
+            scope.ServiceProvider.GetRequiredService<TimeProvider>()));
     }
 
     private static async Task Step(string name, ILogger logger, Func<Task> work)

@@ -17,7 +17,7 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.13")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -653,9 +653,6 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("AssignedToUserId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<Guid?>("CategoryId")
                         .HasColumnType("uniqueidentifier");
 
@@ -732,8 +729,6 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AssignedToUserId");
-
                     b.HasIndex("CategoryId");
 
                     b.HasIndex("ClientId");
@@ -784,6 +779,11 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<bool>("IsPrimary")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<Guid>("TicketId")
                         .HasColumnType("uniqueidentifier");
 
@@ -791,6 +791,11 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("TicketId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_TicketAssignees_OnePrimaryPerTicket")
+                        .HasFilter("[IsPrimary] = 1");
 
                     b.HasIndex("TicketId", "UserId")
                         .IsUnique();
@@ -1306,11 +1311,6 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("TicketSystemTech.Domain.Entities.Ticket", b =>
                 {
-                    b.HasOne("TicketSystemTech.Infrastructure.Identity.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("AssignedToUserId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("TicketSystemTech.Domain.Entities.TicketCategory", "Category")
                         .WithMany()
                         .HasForeignKey("CategoryId")

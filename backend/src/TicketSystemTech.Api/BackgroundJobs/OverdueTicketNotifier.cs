@@ -3,6 +3,7 @@ using TicketSystemTech.Api.Emails;
 using TicketSystemTech.Application.Common.Interfaces;
 using TicketSystemTech.Domain.Entities;
 using TicketSystemTech.Domain.Enums;
+using TicketSystemTech.Domain.Workflow;
 using TicketSystemTech.Infrastructure.Persistence;
 
 namespace TicketSystemTech.Api.BackgroundJobs;
@@ -18,8 +19,12 @@ public class OverdueTicketNotifier : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<OverdueTicketNotifier> _logger;
 
-    public OverdueTicketNotifier(IServiceScopeFactory scopeFactory, ILogger<OverdueTicketNotifier> logger)
+    private readonly TimeProvider _time;
+    private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
+
+    public OverdueTicketNotifier(IServiceScopeFactory scopeFactory, ILogger<OverdueTicketNotifier> logger, TimeProvider time)
     {
+        _time = time;
         _scopeFactory = scopeFactory;
         _logger = logger;
     }
@@ -30,7 +35,7 @@ public class OverdueTicketNotifier : BackgroundService
         {
             try
             {
-                await CheckOverdueTicketsAsync(stoppingToken);
+                await CheckOnceAsync(stoppingToken);
             }
             catch (Exception ex)
             {
@@ -48,7 +53,11 @@ public class OverdueTicketNotifier : BackgroundService
         }
     }
 
-    private async Task CheckOverdueTicketsAsync(CancellationToken ct)
+    /// <summary>What the job needs to know about a ticket: not the whole row (its HTML description, its messages), only what the warning says.</summary>
+    private sealed record OverdueTicket(Guid Id, string TicketNumber, string Title, DateTime? DueDateUtc, DateTime? OpenedAtUtc);
+
+    /// <summary>One pass: warns the assignees of every live ticket that is overdue and has not been warned about yet. Returns how many tickets it warned about.</summary>
+    public async Task<int> CheckOnceAsync(CancellationToken ct)
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -57,30 +66,31 @@ public class OverdueTicketNotifier : BackgroundService
 
         var settings = await db.OverdueNotificationSettings.AsNoTracking().FirstOrDefaultAsync(ct);
         if (settings is null || (!settings.NotifyOnSlaBreach && settings.ManualOverdueDays is null))
-            return;
+            return 0;
 
-        var now = DateTime.UtcNow;
+        var now = UtcNow;
+        var notifyOnSla = settings.NotifyOnSlaBreach;
+        DateTime? openedBefore = settings.ManualOverdueDays is { } days ? now.AddDays(-days) : null;
+
+        // The database picks the tickets; the job gets only the few columns the warning needs. It used to load every live ticket in
+        // full every half hour and look at them one by one.
+        var overdue = new List<(OverdueTicket Ticket, string Reason)>();
         var candidates = await db.Tickets.AsNoTracking()
-            .Where(t => (t.Status == TicketStatus.Open || t.Status == TicketStatus.InProgress) && t.OverdueNotifiedAtUtc == null)
+            .Where(t => TicketWorkflow.ActiveStatuses.Contains(t.Status) && t.OverdueNotifiedAtUtc == null
+                && ((notifyOnSla && t.DueDateUtc != null && t.DueDateUtc < now)
+                    || (openedBefore != null && t.OpenedAtUtc != null && t.OpenedAtUtc < openedBefore)))
+            .Select(t => new OverdueTicket(t.Id, t.TicketNumber, t.Title, t.DueDateUtc, t.OpenedAtUtc))
             .ToListAsync(ct);
-
-        var overdue = new List<(Ticket Ticket, string Reason)>();
         foreach (var t in candidates)
         {
-            if (settings.NotifyOnSlaBreach && t.DueDateUtc.HasValue && t.DueDateUtc.Value < now)
-            {
-                overdue.Add((t, $"it is past its SLA due date ({t.DueDateUtc.Value:yyyy-MM-dd HH:mm} UTC)"));
-                continue;
-            }
-            if (settings.ManualOverdueDays.HasValue && t.OpenedAtUtc.HasValue && t.OpenedAtUtc.Value.AddDays(settings.ManualOverdueDays.Value) < now)
-            {
-                overdue.Add((t, $"it has been open for more than {settings.ManualOverdueDays.Value} day(s)"));
-            }
+            overdue.Add(notifyOnSla && t.DueDateUtc.HasValue && t.DueDateUtc.Value < now
+                ? (t, $"it is past its SLA due date ({t.DueDateUtc.Value:yyyy-MM-dd HH:mm} UTC)")
+                : (t, $"it has been open for more than {settings.ManualOverdueDays!.Value} day(s)"));
         }
 
-        if (overdue.Count == 0) return;
+        if (overdue.Count == 0) return 0;
 
-        var notified = new List<(Ticket Ticket, List<Guid> UserIds)>();
+        var notified = new List<(OverdueTicket Ticket, List<Guid> UserIds)>();
         foreach (var (ticket, reason) in overdue)
         {
             // Claim the ticket BEFORE telling anyone, with one conditional UPDATE. Marking it after sending meant a
@@ -93,7 +103,6 @@ public class OverdueTicketNotifier : BackgroundService
             if (claimed == 0) continue;
 
             var assigneeIds = await db.TicketAssignees.Where(a => a.TicketId == ticket.Id).Select(a => a.UserId).ToListAsync(ct);
-            if (assigneeIds.Count == 0 && ticket.AssignedToUserId.HasValue) assigneeIds.Add(ticket.AssignedToUserId.Value);
 
             var assignees = await db.Users.Where(u => assigneeIds.Contains(u.Id) && u.IsActive).ToListAsync(ct);
             foreach (var assignee in assignees)
@@ -125,5 +134,6 @@ public class OverdueTicketNotifier : BackgroundService
         }
 
         _logger.LogInformation("Sent overdue notifications for {Count} ticket(s)", notified.Count);
+        return notified.Count;
     }
 }

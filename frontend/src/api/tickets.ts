@@ -85,8 +85,8 @@ export const ticketsApi = {
   setStatus: (id: string, status: 'Open' | 'InProgress' | 'Resolved') =>
     apiClient.post<TicketDetailDto>(`/api/tickets/${id}/status`, { status }).then((r) => r.data),
 
-  transferBranch: (id: string, departmentId: string) =>
-    apiClient.post<TicketDetailDto>(`/api/tickets/${id}/transfer-branch`, { departmentId }).then((r) => r.data),
+  transferBranch: (id: string, departmentId: string, subBranchId?: string) =>
+    apiClient.post<TicketDetailDto>(`/api/tickets/${id}/transfer-branch`, { departmentId, subBranchId: subBranchId || undefined }).then((r) => r.data),
 
   addAssignee: (id: string, userId: string) =>
     apiClient.post<TicketDetailDto>(`/api/tickets/${id}/assignees`, { userId }).then((r) => r.data),

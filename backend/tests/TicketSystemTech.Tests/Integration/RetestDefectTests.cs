@@ -379,7 +379,7 @@ public class RetestDefectTests : IAsyncLifetime
     {
         var storage = _world.Factory.Services.CreateScope().ServiceProvider.GetRequiredService<IFileStorage>();
         var stored = await _world.Db(db => db.Users.Where(u => u.Id == person.Id).Select(u => u.ProfilePictureUrl).SingleAsync());
-        storage.DeletePublicImage(stored);
+        await storage.DeletePublicImageAsync(stored);
         await _world.Db(db => db.Users.Where(u => u.Id == person.Id).ExecuteUpdateAsync(s => s.SetProperty(u => u.ProfilePictureUrl, (string?)null)));
     }
 
@@ -525,6 +525,43 @@ public class RetestDefectTests : IAsyncLifetime
             await _world.Db(db => db.Database.ExecuteSqlAsync($"UPDATE [AspNetUsers] SET [NormalizedEmail] = {stored} WHERE [Id] = {userId}"));
         }
         await Run(); // and it was put back
+    }
+
+    // ======================= NOVO-PRV-01: a row that cannot be encrypted must not be left readable without anybody being told =======================
+
+    [SqlFact]
+    public async Task A_row_that_cannot_be_encrypted_stops_a_production_start_but_not_a_development_one()
+    {
+        var protector = _world.Factory.Services.GetRequiredService<IPiiProtector>();
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        Task<int> Run(bool production) => _world.Db(async db =>
+        {
+            await PiiBackfillMigration.RunAsync(db, protector, NullLogger.Instance, refuseToStartWithPlaintextLeft: production);
+            return 0;
+        });
+        try
+        {
+            // Two old accounts with the same user name, both with a plain-text address: encrypting the second collides with the first
+            // (the user name is also kept as a lookup hash, and that is unique).
+            foreach (var id in new[] { first, second })
+                await _world.Db(db => db.Database.ExecuteSqlAsync($@"
+                    INSERT INTO AspNetUsers (Id, FirstName, LastName, Role, IsActive, CreatedAtUtc, MustChangePassword, PhoneNumberPrompted, EmailConfirmed,
+                                             PhoneNumberConfirmed, TwoFactorEnabled, LockoutEnabled, AccessFailedCount, UserName, Email)
+                    VALUES ({id}, 'Old', 'Account', 1, 1, SYSUTCDATETIME(), 0, 1, 1, 0, 0, 0, 0, 'old-duplicate-user', {id.ToString("N") + "@legacy.test"})"));
+
+            await Run(production: false); // development: it says so in the log and carries on
+
+            var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => Run(production: true));
+            Assert.Contains("plain text", refused.Message);
+            Assert.Contains("1 row(s)", refused.Message);
+        }
+        finally
+        {
+            await _world.Db(db => db.Database.ExecuteSqlAsync($"DELETE FROM AspNetUsers WHERE Id IN ({first}, {second})"));
+        }
+
+        await Run(production: true); // and with the rows gone it is quiet again
     }
 
     private sealed class HostEnvironmentStub : IHostEnvironment

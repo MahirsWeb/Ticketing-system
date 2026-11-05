@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace TicketSystemTech.Infrastructure.Persistence;
 
 /// <summary>
-/// Every DateTime in this system is stored as UTC (the code writes DateTime.UtcNow), but SQL Server's datetime2
+/// Every DateTime in this system is stored as UTC (the code writes the time of the application's TimeProvider, in UTC), but SQL Server's datetime2
 /// carries no kind, so EF hands values back as DateTimeKind.Unspecified. System.Text.Json then serialises them
 /// WITHOUT a trailing "Z", and the browser's `new Date(...)` reads the string as local time: every stored time
 /// appears shifted by the viewer's UTC offset (1-2 h here), while values just created in the same request (kind

@@ -35,6 +35,9 @@ public class UsersController : ControllerBase
     private readonly ITicketAssignmentService _assignments;
     private readonly IFileLinkService _links;
 
+    private readonly TimeProvider _time;
+    private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
+
     public UsersController(
         UserManager<ApplicationUser> userManager,
         AppDbContext db,
@@ -46,8 +49,10 @@ public class UsersController : ControllerBase
         IFileStorage fileStorage,
         IMemoryCache cache,
         ITicketAssignmentService assignments,
-        IFileLinkService links)
+        IFileLinkService links,
+        TimeProvider time)
     {
+        _time = time;
         _links = links;
         _assignments = assignments;
         _userManager = userManager;
@@ -144,7 +149,7 @@ public class UsersController : ControllerBase
             return BadRequest(new { message = string.Join(" ", addResult.Errors.Select(e => e.Description)) });
 
         user.MustChangePassword = true;
-        user.TemporaryPasswordExpiresAtUtc = DateTime.UtcNow.AddMinutes(_tempPasswordOptions.ValidityMinutes);
+        user.TemporaryPasswordExpiresAtUtc = UtcNow.AddMinutes(_tempPasswordOptions.ValidityMinutes);
         await _userManager.UpdateAsync(user);
         _cache.Remove(UserStatusCache.Key(user.Id)); // the new security stamp must take effect now, not after the cache TTL
 
@@ -222,11 +227,15 @@ public class UsersController : ControllerBase
         user.CompanyId = companyId;
         user.DepartmentId = departmentId;
         user.SubBranchId = subBranchId;
-        await _userManager.UpdateAsync(user);
-        _cache.Remove(UserStatusCache.Key(user.Id));
 
+        // The tickets are released BEFORE the person is saved. The release saves what is pending in the same context, the changes to this
+        // person included, so either both happen or neither does: if a ticket in use by someone else makes the save fail (a 409), nothing
+        // has changed and the Admin simply tries again. Saving the person first used to leave them moved while their tickets stayed theirs.
         if (movedAway)
             await _assignments.ReleaseLiveTicketsAsync(user.Id, "moved to a different role or branch", _currentUser.UserId);
+        var saved = await _userManager.UpdateAsync(user);
+        if (!saved.Succeeded) return BadRequest(new { message = string.Join(" ", saved.Errors.Select(e => e.Description)) });
+        _cache.Remove(UserStatusCache.Key(user.Id));
 
         return Ok();
     }
@@ -246,12 +255,14 @@ public class UsersController : ControllerBase
 
         _db.Audit(_currentUser.UserId, request.IsActive ? "UserActivated" : "UserDeactivated", nameof(ApplicationUser), user.Id, $"Role of target: {user.Role}");
         user.IsActive = request.IsActive;
-        await _userManager.UpdateAsync(user);
-        _cache.Remove(UserStatusCache.Key(user.Id));
 
-        // Someone who can no longer work must not keep owning live tickets.
+        // Someone who can no longer work must not keep owning live tickets. Released first and saved together with the person (see
+        // UpdateUser): a failure leaves the account as it was instead of inactive with its tickets still on it.
         if (!request.IsActive && user.Role == UserRole.Employee)
             await _assignments.ReleaseLiveTicketsAsync(user.Id, "account deactivated", _currentUser.UserId);
+        var saved = await _userManager.UpdateAsync(user);
+        if (!saved.Succeeded) return BadRequest(new { message = string.Join(" ", saved.Errors.Select(e => e.Description)) });
+        _cache.Remove(UserStatusCache.Key(user.Id));
 
         return Ok();
     }
@@ -272,7 +283,7 @@ public class UsersController : ControllerBase
 
         var export = new
         {
-            generatedAtUtc = DateTime.UtcNow,
+            generatedAtUtc = UtcNow,
             profile = new
             {
                 user.Id,
@@ -328,6 +339,8 @@ public class UsersController : ControllerBase
     /// removed, the account is locked for good and every session ends. Tickets, messages and work time stay, so the history of
     /// the work is still true; they now carry the placeholder name. It cannot be undone. The audit log keeps that it happened,
     /// without any of the personal data. Not possible for yourself, so there is always an Admin left to do it.
+    /// The name is also taken out of the sentences the application itself wrote about the person ("Ticket closed by ...",
+    /// "... assigned you a task"): those are generated text, not somebody's own words, so replacing the name in them is safe.
     /// What it does not reach: names that other people typed into the text of their own messages, and copies in backups.
     /// </summary>
     [HttpPost("{id:guid}/anonymize")]
@@ -340,6 +353,7 @@ public class UsersController : ControllerBase
         if (user.UserName?.EndsWith(AnonymizedDomain, StringComparison.OrdinalIgnoreCase) == true) return Ok(); // already done
 
         var avatar = user.ProfilePictureUrl;
+        var formerName = $"{user.FirstName} {user.LastName}".Trim();
         var wasEmployee = user.Role == UserRole.Employee;
         var placeholder = $"anonymized-{Guid.NewGuid():N}{AnonymizedDomain}";
 
@@ -364,7 +378,8 @@ public class UsersController : ControllerBase
 
         await _db.Notifications.Where(n => n.UserId == id).ExecuteDeleteAsync();
         await _db.SaveChangesAsync();
-        _fileStorage.DeletePublicImage(avatar);
+        await ScrubNameFromGeneratedTextAsync(formerName);
+        await _fileStorage.DeletePublicImageAsync(avatar);
 
         if (wasEmployee)
             await _assignments.ReleaseLiveTicketsAsync(user.Id, "account anonymized", _currentUser.UserId);
@@ -373,6 +388,31 @@ public class UsersController : ControllerBase
     }
 
     private const string AnonymizedDomain = "@anonymized.invalid";
+    private const string AnonymousName = "Obrisan korisnik";
+
+    /// <summary>
+    /// Replaces a person's former name in what the application wrote itself: the system events on tickets and the texts of
+    /// notifications. Only whole names are replaced ("Ana Bo" is left alone inside "Ana Bošnjak"), and nothing a person typed is touched.
+    /// </summary>
+    private async Task ScrubNameFromGeneratedTextAsync(string formerName)
+    {
+        if (formerName.Length < 3) return;
+
+        var variants = new[] { formerName, System.Net.WebUtility.HtmlEncode(formerName) }.Distinct().ToList();
+        string Scrub(string text) => variants.Aggregate(text, (current, name) =>
+            System.Text.RegularExpressions.Regex.Replace(current, @"(?<!\p{L})" + System.Text.RegularExpressions.Regex.Escape(name) + @"(?!\p{L})", AnonymousName));
+
+        // The database narrows it down; the whole-name rule is applied here, where it can be written as a rule.
+        var events = await _db.TicketMessages
+            .Where(m => m.Type == MessageType.SystemEvent && variants.Any(v => m.BodyHtml.Contains(v)))
+            .ToListAsync();
+        foreach (var message in events) message.BodyHtml = Scrub(message.BodyHtml);
+
+        var notifications = await _db.Notifications.Where(n => variants.Any(v => n.Message.Contains(v))).ToListAsync();
+        foreach (var notification in notifications) notification.Message = Scrub(notification.Message);
+
+        await _db.SaveChangesAsync();
+    }
 
     [HttpGet]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
@@ -542,7 +582,7 @@ public class UsersController : ControllerBase
         var previousPicture = user.ProfilePictureUrl;
         user.ProfilePictureUrl = url;
         await _userManager.UpdateAsync(user);
-        _fileStorage.DeletePublicImage(previousPicture); // the old picture is no longer referenced by anything
+        await _fileStorage.DeletePublicImageAsync(previousPicture); // the old picture is no longer referenced by anything
         return Ok(new { profilePictureUrl = _links.ToPublicUrl(url) });
     }
 
@@ -618,7 +658,7 @@ public class UsersController : ControllerBase
             return Conflict(new { message = "A user with this email already exists." });
 
         var tempPassword = _tempPasswordGenerator.Generate();
-        var expiresAt = DateTime.UtcNow.AddMinutes(_tempPasswordOptions.ValidityMinutes);
+        var expiresAt = UtcNow.AddMinutes(_tempPasswordOptions.ValidityMinutes);
 
         var user = new ApplicationUser
         {

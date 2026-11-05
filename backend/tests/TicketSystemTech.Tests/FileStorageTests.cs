@@ -105,9 +105,9 @@ public class FileStorageTests : IDisposable
     [InlineData("../appsettings.json")]
     [InlineData("C:\\Windows\\win.ini")]
     [InlineData("3f2504e0-4f89-11d3-9a0c-0305e82c3301.pdf:stream")]
-    public void Unsafe_keys_are_rejected_before_touching_the_disk(string key)
+    public async Task Unsafe_keys_are_rejected_before_touching_the_disk(string key)
     {
-        Assert.Null(NewStorage().OpenRead(key));
+        Assert.Null(await NewStorage().OpenReadAsync(key, TestContext.Current.CancellationToken));
         Assert.False(NewLinks().IsValid(key, "x"));
     }
 
@@ -123,7 +123,7 @@ public class FileStorageTests : IDisposable
         Assert.True(File.Exists(Path.Combine(_root, "private", key)));
         Assert.False(Directory.Exists(Path.Combine(_root, "wwwroot", "uploads"))); // never inside the web root
 
-        await using var stream = storage.OpenRead(key)!;
+        await using var stream = (await storage.OpenReadAsync(key, TestContext.Current.CancellationToken))!;
         Assert.Equal(3, stream.Length);
     }
 
@@ -142,10 +142,10 @@ public class FileStorageTests : IDisposable
         var reference = await storage.SaveAsync("manual.pdf", "application/pdf", new MemoryStream(new byte[] { 1, 2, 3 }), TestContext.Current.CancellationToken);
         var key = reference["/uploads/".Length..];
 
-        Assert.True(storage.Delete(reference));
+        Assert.True(await storage.DeleteAsync(reference, TestContext.Current.CancellationToken));
         Assert.False(File.Exists(Path.Combine(_root, "private", key)));
-        Assert.Null(storage.OpenRead(key));
-        Assert.False(storage.Delete(reference)); // nothing left to delete
+        Assert.Null(await storage.OpenReadAsync(key, TestContext.Current.CancellationToken));
+        Assert.False(await storage.DeleteAsync(reference, TestContext.Current.CancellationToken)); // nothing left to delete
     }
 
     [Theory]
@@ -154,8 +154,8 @@ public class FileStorageTests : IDisposable
     [InlineData("../../secret.txt")]
     [InlineData(@"C:\Windows\win.ini")]
     [InlineData("/uploads/not-a-guid.pdf")]
-    public void Delete_ignores_anything_that_is_not_a_stored_key(string? reference) =>
-        Assert.False(NewStorage().Delete(reference));
+    public async Task Delete_ignores_anything_that_is_not_a_stored_key(string? reference) =>
+        Assert.False(await NewStorage().DeleteAsync(reference, TestContext.Current.CancellationToken));
 
     [Fact]
     public async Task A_replaced_profile_picture_is_deleted_but_only_from_the_avatars_folder()
@@ -167,10 +167,10 @@ public class FileStorageTests : IDisposable
         Assert.True(File.Exists(avatarPath));
 
         // a URL that does not point into /avatars/ is refused, even with a perfectly valid key
-        Assert.False(storage.DeletePublicImage("https://host.example/uploads/" + key));
+        Assert.False(await storage.DeletePublicImageAsync("https://host.example/uploads/" + key, TestContext.Current.CancellationToken));
         Assert.True(File.Exists(avatarPath));
 
-        Assert.True(storage.DeletePublicImage(url));
+        Assert.True(await storage.DeletePublicImageAsync(url, TestContext.Current.CancellationToken));
         Assert.False(File.Exists(avatarPath));
     }
 
