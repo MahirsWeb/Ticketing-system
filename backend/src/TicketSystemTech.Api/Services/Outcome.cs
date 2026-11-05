@@ -27,11 +27,12 @@ public enum Failure
 /// </summary>
 public sealed record Outcome<T>
 {
-    private Outcome(T? value, Failure? failure, string? message)
+    private Outcome(T? value, Failure? failure, string? message, object? body = null)
     {
         Value = value;
         Failure = failure;
         Message = message;
+        Body = body;
     }
 
     public T? Value { get; }
@@ -39,6 +40,9 @@ public sealed record Outcome<T>
     public Failure? Failure { get; }
 
     public string? Message { get; }
+
+    /// <summary>The whole answer body, for the rare 400 that carries more than a message.</summary>
+    public object? Body { get; }
 
     public bool Succeeded => Failure is null;
 
@@ -51,6 +55,8 @@ public sealed record Outcome<T>
     public static Outcome<T> Unauthorized() => new(default, Services.Failure.Unauthorized, null);
 
     public static Outcome<T> Invalid(string message) => new(default, Services.Failure.Invalid, message);
+
+    public static Outcome<T> InvalidBody(object body) => new(default, Services.Failure.Invalid, null, body);
 
     public static Outcome<T> Conflict(string message) => new(default, Services.Failure.Conflict, message);
 }
@@ -70,7 +76,7 @@ public static class OutcomeExtensions
         Failure.NotFound => outcome.Message is null ? controller.NotFound() : controller.NotFound(new { message = outcome.Message }),
         Failure.Forbidden => controller.Forbid(),
         Failure.Unauthorized => controller.Unauthorized(),
-        Failure.Invalid => controller.BadRequest(new { message = outcome.Message }),
+        Failure.Invalid => controller.BadRequest(outcome.Body ?? new { message = outcome.Message }),
         Failure.Conflict => controller.Conflict(new { message = outcome.Message, code = "CONFLICT" }),
         _ => throw new InvalidOperationException($"Unknown failure {outcome.Failure}")
     };
@@ -86,7 +92,7 @@ public static class OutcomeExtensions
         Failure.NotFound => outcome.Message is null ? controller.NotFound() : controller.NotFound(new { message = outcome.Message }),
         Failure.Forbidden => controller.Forbid(),
         Failure.Unauthorized => controller.Unauthorized(),
-        Failure.Invalid => controller.BadRequest(new { message = outcome.Message }),
+        Failure.Invalid => controller.BadRequest(outcome.Body ?? new { message = outcome.Message }),
         Failure.Conflict => controller.Conflict(new { message = outcome.Message, code = "CONFLICT" }),
         _ => throw new InvalidOperationException($"Unknown failure {outcome.Failure}")
     };

@@ -225,6 +225,8 @@ builder.Services.AddScoped<TicketSystemTech.Api.Tickets.ITicketWorkSessionServic
 builder.Services.AddScoped<TicketSystemTech.Api.Services.IBranchRules, TicketSystemTech.Api.Services.BranchRules>();
 builder.Services.AddScoped<TicketSystemTech.Api.Tickets.ITicketRouting, TicketSystemTech.Api.Tickets.TicketRouting>();
 builder.Services.AddScoped<TicketSystemTech.Api.Users.IUserQueries, TicketSystemTech.Api.Users.UserQueries>();
+builder.Services.AddScoped<TicketSystemTech.Api.KnowledgeBase.IKnowledgeBaseSearch, TicketSystemTech.Api.KnowledgeBase.KnowledgeBaseSearch>();
+builder.Services.AddScoped<TicketSystemTech.Api.KnowledgeBase.IKnowledgeBaseDocuments, TicketSystemTech.Api.KnowledgeBase.KnowledgeBaseDocuments>();
 builder.Services.AddScoped<TicketSystemTech.Api.Users.IUserAccountService, TicketSystemTech.Api.Users.UserAccountService>();
 builder.Services.AddScoped<TicketSystemTech.Api.Users.IUserPrivacyService, TicketSystemTech.Api.Users.UserPrivacyService>();
 builder.Services.AddScoped<TicketSystemTech.Api.Users.IUserProfileService, TicketSystemTech.Api.Users.UserProfileService>();

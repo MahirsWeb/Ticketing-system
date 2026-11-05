@@ -1,7 +1,7 @@
 # Otvorene stavke: šta nije ispravljeno i šta je ispravljeno samo djelimično
 
 **Stanje:** poslije šestog kruga ispravki (2026-11-05). Detalji i dokazi su u `IZVJESTAJ_ISPRAVKI.md` (odjeljci 9.8 do 9.12).
-**Testovi:** 662 backend i 155 frontend testova prolaze, bez preskočenih. Format, ranjivi paketi, migracije u odnosu na model, lint, `tsc`, build i `npm audit` (visoke) su čisti.
+**Testovi:** 664 backend i 155 frontend testova prolaze, bez preskočenih. Format, ranjivi paketi, migracije u odnosu na model, lint, `tsc`, build i `npm audit` (visoke) su čisti.
 **Izvor:** analiza `ANALYSIS_1` (T-01 … T-64), ponovno testiranje commita `7af778a` (149 scenarija) i moje ponovno izvođenje scenarija na izoliranoj kopiji.
 
 ## 1. Sažetak
@@ -34,7 +34,7 @@ Isključeno odlukom vlasnika: **T-28 MFA**.
 
 | Stavka | Šta je urađeno | Šta je ostalo |
 |---|---|---|
-| **T-15** poslovna logika | Nekorišteni MediatR i FluentValidation uklonjeni; pravilo dodjele je na jednom mjestu (`TicketAssignment`); sva vremena idu kroz `TimeProvider` (TS-15.2 zatvoren, uz test koji brani da se sistemski sat ne vrati); novi dijelovi su zasebne klase; **tiketi su izdvojeni iz kontrolera u servise** (vidi ispod) | KnowledgeBaseController (552), LookupsController (394), WorkTasksController (390), ReportsController (382), AuthController (301) i EmailIntegrationController (144) i dalje sadrže poslovnu logiku (TS-15.1) |
+| **T-15** poslovna logika | Nekorišteni MediatR i FluentValidation uklonjeni; pravilo dodjele je na jednom mjestu (`TicketAssignment`); sva vremena idu kroz `TimeProvider` (TS-15.2 zatvoren, uz test koji brani da se sistemski sat ne vrati); novi dijelovi su zasebne klase; **tiketi su izdvojeni iz kontrolera u servise** (vidi ispod) | LookupsController (394), WorkTasksController (390), ReportsController (382), AuthController (301) i EmailIntegrationController (144) i dalje sadrže poslovnu logiku (TS-15.1) |
 | **T-10** GDPR | Admin izvozi sve podatke o osobi i anonimizira osobu (API i dugmad na stranici osobe, isprobano u pregledniku); ime se uklanja i iz rečenica koje je aplikacija sama napisala (TS-10.3 zatvoren); audit log za osjetljive radnje | Period čuvanja i automatsko brisanje; imena koja su drugi ukucali u tekst svojih poruka; kopije u backupima |
 | **T-11** AI i lični podaci | Davalac je podešavanje; maskiraju se email, telefon i lozinke/tokeni uz riječ koja ih imenuje, prije slanja i već pri upisu u bazu znanja (TS-11.2 zatvoren; stari chunkovi se maskiraju pri pokretanju); ograničenja dužine | Ugovor o obradi podataka s davaocem (vlasnik). Imena i slobodan tekst odlaze vanjskom davaocu. U samim tiketima i porukama tekst stoji kako je kucan. Isključenje po kompaniji ne postoji |
 | **T-18** sesije | Opoziv tokena, hub se gasi pri odjavi | JWT je u `localStorage`, nema refresh tokena (TS-18.1) |
@@ -46,6 +46,8 @@ Isključeno odlukom vlasnika: **T-28 MFA**.
 | **T-52** licenca | `CONTRIBUTING.md`, `.mailmap` | **Odluka o licenci i vlasništvu (vlasnik, pravno)**; `THIRD-PARTY-NOTICES` |
 | **T-53** README | Prepisan prema stvarnom stanju | Nisam ga prošao od nule na čistom računaru |
 | **T-58** sitnice | Uklonjeni ostaci, brojevi tiketa se sortiraju kao brojevi; pravila analizatora CA2016 (token se prosljeđuje), te za `src` CA1305 (kultura pri formatiranju), CA1068 i CA1001 su upozorenja, a CI ih pretvara u greške | Ostala pravila analizatora (npr. CA1848 poruke loga preko `LoggerMessage`, CA1861 nizovi konstanti), magični stringovi, struktura foldera |
+
+**T-15, treći komad (baza znanja).** **Baza znanja (KnowledgeBaseController).** Sveden sa 552 na 131 liniju. Pravila su u `backend/src/TicketSystemTech.Api/KnowledgeBase/`: pretraga i odgovori (`KnowledgeBaseSearch`: traženje, pitanje osoblja, pitanje klijenta, izvještaj o sličnim tiketima, uključujući ograničenje na tikete vlastite poslovnice) i dokumentacija (`KnowledgeBaseDocuments`: otpremanje, spisak, brisanje). Token zahtjeva se sada prosljeđuje kao parametar, ne kao svojstvo kontrolera. `Outcome` može nositi i potpuno tijelo greške (`InvalidBody`), jer otpremanje vraća i spisak preskočenih fajlova.
 
 **T-15, drugi komad (nalozi).** **Nalozi (UsersController).** Sveden sa 693 na 144 linije. Pravila su u `backend/src/TicketSystemTech.Api/Users/`: čitanje (`UserQueries`: lista, stranica, jedan nalog, traženje klijenta po emailu), pravljenje i izmjena naloga (`UserAccountService`: novi zaposlenik i klijent, nova privremena lozinka, izmjena, uključivanje i isključivanje), pravo osobe na svoje podatke (`UserPrivacyService`: izvoz i anonimizacija) i lični podaci (`UserProfileService`: slika, telefon). Provjera podposlovnice je sada na jednom mjestu (`BranchRules`), a koriste je i tiketi i nalozi (prije su postojale dvije kopije). Dodato: `Outcome` zna za 401 i za "gotovo bez odgovora" (`Done`), a `ToResult` čuva deklarisani tip `IActionResult` pa se opis API-ja nije promijenio.
 

@@ -4,7 +4,7 @@ Ovaj dokument kaže **šta znači „prošlo“**, šta je u drugom krugu testir
 i čime, šta nije moguće dokazati na ovom računaru i šta je svjesno ostalo otvoreno. Cilj je da se pri sljedećem krugu ponovo
 provjerava **samo razlika**, a ne cijeli skup.
 
-Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 662 backend i 155 frontend testova.
+Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 664 backend i 155 frontend testova.
 
 ## 1. Statusi
 
@@ -157,3 +157,5 @@ T-41 je zatvoren: `docs/openapi.json` čuva `ApiContractTests`, frontend generi�
 T-15 (prvi komad): kontroler tiketa je sveden na 160 linija, a pravila su u servisima u `Api/Tickets/`; ponašanje je isto (ugovor API-ja i svi raniji testovi nepromijenjeni).
 
 T-15 (drugi komad): kontroler naloga je sveden na 144 linije, a pravila su u servisima u `Api/Users/`; ponašanje je isto.
+
+T-15 (treći komad): kontroler baze znanja je sveden na 131 liniju, a pravila su u servisima u `Api/KnowledgeBase/`; ponašanje je isto.
