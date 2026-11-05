@@ -1,7 +1,7 @@
 # Otvorene stavke: šta nije ispravljeno i šta je ispravljeno samo djelimično
 
 **Stanje:** poslije šestog kruga ispravki (2026-11-05). Detalji i dokazi su u `IZVJESTAJ_ISPRAVKI.md` (odjeljci 9.8 do 9.12).
-**Testovi:** 644 backend i 155 frontend testova prolaze, bez preskočenih. Format, ranjivi paketi, migracije u odnosu na model, lint, `tsc`, build i `npm audit` (visoke) su čisti.
+**Testovi:** 646 backend i 155 frontend testova prolaze, bez preskočenih. Format, ranjivi paketi, migracije u odnosu na model, lint, `tsc`, build i `npm audit` (visoke) su čisti.
 **Izvor:** analiza `ANALYSIS_1` (T-01 … T-64), ponovno testiranje commita `7af778a` (149 scenarija) i moje ponovno izvođenje scenarija na izoliranoj kopiji.
 
 ## 1. Sažetak
@@ -80,13 +80,15 @@ Pregled svih 80 nalaza po stanju (detalji u `IZVJESTAJ_ISPRAVKI.md`, odjeljak 9.
 
 | Stanje | Nalazi |
 |---|---|
-| Riješeno (ovaj krug) | ARC-04, 05, 06, 10, 11, 12, 15; DOM-02, 04, 06, 07, 08; PRV-01, 02; HOST-04; FE-01, 03, 05, 07, 08, 09, 10, 11; SEC-05, 08, 10; OPS-08, 14, 15 |
+| Riješeno (ovaj krug) | ARC-04, 05, 06, 10, 11, 12, 13, 15; DOM-02, 04, 06, 07, 08; PRV-01, 02; HOST-04; FE-01, 03, 05, 07, 08, 09, 10, 11; SEC-05, 08, 10; OPS-08, 14, 15 |
 | Riješeno (ranije, provjereno) | ARC-01, 02, 03; DOM-01, 03, 05; DB-01; FE-02, 04, 06; HOST-01, 02, 03, 05, 06, 08, 09, 11; OPS-01, 02, 03, 04, 09, 10, 13, 16; SEC-07, 09 |
 | Djelimično | SEC-03 (CSP samo u primjerima za server) |
 | Prihvaćeno uz obrazloženje | ARC-09, OPS-07, ARC-14, HOST-12, OPS-17, SEC-01, SEC-02, SEC-06 |
-| Otvoreno | ARC-07, 08, 13; OPS-05, 06, 11 (opterećenje i memorija, mjereno samo djelimično, vidi ispod); HOST-07, OPS-12 (SQL Server 2017 ili 2019, odluka vlasnika); HOST-10; SEC-04 (odluka vlasnika) |
+| Otvoreno | ARC-07, 08; OPS-05, 06, 11 (opterećenje i memorija, mjereno samo djelimično, vidi ispod); HOST-07, OPS-12 (SQL Server 2017 ili 2019, odluka vlasnika); HOST-10; SEC-04 (odluka vlasnika) |
 
 ARC-06, HOST-04 i OPS-08 su u prošlom krugu bili označeni kao djelimični jer reset lozinke i obavijest o zaključavanju idu kroz red u memoriji. Poslije čitanja koda: red samo upisuje poruku u outbox u bazi (`IEmailSender` je `OutboxEmailSender`), a dispatcher je šalje s ponavljanjem. Gubi se jedino ono što u trenutku restarta čeka na taj upis, u milisekundama, a reset lozinke korisnik može ponovo zatražiti. Komentar na klasi je ispravljen da to kaže.
+
+ARC-13: reindeks staje poslije pet neuspjeha zaredom, ali prije toga davaocu pošalje jedan običan upit; ako odgovori, pet odbijenih tiketa se bilježi kao neuspjeh, a reindeks ide dalje, a ako ne odgovori, staje kao i prije (testovi `ReindexFailureTests`, oba smjera mutacijski provjerena). Ograničenje: davalac koji odgovara na običan upit, a odbija većinu tiketa, prolazi cijelu listu uz jedan poziv po tiketu.
 
 **Mjerenje (šesti krug).** Na probnoj bazi s 20.000 sintetičkih tiketa (ne na kopiji prave baze) izmjeren je po jedan zahtjev: lista tiketa (prva stranica) 19 ms, brojači 27 ms, izvještaji sažetak 68 ms, vremenska serija 35 ms, po poslovnicama 54 ms i poređenje perioda 34 ms, a izvoz u Excel 2,6 do 3,5 s (1,5 MB; samo sastavljanje datoteke je oko 2 s, ostalo je čitanje). Jednom je izvoz trajao 27 s i nisam ga mogao ponoviti, pa ne znam šta ga je tada usporilo. Rang lista i najčešći problemi odgovorili su za 2 ms, što upućuje na to da probni podaci nisu imali ono što ti izvještaji broje (zadužene, teme), pa ta dva ne računam kao izmjerena. Ovim **nisu** pokriveni ARC-07 (spisak klijenata poslovnice u pregledu korisnika), ARC-08 i OPS-05 (indeks vektora), OPS-06 (xlsx u memoriji dok radi više korisnika) niti OPS-11: za njih i dalje nema mjerenja.
 
@@ -94,5 +96,5 @@ ARC-06, HOST-04 i OPS-08 su u prošlom krugu bili označeni kao djelimični jer 
 
 1. **Odluke vlasnika** iz odjeljka 6 i dvije nove: minimum SQL Servera (HOST-07) i ko smije resetovati klijentsku lozinku (SEC-04). Zaštita grane `main` je pet minuta posla na GitHubu.
 2. **Mjerenje prije optimizacije:** ARC-07, ARC-08, OPS-05, 06, 11 su pretpostavke o opterećenju; treba ih izmjeriti na pravoj bazi (21.712 tiketa) prije bilo kakve izmjene. Ono što je mjereno na sintetičkoj bazi (odjeljak 7) ne ukazuje na problem osim Excel izvoza od oko 3 s.
-3. **Srednji poslovi:** T-37 (izvještaji bez učitavanja cijelih tiketa; mjerenje pokazuje da to sada nije hitno), ostatak T-58 (preostala pravila analizatora, magični stringovi), ARC-13 (razlikovati grešku jednog tiketa od nedostupnog davaoca).
+3. **Srednji poslovi:** T-37 (izvještaji bez učitavanja cijelih tiketa; mjerenje pokazuje da to sada nije hitno), ostatak T-58 (preostala pravila analizatora, magični stringovi).
 4. **Veliki refaktori** (T-15, T-17, T-31, T-47, T-45) tek poslije toga, svaki kao zaseban zadatak, jer svaki mijenja način rada cijele aplikacije.

@@ -18,9 +18,14 @@ namespace TicketSystemTech.Api.BackgroundJobs;
 /// </summary>
 public sealed class KnowledgeBaseReindexService : BackgroundService, IKnowledgeBaseReindexJob
 {
-    /// <summary>If the embedding provider returns nothing this many times in a row it is almost certainly not
-    /// configured or out of quota; carrying on would just burn through the whole list reporting failures.</summary>
+    /// <summary>If the embedding provider returns nothing this many times in a row it may well be not configured or out of
+    /// quota, and carrying on would just burn through the whole list reporting failures. But five tickets it refuses one by
+    /// one (a text it will not take) look the same from here, so before giving up the provider is asked something harmless:
+    /// only if it does not answer that either is the run stopped.</summary>
     private const int ConsecutiveFailureLimit = 5;
+
+    /// <summary>What the provider is asked to check that it answers at all.</summary>
+    private const string ProviderCheckText = "connection check";
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<KnowledgeBaseReindexService> _logger;
@@ -150,6 +155,13 @@ public sealed class KnowledgeBaseReindexService : BackgroundService, IKnowledgeB
         return documentIds;
     }
 
+    private async Task<bool> ProviderAnswersAsync(CancellationToken ct)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var embedding = scope.ServiceProvider.GetRequiredService<IEmbeddingService>();
+        return await embedding.EmbedAsync(ProviderCheckText, EmbeddingPriority.Background, ct) is not null;
+    }
+
     private async Task RunAsync(CancellationToken ct)
     {
         var staleDocumentIds = await ForgetStaleVectorsAsync(ct);
@@ -196,6 +208,13 @@ public sealed class KnowledgeBaseReindexService : BackgroundService, IKnowledgeB
 
             if (consecutiveFailures >= ConsecutiveFailureLimit)
             {
+                if (await ProviderAnswersAsync(ct))
+                {
+                    _logger.LogWarning("Reindex: {Limit} tickets in a row were refused, but the provider answers a plain request; carrying on", ConsecutiveFailureLimit);
+                    consecutiveFailures = 0;
+                    continue;
+                }
+
                 Update(s => s with
                 {
                     State = ReindexState.Failed,

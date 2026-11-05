@@ -19,6 +19,10 @@ public sealed class FakeEmbeddingService : IEmbeddingService
     /// <summary>How long a call takes, to stand in for a provider that is slow.</summary>
     public TimeSpan Delay { get; set; } = TimeSpan.Zero;
 
+    /// <summary>When set, a text it returns true for gets no vector (a provider that refuses one particular item and is fine otherwise;
+    /// <c>_ =&gt; true</c> is a provider that is down).</summary>
+    public Func<string, bool>? Rejects { get; set; }
+
     private int _calls;
 
     /// <summary>How many embeddings were asked for.</summary>
@@ -28,7 +32,7 @@ public sealed class FakeEmbeddingService : IEmbeddingService
     {
         Interlocked.Increment(ref _calls);
         if (Delay > TimeSpan.Zero) await Task.Delay(Delay, ct);
-        return Enabled ? new[] { 1f, 0f, 0f } : null;
+        return Enabled && Rejects?.Invoke(text) != true ? new[] { 1f, 0f, 0f } : null;
     }
 }
 
