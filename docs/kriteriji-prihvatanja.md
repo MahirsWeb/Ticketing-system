@@ -4,7 +4,7 @@ Ovaj dokument kaže **šta znači „prošlo“**, šta je u drugom krugu testir
 i čime, šta nije moguće dokazati na ovom računaru i šta je svjesno ostalo otvoreno. Cilj je da se pri sljedećem krugu ponovo
 provjerava **samo razlika**, a ne cijeli skup.
 
-Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 718 backend i 418 frontend testova.
+Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 718 backend i 485 frontend testova.
 
 ## 1. Statusi
 
@@ -183,3 +183,5 @@ T-17 (četvrti dio) i T-42 (drugi dio): administratorski spiskovi, postavke obav
 T-17 (peti dio) i T-42 (treći dio): stranica korisnika dolazi iz zajedničkog sloja upita i razbijena je na dijelove u `pages/users/` (56 linija, bila 471); 53 testa koja ranije nisu postojala, uključujući 12 za greške koje su ranije prolazile tiho (poruka "User not found." za svakog sljedećeg korisnika, svaka greška pisana kao nepostojeći korisnik, spor odgovor za prethodnog korisnika). Ostale velike stranice ostaju.
 
 T-17 (šesti dio) i T-42 (četvrti dio): tiket u ime klijenta razbijen je na model, prikaz i traženje klijenta u `pages/tickets/` (stranica 60 linija, bila 430), a oba obrasca za tiket dijele konstante, rok, polja za izbor i učitavanje spiskova (`OpenTicketForm` 223 → 137 linija); 43 testa koja ranije nisu postojala, uključujući greške koje su ranije prolazile tiho (osoblje, e-mail i spiskovi koji se ne učitaju, naslov s razmacima). Ostale velike stranice ostaju.
+
+T-42 (peti dio): spisak tiketa razbijen je na model filtera u adresi, čiste funkcije, filtere, tabelu i stranice u `pages/tickets/` (stranica 75 linija, bila 379); 67 testova koja ranije nisu postojala, uključujući greške koje su ranije prolazile tiho ili rušile stranicu (datum u adresi koji nije datum, stranica poslije posljednje, "mine" za one koji ga ne mogu skinuti, filter zaposlenog na kartici "New", filteri koji se ne učitaju). Ostale velike stranice ostaju.
