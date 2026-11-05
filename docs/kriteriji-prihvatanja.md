@@ -4,7 +4,7 @@ Ovaj dokument kaže **šta znači „prošlo“**, šta je u drugom krugu testir
 i čime, šta nije moguće dokazati na ovom računaru i šta je svjesno ostalo otvoreno. Cilj je da se pri sljedećem krugu ponovo
 provjerava **samo razlika**, a ne cijeli skup.
 
-Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 718 backend i 322 frontend testova.
+Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 718 backend i 375 frontend testova.
 
 ## 1. Statusi
 
@@ -179,3 +179,5 @@ T-17 (drugi dio): spisak tiketa, detalj tiketa i brojke u meniju dolaze iz zajed
 T-17 (treći dio) i T-42 (prvi dio): dashboard dolazi iz zajedničkog sloja upita (`src/api/reportQueries.ts`) i razbijen je na dijelove u `pages/dashboard/` (stranica 101 linija, bila 631); 52 testa koji ranije nisu postojali. Ostale velike stranice (`SettingsPage` i dr.) ostaju.
 
 T-17 (četvrti dio) i T-42 (drugi dio): administratorski spiskovi, postavke obavijesti i dokumentacija dolaze iz zajedničkog sloja upita, a `SettingsPage` je razbijen na dijelove u `pages/settings/` (76 linija, bila 1.057); 81 test koji ranije nisu postojali, uključujući 16 za greške koje su ranije prolazile tiho. Ostale velike stranice ostaju.
+
+T-17 (peti dio) i T-42 (treći dio): stranica korisnika dolazi iz zajedničkog sloja upita i razbijena je na dijelove u `pages/users/` (56 linija, bila 471); 53 testa koja ranije nisu postojala, uključujući 12 za greške koje su ranije prolazile tiho (poruka "User not found." za svakog sljedećeg korisnika, svaka greška pisana kao nepostojeći korisnik, spor odgovor za prethodnog korisnika). Ostale velike stranice ostaju.
