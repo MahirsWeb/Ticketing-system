@@ -1,13 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
-import { useDepartments, useHelpTopics, useSlaPlans, useSubBranches, useTicketCategories } from '../../api/lookupQueries';
+import { useEffect, useState } from 'react';
+import { useSubBranches } from '../../api/lookupQueries';
 import { usersApi } from '../../api/users';
 import { ticketsApi } from '../../api/tickets';
 import type { TicketDetailDto, TicketPriority, TicketSource } from '../../types';
-import { Button, Card, ErrorText, Label, Select, Field, Input } from '../../components/ui';
+import { Button, Card, ErrorText, Field, Label, Select } from '../../components/ui';
 import { useAuthStore } from '../../store/authStore';
-
-const SOURCES: TicketSource[] = ['Phone', 'Email', 'TicketSystem', 'Other'];
-const PRIORITIES: TicketPriority[] = ['Emergency', 'High', 'Medium', 'Low'];
+import { DueDateField, SelectField } from './ticketFields';
+import { PRIORITIES, SOURCES, dueDateToUtc } from './ticketOptions';
+import { useTicketLists } from './useTicketLists';
 
 export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; onOpened: (t: TicketDetailDto) => void }) {
   const user = useAuthStore((s) => s.user);
@@ -29,34 +29,11 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // The lists are shared with the other screens (fetched once, not on every visit). The sub-branches are asked for per branch, so an answer for a
-  // branch that is no longer the chosen one is never shown: changing the branch quickly used to let the slower answer replace the list for the new one.
-  const { data: helpTopics = [] } = useHelpTopics();
-  const { data: departments = [] } = useDepartments();
-  const { data: slaPlans = [] } = useSlaPlans();
-  const { data: categories = [] } = useTicketCategories();
+  // The lists are shared with the other screens, and the first entry of each is chosen once (see useTicketLists). The sub-branches are asked for per
+  // branch, so an answer for a branch that is no longer the chosen one is never shown: changing the branch quickly used to let the slower answer
+  // replace the list for the new one.
+  const lists = useTicketLists({ isAdmin, departmentId, onTopic: setHelpTopicId, onSla: setSlaPlanId, onDepartment: setDepartmentId });
   const { data: subBranches = [] } = useSubBranches(departmentId);
-
-  // The first entry of each list is chosen for the person, once, when the list arrives: whatever they choose afterwards stays.
-  const defaulted = useRef({ topic: false, sla: false, department: false });
-  useEffect(() => {
-    if (!defaulted.current.topic && helpTopics[0]) {
-      defaulted.current.topic = true;
-      setHelpTopicId(helpTopics[0].id);
-    }
-  }, [helpTopics]);
-  useEffect(() => {
-    if (!defaulted.current.sla && slaPlans[0]) {
-      defaulted.current.sla = true;
-      setSlaPlanId(slaPlans[0].id);
-    }
-  }, [slaPlans]);
-  useEffect(() => {
-    if (!defaulted.current.department && isAdmin && departments[0]) {
-      defaulted.current.department = true;
-      if (!departmentId) setDepartmentId(departments[0].id);
-    }
-  }, [departments, isAdmin, departmentId]);
 
   useEffect(() => {
     setSubBranchId('');
@@ -100,7 +77,7 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
         subBranchId: subBranchId || undefined,
         slaPlanId,
         priority,
-        dueDateUtc: dueDate ? new Date(`${dueDate}T23:59:59`).toISOString() : null,
+        dueDateUtc: dueDateToUtc(dueDate),
         assignedToUserId,
         categoryId: categoryId || undefined,
       });
@@ -116,79 +93,20 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
     <Card className="p-5">
       <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-500">Open ticket</h2>
       <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
-        <Field>
-          <Label>Ticket source</Label>
-          <Select value={source} onChange={(e) => setSource(e.target.value as TicketSource)}>
-            {SOURCES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field>
-          <Label>Help topic</Label>
-          <Select value={helpTopicId} onChange={(e) => setHelpTopicId(e.target.value)}>
-            {helpTopics.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field>
-          <Label>Branch</Label>
-          <Select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
-            <option value="">Select a branch…</option>
-            {departments.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        <SelectField label="Ticket source" value={source} onChange={(v) => setSource(v as TicketSource)} options={SOURCES.map((s) => ({ value: s, label: s }))} />
+        <SelectField label="Help topic" value={helpTopicId} onChange={setHelpTopicId} options={lists.helpTopics.map((t) => ({ value: t.id, label: t.name }))} />
+        <SelectField label="Branch" value={departmentId} onChange={setDepartmentId} placeholder="Select a branch…" options={lists.departments.map((d) => ({ value: d.id, label: d.name }))} />
         {subBranches.length > 0 && (
-          <Field>
-            <Label>Sub-branch</Label>
-            <Select value={subBranchId} onChange={(e) => setSubBranchId(e.target.value)}>
-              <option value="">Select a sub-branch…</option>
-              {subBranches.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
+          <SelectField label="Sub-branch" value={subBranchId} onChange={setSubBranchId} placeholder="Select a sub-branch…" options={subBranches.map((s) => ({ value: s.id, label: s.name }))} />
         )}
-        <Field>
-          <Label>SLA plan</Label>
-          <Select value={slaPlanId} onChange={(e) => setSlaPlanId(e.target.value)}>
-            {slaPlans.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} ({s.resolutionTimeHours}h resolution)
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field>
-          <Label>Priority</Label>
-          <Select value={priority} onChange={(e) => setPriority(e.target.value as TicketPriority)}>
-            {PRIORITIES.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field>
-          <Label>Due date (optional)</Label>
-          <Input
-            type="date"
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
-          />
-          <p className="mt-1 text-xs text-slate-500">Leave empty to use the SLA plan&apos;s resolution time.</p>
-        </Field>
+        <SelectField
+          label="SLA plan"
+          value={slaPlanId}
+          onChange={setSlaPlanId}
+          options={lists.slaPlans.map((s) => ({ value: s.id, label: `${s.name} (${s.resolutionTimeHours}h resolution)` }))}
+        />
+        <SelectField label="Priority" value={priority} onChange={(v) => setPriority(v as TicketPriority)} options={PRIORITIES.map((p) => ({ value: p, label: p }))} />
+        <DueDateField value={dueDate} onChange={setDueDate} />
         <Field>
           <Label>Assign to</Label>
           <Select value={assignedToUserId} onChange={(e) => setAssignedToUserId(e.target.value)}>
@@ -200,17 +118,13 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
             ))}
           </Select>
         </Field>
-        <Field>
-          <Label>Category (internal, staff only)</Label>
-          <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-            <option value="">No category</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        <SelectField
+          label="Category (internal, staff only)"
+          value={categoryId}
+          onChange={setCategoryId}
+          placeholder="No category"
+          options={lists.categories.map((c) => ({ value: c.id, label: c.name }))}
+        />
         <div className="col-span-2">
           <ErrorText>{error}</ErrorText>
           <Button type="submit" disabled={loading}>

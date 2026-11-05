@@ -4,7 +4,7 @@ Ovaj dokument kaže **šta znači „prošlo“**, šta je u drugom krugu testir
 i čime, šta nije moguće dokazati na ovom računaru i šta je svjesno ostalo otvoreno. Cilj je da se pri sljedećem krugu ponovo
 provjerava **samo razlika**, a ne cijeli skup.
 
-Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 718 backend i 375 frontend testova.
+Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 718 backend i 418 frontend testova.
 
 ## 1. Statusi
 
@@ -181,3 +181,5 @@ T-17 (treći dio) i T-42 (prvi dio): dashboard dolazi iz zajedničkog sloja upit
 T-17 (četvrti dio) i T-42 (drugi dio): administratorski spiskovi, postavke obavijesti i dokumentacija dolaze iz zajedničkog sloja upita, a `SettingsPage` je razbijen na dijelove u `pages/settings/` (76 linija, bila 1.057); 81 test koji ranije nisu postojali, uključujući 16 za greške koje su ranije prolazile tiho. Ostale velike stranice ostaju.
 
 T-17 (peti dio) i T-42 (treći dio): stranica korisnika dolazi iz zajedničkog sloja upita i razbijena je na dijelove u `pages/users/` (56 linija, bila 471); 53 testa koja ranije nisu postojala, uključujući 12 za greške koje su ranije prolazile tiho (poruka "User not found." za svakog sljedećeg korisnika, svaka greška pisana kao nepostojeći korisnik, spor odgovor za prethodnog korisnika). Ostale velike stranice ostaju.
+
+T-17 (šesti dio) i T-42 (četvrti dio): tiket u ime klijenta razbijen je na model, prikaz i traženje klijenta u `pages/tickets/` (stranica 60 linija, bila 430), a oba obrasca za tiket dijele konstante, rok, polja za izbor i učitavanje spiskova (`OpenTicketForm` 223 → 137 linija); 43 testa koja ranije nisu postojala, uključujući greške koje su ranije prolazile tiho (osoblje, e-mail i spiskovi koji se ne učitaju, naslov s razmacima). Ostale velike stranice ostaju.
