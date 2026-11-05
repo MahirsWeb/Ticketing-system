@@ -2,10 +2,10 @@ import { Link } from 'react-router-dom';
 import { useTicketList } from '../../api/ticketQueries';
 import { Button, Card, ErrorText, Spinner } from '../../components/ui';
 import { useAuthStore } from '../../store/authStore';
-import { PAGE_SIZE, rangeLabel } from './ticketListAddress';
+import { PAGE_SIZE, rangeLabel, TABS } from './ticketListAddress';
 import { TicketFilterBar } from './TicketFilterBar';
-import { TicketPager } from './TicketPager';
-import { TicketTabs } from './TicketTabs';
+import { Pager } from '../../components/Pager';
+import { Tabs } from '../../components/Tabs';
 import { TicketsTable } from './TicketsTable';
 import { useTicketListFilters } from './useTicketListFilters';
 
@@ -43,7 +43,7 @@ export default function TicketsListPage() {
         )}
       </div>
 
-      <TicketTabs active={filters.activeTab} onSelect={filters.selectTab} />
+      <Tabs label="Ticket groups" tabs={TABS} active={filters.activeTab} onSelect={filters.selectTab} className="mb-4" />
       <TicketFilterBar filters={filters} isAdmin={isAdmin} isEmployee={isEmployee} />
 
       {isError && <ErrorText>The tickets could not be loaded. Try again in a moment.</ErrorText>}
@@ -69,7 +69,7 @@ export default function TicketsListPage() {
         )}
       </Card>
 
-      <TicketPager page={filters.page} totalPages={totalPages} onPage={(p) => filters.update({ page: String(p) })} />
+      <Pager page={filters.page} totalPages={totalPages} onPage={(p) => filters.update({ page: String(p) })} />
     </div>
   );
 }

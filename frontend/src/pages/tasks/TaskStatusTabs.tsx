@@ -1,3 +1,4 @@
+import { Tabs } from '../../components/Tabs';
 import type { WorkTaskStatus } from '../../types';
 
 const STATUS_TABS: { key: WorkTaskStatus; label: string }[] = [
@@ -16,21 +17,5 @@ export function TaskStatusTabs({
   counts: Record<WorkTaskStatus, number> | null;
   onSelect: (status: WorkTaskStatus) => void;
 }) {
-  return (
-    <div className="flex gap-2 border-b border-slate-200" role="tablist" aria-label="Task status">
-      {STATUS_TABS.map((t) => (
-        <button
-          key={t.key}
-          type="button"
-          role="tab"
-          aria-selected={active === t.key}
-          onClick={() => onSelect(t.key)}
-          className={`px-3 py-2 text-sm font-medium ${active === t.key ? 'border-b-2 border-blue-700 text-blue-700' : 'text-slate-500'}`}
-        >
-          {t.label}
-          {counts && ` (${counts[t.key]})`}
-        </button>
-      ))}
-    </div>
-  );
+  return <Tabs label="Task status" tabs={STATUS_TABS.map((t) => ({ key: t.key, label: counts ? `${t.label} (${counts[t.key]})` : t.label }))} active={active} onSelect={onSelect} />;
 }

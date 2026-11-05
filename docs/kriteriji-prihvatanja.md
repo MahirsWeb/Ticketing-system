@@ -4,7 +4,7 @@ Ovaj dokument kaže **šta znači „prošlo“**, šta je u drugom krugu testir
 i čime, šta nije moguće dokazati na ovom računaru i šta je svjesno ostalo otvoreno. Cilj je da se pri sljedećem krugu ponovo
 provjerava **samo razlika**, a ne cijeli skup.
 
-Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 718 backend i 577 frontend testova.
+Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 718 backend i 640 frontend testova.
 
 ## 1. Statusi
 
@@ -187,3 +187,5 @@ T-17 (šesti dio) i T-42 (četvrti dio): tiket u ime klijenta razbijen je na mod
 T-42 (peti dio): spisak tiketa razbijen je na model filtera u adresi, čiste funkcije, filtere, tabelu i stranice u `pages/tickets/` (stranica 75 linija, bila 379); 67 testova koja ranije nisu postojala, uključujući greške koje su ranije prolazile tiho ili rušile stranicu (datum u adresi koji nije datum, stranica poslije posljednje, "mine" za one koji ga ne mogu skinuti, filter zaposlenog na kartici "New", filteri koji se ne učitaju). Ostale velike stranice ostaju.
 
 T-17 (sedmi dio) i T-42 (šesti dio): zadaci su na zajedničkom sloju upita i razbijeni na dijelove u `pages/tasks/` (stranica 71 linija, bila 345); 92 testa koja ranije nisu postojala, na nivou HTTP-a protiv lažnog servera, uključujući greške koje su ranije prolazile tiho ili miješale odgovore (spisak koji se ne učita, kasni odgovor za prethodni zadatak ispod drugog, red koji nestaje kad se pokrene sat, neuspjelo prebacivanje koje briše izbor). Ostale velike stranice ostaju.
+
+T-17 (osmi dio) i T-42 (sedmi dio): spisak i pravljenje naloga su na zajedničkom sloju upita i razbijeni na dijelove u `pages/users/` (stranica 26 linija, bila 329); 63 testa koja ranije nisu postojala, uključujući greške koje su ranije prolazile tiho ili miješale prikaz (stari redovi pod novom karticom, poruka o grešci uz stare redove, imena od razmaka, spiskovi koji se ne učitaju). Zajednički `Pager` i `Tabs`. Ostale velike stranice ostaju.

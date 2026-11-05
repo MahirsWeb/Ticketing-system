@@ -1,5 +1,4 @@
-import { vi } from 'vitest';
-import { apiClient } from '../api/client';
+import { installFakeHttp, refuse } from './fakeHttp';
 
 /**
  * A stand-in for the part of the server that the tasks page talks to, kept in memory and answering at the level of HTTP (what `apiClient`
@@ -101,34 +100,14 @@ const asListItem = (t: FakeTask) => {
 };
 const asDetail = (t: FakeTask) => ({ ...t, status: statusOf(t), startedAtUtc: firstStart(t), endedAtUtc: lastEnd(t) });
 
-export interface RequestRecord {
-  method: string;
-  url: string;
-  body?: unknown;
-  params?: Record<string, unknown>;
-}
-
 export function installTasksBackend(state: TasksState = newTasksState()) {
-  const requests: RequestRecord[] = [];
-  const failures: { method: string; pattern: RegExp; status: number; data: Record<string, unknown>; times: number }[] = [];
-  const holds: { method: string; pattern: RegExp; release: () => void; gate: Promise<void> }[] = [];
   let next = 100;
   let tick = 0;
 
-  const refuse = (status: number, data: Record<string, unknown>): never => {
-    throw Object.assign(new Error(`The server said ${status}`), { response: { status, data } });
-  };
   const find = (id: string) => state.tasks.find((t) => t.id === id) ?? refuse(404, { message: 'Task not found.' });
   const now = () => new Date(2026, 5, 20, 10, 0, tick++).toISOString();
 
-  function handle(method: string, url: string, body: any, config: any): unknown {
-    const params = config?.params;
-    const failure = failures.find((f) => f.method === method && f.pattern.test(url) && f.times !== 0);
-    if (failure) {
-      if (failure.times > 0) failure.times--;
-      refuse(failure.status, failure.data);
-    }
-
+  function handle(method: string, url: string, body: any, params: any): unknown {
     if (method === 'GET' && url === '/api/departments') return state.departments.filter((d) => d.isActive);
     if (method === 'GET' && url === '/api/users') {
       return state.people.filter((p) => (!params?.role || p.role === params.role) && (!params?.departmentId || p.departmentId === params.departmentId));
@@ -184,43 +163,5 @@ export function installTasksBackend(state: TasksState = newTasksState()) {
     return refuse(404, { message: `The stand-in server has no ${method} ${url}.` });
   }
 
-  /** What the server said, as axios hands it over: a copy, so that nothing the page does can change what the server keeps. */
-  async function answer(method: string, url: string, body: unknown, config: unknown) {
-    requests.push({ method, url, body, params: (config as { params?: Record<string, unknown> } | undefined)?.params });
-    // The server works out its answer when the request arrives, and a held answer is delivered late, as it was: a slow answer is an old one.
-    const hold = holds.find((h) => h.method === method && h.pattern.test(url));
-    if (hold) holds.splice(holds.indexOf(hold), 1);
-    let data: unknown;
-    let refusal: unknown = null;
-    try {
-      data = handle(method, url, body, config);
-    } catch (error) {
-      refusal = error;
-    }
-    if (hold) await hold.gate;
-    if (refusal) throw refusal;
-    return { data: data === undefined || data === null ? data : JSON.parse(JSON.stringify(data)) };
-  }
-
-  vi.mocked(apiClient.get).mockReset().mockImplementation(((url: string, config?: unknown) => answer('GET', url, undefined, config)) as never);
-  vi.mocked(apiClient.post).mockReset().mockImplementation(((url: string, body?: unknown, config?: unknown) => answer('POST', url, body, config)) as never);
-  vi.mocked(apiClient.patch).mockReset().mockImplementation(((url: string, body?: unknown, config?: unknown) => answer('PATCH', url, body, config)) as never);
-
-  return {
-    state,
-    requests,
-    /** Requests of one kind, e.g. `sent('GET', /work-tasks$/)`. */
-    sent: (method: string, pattern: RegExp) => requests.filter((r) => r.method === method && pattern.test(r.url)),
-    /** The next requests that match are answered with a refusal (`times` of them; every one when negative). */
-    refuse: (method: string, pattern: RegExp, status = 400, data: Record<string, unknown> = {}, times = 1) => {
-      failures.push({ method, pattern, status, data, times });
-    },
-    /** The next request that matches is not answered until `release()` is called; the answer is what the server said when the request arrived. */
-    hold: (method: string, pattern: RegExp) => {
-      let release!: () => void;
-      const gate = new Promise<void>((resolve) => (release = resolve));
-      holds.push({ method, pattern, release, gate });
-      return { release };
-    },
-  };
+  return { state, ...installFakeHttp(handle) };
 }

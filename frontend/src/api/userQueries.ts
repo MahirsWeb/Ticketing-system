@@ -1,14 +1,27 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { ticketsApi } from './tickets';
 import { usersApi } from './users';
+import { userKeys } from './userKeys';
 import type { UserListItemDto } from '../types';
 
-export const userKeys = {
-  all: ['users'] as const,
-  employees: (departmentId: string | null) => ['users', 'employees', departmentId] as const,
-  detail: (id: string) => ['users', 'detail', id] as const,
-  tickets: (role: string, id: string) => ['users', 'tickets', role, id] as const,
-};
+export { userKeys };
+
+export type UserPageParams = Parameters<typeof usersApi.listPaged>[0];
+
+/**
+ * One page of the list of accounts (clients or staff, for a search). Every page of every list is an entry of its own and is forgotten when
+ * it is left (gcTime 0), so the answer to an earlier choice is never shown as the answer to the current one, and a request that has been
+ * overtaken is cancelled. While the page for a new choice is on its way, `data` is still the one before it, so that the totals in the tabs
+ * do not flash: `isPlaceholderData` says so, and what is shown for a page must not come from it.
+ */
+export function useUserPage(params: UserPageParams) {
+  return useQuery({
+    queryKey: userKeys.page(params),
+    queryFn: ({ signal }) => usersApi.listPaged(params, signal),
+    gcTime: 0,
+    placeholderData: keepPreviousData,
+  });
+}
 
 /**
  * The staff, for the screens that let somebody be picked (the "assigned to" filter of the ticket list, the people of the dashboard).

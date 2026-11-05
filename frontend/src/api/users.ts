@@ -1,24 +1,36 @@
 import { apiClient } from './client';
+import { queryClient } from './queryClient';
+import { userKeys } from './userKeys';
 import type { ClientLookupResult, CreatedUserResponse, UserListItemDto, UserPageDto, UserRole } from '../types';
+
+/** A new account changes the lists on screen (and the totals in their tabs), so they are asked again. */
+function accountMade<T>(request: Promise<T>): Promise<T> {
+  return request.then((result) => {
+    void queryClient.invalidateQueries({ queryKey: userKeys.all });
+    return result;
+  });
+}
 
 export const usersApi = {
   lookupByEmail: (email: string) =>
     apiClient.get<ClientLookupResult>('/api/users/lookup-by-email', { params: { email } }).then((r) => r.data),
 
   createEmployee: (firstName: string, lastName: string, email: string, role: UserRole, departmentId?: string, subBranchId?: string) =>
-    apiClient
-      .post<CreatedUserResponse>('/api/users/employees', {
-        firstName,
-        lastName,
-        email,
-        role,
-        departmentId: departmentId || null,
-        subBranchId: subBranchId || null,
-      })
-      .then((r) => r.data),
+    accountMade(
+      apiClient
+        .post<CreatedUserResponse>('/api/users/employees', {
+          firstName,
+          lastName,
+          email,
+          role,
+          departmentId: departmentId || null,
+          subBranchId: subBranchId || null,
+        })
+        .then((r) => r.data)
+    ),
 
   createClient: (firstName: string, lastName: string, email: string, companyId: string) =>
-    apiClient.post<CreatedUserResponse>('/api/users/clients', { firstName, lastName, email, companyId }).then((r) => r.data),
+    accountMade(apiClient.post<CreatedUserResponse>('/api/users/clients', { firstName, lastName, email, companyId }).then((r) => r.data)),
 
   regenerateTempPassword: (userId: string) =>
     apiClient.post<CreatedUserResponse>(`/api/users/${userId}/regenerate-temp-password`).then((r) => r.data),
