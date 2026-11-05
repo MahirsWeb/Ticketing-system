@@ -17,6 +17,9 @@ public enum Failure
     /// <summary>400 with <c>{ message }</c>: the request is not acceptable as it is.</summary>
     Invalid,
 
+    /// <summary>Any other status with a body of its own (and perhaps headers): a 429 with Retry-After, a 401 that carries a code.</summary>
+    Status,
+
     /// <summary>409 with <c>{ message, code }</c> (the shape every 409 of the API has): it clashes with the state of things.</summary>
     Conflict
 }
@@ -27,12 +30,14 @@ public enum Failure
 /// </summary>
 public sealed record Outcome<T>
 {
-    private Outcome(T? value, Failure? failure, string? message, object? body = null)
+    private Outcome(T? value, Failure? failure, string? message, object? body = null, int? statusCode = null, IReadOnlyDictionary<string, string>? headers = null)
     {
         Value = value;
         Failure = failure;
         Message = message;
         Body = body;
+        StatusCode = statusCode;
+        Headers = headers;
     }
 
     public T? Value { get; }
@@ -43,6 +48,12 @@ public sealed record Outcome<T>
 
     /// <summary>The whole answer body, for the rare 400 that carries more than a message.</summary>
     public object? Body { get; }
+
+    /// <summary>The status of a <see cref="Services.Failure.Status"/> failure.</summary>
+    public int? StatusCode { get; }
+
+    /// <summary>Headers to set on the answer of a <see cref="Services.Failure.Status"/> failure.</summary>
+    public IReadOnlyDictionary<string, string>? Headers { get; }
 
     public bool Succeeded => Failure is null;
 
@@ -58,6 +69,9 @@ public sealed record Outcome<T>
 
     public static Outcome<T> InvalidBody(object body) => new(default, Services.Failure.Invalid, null, body);
 
+    public static Outcome<T> Status(int statusCode, object body, IReadOnlyDictionary<string, string>? headers = null) =>
+        new(default, Services.Failure.Status, null, body, statusCode, headers);
+
     public static Outcome<T> Conflict(string message) => new(default, Services.Failure.Conflict, message);
 }
 
@@ -69,6 +83,13 @@ public readonly record struct Done
 
 public static class OutcomeExtensions
 {
+    private static ObjectResult StatusWith(this ControllerBase controller, int statusCode, object body, IReadOnlyDictionary<string, string>? headers)
+    {
+        if (headers is not null)
+            foreach (var (name, value) in headers) controller.Response.Headers[name] = value;
+        return new ObjectResult(body) { StatusCode = statusCode };
+    }
+
     /// <summary>Success becomes 200 with the value; each failure becomes the answer the API has always given for it.</summary>
     public static ActionResult<T> ToActionResult<T>(this ControllerBase controller, Outcome<T> outcome) => outcome.Failure switch
     {
@@ -76,6 +97,7 @@ public static class OutcomeExtensions
         Failure.NotFound => outcome.Message is null ? controller.NotFound() : controller.NotFound(new { message = outcome.Message }),
         Failure.Forbidden => controller.Forbid(),
         Failure.Unauthorized => controller.Unauthorized(),
+        Failure.Status => controller.StatusWith(outcome.StatusCode!.Value, outcome.Body!, outcome.Headers),
         Failure.Invalid => controller.BadRequest(outcome.Body ?? new { message = outcome.Message }),
         Failure.Conflict => controller.Conflict(new { message = outcome.Message, code = "CONFLICT" }),
         _ => throw new InvalidOperationException($"Unknown failure {outcome.Failure}")
@@ -92,6 +114,7 @@ public static class OutcomeExtensions
         Failure.NotFound => outcome.Message is null ? controller.NotFound() : controller.NotFound(new { message = outcome.Message }),
         Failure.Forbidden => controller.Forbid(),
         Failure.Unauthorized => controller.Unauthorized(),
+        Failure.Status => controller.StatusWith(outcome.StatusCode!.Value, outcome.Body!, outcome.Headers),
         Failure.Invalid => controller.BadRequest(outcome.Body ?? new { message = outcome.Message }),
         Failure.Conflict => controller.Conflict(new { message = outcome.Message, code = "CONFLICT" }),
         _ => throw new InvalidOperationException($"Unknown failure {outcome.Failure}")

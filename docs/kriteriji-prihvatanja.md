@@ -4,7 +4,7 @@ Ovaj dokument kaže **šta znači „prošlo“**, šta je u drugom krugu testir
 i čime, šta nije moguće dokazati na ovom računaru i šta je svjesno ostalo otvoreno. Cilj je da se pri sljedećem krugu ponovo
 provjerava **samo razlika**, a ne cijeli skup.
 
-Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 683 backend i 155 frontend testova.
+Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 692 backend i 155 frontend testova.
 
 ## 1. Statusi
 
@@ -165,3 +165,5 @@ T-15 (četvrti komad): kontroler šifarnika je sveden na 179 linija, a pravila s
 T-15 (peti komad): kontroler zadataka je sveden na 96 linija, a pravila su u servisima u `Api/WorkTasks/`; ponašanje je isto.
 
 T-15 (šesti komad): kontroler izvještaja je sveden na 75 linija, a računica je u `Api/Reports/ReportService.cs` uz 11 novih testova izvještaja; ponašanje je isto.
+
+T-15 (sedmi komad): kontroler prijave je sveden na 38 linija, a pravila su u `Api/Auth/AuthService.cs` uz 9 novih testova pravila prijave i lozinki; ponašanje je isto.
