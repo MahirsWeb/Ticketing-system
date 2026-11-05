@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TicketSystemTech.Api.Contracts;
+using TicketSystemTech.Api.Notifications;
 using TicketSystemTech.Api.Emails;
 using TicketSystemTech.Api.Services;
 using TicketSystemTech.Application.Common;
@@ -27,20 +28,18 @@ public sealed class TicketAssigneeService : ITicketAssigneeService
 {
     private readonly AppDbContext _db;
     private readonly ICurrentUserService _currentUser;
-    private readonly IEmailSender _emailSender;
-    private readonly INotificationPublisher _notificationPublisher;
+    private readonly INotifier _notifier;
     private readonly ITicketQueries _queries;
     private readonly TimeProvider _time;
     private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
 
     public TicketAssigneeService(
-        AppDbContext db, ICurrentUserService currentUser, IEmailSender emailSender, INotificationPublisher notificationPublisher,
+        AppDbContext db, ICurrentUserService currentUser, INotifier notifier,
         ITicketQueries queries, TimeProvider time)
     {
         _db = db;
         _currentUser = currentUser;
-        _emailSender = emailSender;
-        _notificationPublisher = notificationPublisher;
+        _notifier = notifier;
         _queries = queries;
         _time = time;
     }
@@ -74,7 +73,8 @@ public sealed class TicketAssigneeService : ITicketAssigneeService
             BodyHtml = $"<p>{FullName(user)} added as an assignee by {FullName(addedBy)}.</p>"
         });
 
-        _db.Notifications.Add(new Notification { UserId = user.Id, Type = NotificationType.TicketAssigned, Message = $"Ticket #{ticket.TicketNumber} assigned to you", TicketId = ticket.Id });
+        var added = new TicketAssignedEvent(ticket, user);
+        _db.Notifications.AddRange(_notifier.InApp(added));
         _db.Audit(_currentUser.UserId, "TicketAssigneeAdded", nameof(Ticket), ticket.Id, $"Added {user.Id}");
         try
         {
@@ -92,8 +92,7 @@ public sealed class TicketAssigneeService : ITicketAssigneeService
             throw;
         }
 
-        await _emailSender.SendAsync(user.Email!, $"Ticket #{ticket.TicketNumber} assigned to you", EmailTemplates.TicketAssigned(user.FirstName, ticket.TicketNumber, ticket.Title));
-        await _notificationPublisher.PushToUserAsync(user.Id, "ticketAssigned", new { ticket.Id, ticket.TicketNumber, ticket.Title });
+        await _notifier.DeliverAsync(added);
 
         return Outcome<TicketDetailDto>.Ok(await _queries.BuildDetailAsync(id));
     }

@@ -1,7 +1,7 @@
 # Otvorene stavke: šta nije ispravljeno i šta je ispravljeno samo djelimično
 
 **Stanje:** poslije šestog kruga ispravki (2026-11-05). Detalji i dokazi su u `IZVJESTAJ_ISPRAVKI.md` (odjeljci 9.8 do 9.12).
-**Testovi:** 697 backend i 164 frontend testova prolaze, bez preskočenih. Format, ranjivi paketi, migracije u odnosu na model, lint, `tsc`, build i `npm audit` (visoke) su čisti.
+**Testovi:** 718 backend i 164 frontend testova prolaze, bez preskočenih. Format, ranjivi paketi, migracije u odnosu na model, lint, `tsc`, build i `npm audit` (visoke) su čisti.
 **Izvor:** analiza `ANALYSIS_1` (T-01 … T-64), ponovno testiranje commita `7af778a` (149 scenarija) i moje ponovno izvođenje scenarija na izoliranoj kopiji.
 
 ## 1. Sažetak
@@ -9,13 +9,13 @@
 | Stavke analize (64) | Broj |
 |---|---|
 | Riješeno | **44** |
-| Djelimično | **12** |
-| Nije rađeno | **7** |
+| Djelimično | **13** |
+| Nije rađeno | **6** |
 | Isključeno odlukom vlasnika (MFA) | **1** |
 
 U četvrtom krugu su svi scenariji iz paketa testera ponovo izvedeni (uživo, u pregledniku ili kodom i testom), a nađene greške ispravljene: brisanje poslovnice sa osobljem, `Pii:HashKey` koji se tiho promijeni, nepokriven test za prilog na tuđoj poruci, trostruko pravilo dodjele, tastatura u meniju i tabeli zadataka, zastarjeli i nekorišteni paketi (uključujući xunit), skripta za backup s upozorenjem na limit Expressa. Ispod je **samo ono što je ostalo**.
 
-## 2. Nije ispravljeno (7 stavki)
+## 2. Nije ispravljeno (6 stavki)
 
 | Stavka | Šta je ostalo | Zašto | Šta treba |
 |---|---|---|---|
@@ -23,17 +23,17 @@ U četvrtom krugu su svi scenariji iz paketa testera ponovo izvedeni (uživo, u 
 | **T-31** (TS-31.1, 31.2) | Email → tiket nije atomski ni idempotentan; nema povezivanja odgovora u niti | Veća funkcionalnost | Posebna izrada |
 | **T-42** | Predimenzionirane stranice, duplirane forme | Nije rađeno | Refaktor |
 | **T-45** | i18n pokriva oko 5 % interfejsa | Veliki posao | Prevod i izmjena komponenti |
-| **T-47** (TS-47.1) | Kontroleri direktno zovu `IEmailSender`; šabloni su C# stringovi | Nije rađeno | Jedna tačka za notifikacije, šabloni kao resursi |
 | **T-48** (TS-48.1) | Nema verzija API-ja, webhookova ni mašinskih kredencijala | Nije rađeno | Samo ako ih kupci traže |
 | **T-51** (TS-51.1) | NPOI je pod OSMF licencom s naknadom; nema zabilježene odluke | Pravno pitanje | **Odluka vlasnika:** plaćanje, build iz izvora ili zamjena biblioteke |
 
 Isključeno odlukom vlasnika: **T-28 MFA**.
 
-## 3. Djelimično (12 stavki)
+## 3. Djelimično (13 stavki)
 
 | Stavka | Šta je urađeno | Šta je ostalo |
 |---|---|---|
 | **T-17** podaci na frontendu | Zajednički sloj upita (React Query) za šifarnike: 9 ekrana, jedan zajednički zahtjev umjesto 22 pojedinačna, osvježavanje pri izmjeni, brisanje pri odjavi; zaštite od starih odgovora u spiskovima | Podaci tiketa, izvještaja, zadataka i naloga i dalje se učitavaju ručno (TS-17.1) |
+| **T-47** notifikacije | Jedna tačka (`Notifier`) za red u listi, e-mail i push svih osam događaja nad tiketima i zadacima; riječi nepromijenjene; 21 novi test, od kojih 10 nad pravom bazom | Šabloni su C# stringovi, ne resursi; poruke o nalozima i sigurnosti (zaključavanje, potvrda, lozinka, pozivnica) i dva push događaja bez e-maila ostaju u svojim servisima (TS-47.1) |
 | **T-10** GDPR | Admin izvozi sve podatke o osobi i anonimizira osobu (API i dugmad na stranici osobe, isprobano u pregledniku); ime se uklanja i iz rečenica koje je aplikacija sama napisala (TS-10.3 zatvoren); audit log za osjetljive radnje | Period čuvanja i automatsko brisanje; imena koja su drugi ukucali u tekst svojih poruka; kopije u backupima |
 | **T-11** AI i lični podaci | Davalac je podešavanje; maskiraju se email, telefon i lozinke/tokeni uz riječ koja ih imenuje, prije slanja i već pri upisu u bazu znanja (TS-11.2 zatvoren; stari chunkovi se maskiraju pri pokretanju); ograničenja dužine | Ugovor o obradi podataka s davaocem (vlasnik). Imena i slobodan tekst odlaze vanjskom davaocu. U samim tiketima i porukama tekst stoji kako je kucan. Isključenje po kompaniji ne postoji |
 | **T-18** sesije | Opoziv tokena, hub se gasi pri odjavi | JWT je u `localStorage`, nema refresh tokena (TS-18.1) |
@@ -45,6 +45,8 @@ Isključeno odlukom vlasnika: **T-28 MFA**.
 | **T-52** licenca | `CONTRIBUTING.md`, `.mailmap` | **Odluka o licenci i vlasništvu (vlasnik, pravno)**; `THIRD-PARTY-NOTICES` |
 | **T-53** README | Prepisan prema stvarnom stanju | Nisam ga prošao od nule na čistom računaru |
 | **T-58** sitnice | Uklonjeni ostaci, brojevi tiketa se sortiraju kao brojevi; pravila analizatora CA2016 (token se prosljeđuje), te za `src` CA1305 (kultura pri formatiranju), CA1068 i CA1001 su upozorenja, a CI ih pretvara u greške | Ostala pravila analizatora (npr. CA1848 poruke loga preko `LoggerMessage`, CA1861 nizovi konstanti), magični stringovi, struktura foldera |
+
+**T-47, prvi dio (jedna tačka za notifikacije).** Osam događaja u šest klasa (podnošenje tiketa, otvaranje, dodavanje osobe na tiket, premještaj u drugu poslovnicu, zatvaranje, odgovor, zadatak, zakašnjenje) pisalo je svako za sebe tri stvari: red u listi obavijesti, naslov i šablon e-maila i naziv push događaja, uz po dvije zavisnosti (`IEmailSender`, `INotificationPublisher`). Sada servis ili posao samo kaže šta se desilo (`NewTicketEvent`, `TicketOpenedEvent`, `TicketAssignedEvent`, `TicketTransferredEvent`, `TicketClosedEvent`, `NewResponseEvent`, `TaskAssignedEvent`, `TicketOverdueEvent`), a `backend/src/TicketSystemTech.Api/Notifications/Notifier.cs` je jedino mjesto koje zna riječi: red u listi (dodaje ga pozivalac prije spremanja, pa se sprema u istoj transakciji kao promjena), e-mail (kroz outbox) i push. Riječi su ostale iste do slova. Posao za zakašnjele tikete prosljeđuje svoj token, pa zaustavljanje aplikacije zaustavlja i slanje. **Promjena ponašanja (jedna):** push o zakašnjelom tiketu sada ide odmah poslije e-maila tog tiketa, a ne tek poslije obrade svih tiketa u prolazu. **Nije prebačeno:** šabloni e-mailova su i dalje C# stringovi u `EmailTemplates.cs`, a ne resursi; ne postoji izbor kanala po osobi. Poruke o nalozima i sigurnosti i dalje šalju njihovi servisi: zaključan nalog, potvrda e-maila i zaboravljena lozinka (`AuthService`), nova privremena lozinka i pozivnica (`UserAccountService`), dobrodošlica na adresu poslovnice (`BranchService`), te dva push događaja bez e-maila (`userActivatedViaInvite` za administratore i `ticketUnassigned` u `TicketAssignmentService`). To nisu događaji nad tiketom i nemaju red u listi, pa ih nisam silom uvlačio u isti oblik. Push se iz integracijskih testova ne vidi (niko nije povezan), pa ga pokrivaju samo jedinični testovi `Notifier`-a.
 
 **T-17, prvi dio (šifarnici).** Frontend ima sloj podataka: jedan `QueryClient` (`src/api/queryClient.ts`) s pravilom ponavljanja (odbijen zahtjev se ne ponavlja, greška servera najviše dvaput), bez osvježavanja pri povratku u prozor i s brisanjem keša pri odjavi, te kukice za šifarnike (`src/api/lookupQueries.ts`: poslovnice, firme, teme, SLA planovi, kategorije, podposlovnice). Šifarnici su se učitavali ručno na 22 mjesta u 9 ekrana, sa po jednim `useEffect` i `useState`, bez obrade grešaka; sada je to jedna lista koju dijele svi ekrani (pet minuta svježa), a svaka izmjena kroz `lookupsApi` (16 poziva: pravljenje, izmjena, brisanje) osvježava zajedničke liste. Podposlovnice se traže po poslovnici, pa odgovor za poslovnicu koja više nije izabrana nikad ne zamijeni novi. Prebačeno je: spisak tiketa, dashboard, zadaci, novi tiket, novi tiket u ime klijenta, otvaranje tiketa, premještaj u drugu poslovnicu, nalog osobe i spisak naloga. **Nije prebačeno:** podaci samih tiketa (spisak, detalj), izvještaji, zadaci, nalozi i postavke se i dalje učitavaju ručno, uz ranije dodate zaštite od starih odgovora. Prebacivanje tiketa traži posebnu pažnju zbog trenutnog osvježavanja poslije svake radnje.
 

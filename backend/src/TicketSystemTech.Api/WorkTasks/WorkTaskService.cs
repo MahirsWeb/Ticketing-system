@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using TicketSystemTech.Api.Contracts;
+using TicketSystemTech.Api.Notifications;
 using TicketSystemTech.Api.Emails;
 using TicketSystemTech.Api.Services;
 using TicketSystemTech.Application.Common.Interfaces;
@@ -45,20 +46,18 @@ public sealed class WorkTaskService : IWorkTaskService
 
     private readonly AppDbContext _db;
     private readonly ICurrentUserService _currentUser;
-    private readonly IEmailSender _emailSender;
-    private readonly INotificationPublisher _notificationPublisher;
+    private readonly INotifier _notifier;
     private readonly IWorkTaskQueries _queries;
     private readonly TimeProvider _time;
     private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
 
     public WorkTaskService(
-        AppDbContext db, ICurrentUserService currentUser, IEmailSender emailSender, INotificationPublisher notificationPublisher,
+        AppDbContext db, ICurrentUserService currentUser, INotifier notifier,
         IWorkTaskQueries queries, TimeProvider time)
     {
         _db = db;
         _currentUser = currentUser;
-        _emailSender = emailSender;
-        _notificationPublisher = notificationPublisher;
+        _notifier = notifier;
         _queries = queries;
         _time = time;
     }
@@ -205,16 +204,10 @@ public sealed class WorkTaskService : IWorkTaskService
 
     private async Task NotifyAssignee(WorkTask task, Infrastructure.Identity.ApplicationUser assignee, Infrastructure.Identity.ApplicationUser assignedBy)
     {
-        _db.Notifications.Add(new Notification
-        {
-            UserId = assignee.Id,
-            Type = NotificationType.TaskAssigned,
-            Message = $"{assignedBy.FirstName} {assignedBy.LastName} assigned you a task: \"{task.Title}\""
-        });
+        var assigned = new TaskAssignedEvent(task, assignee, assignedBy);
+        _db.Notifications.AddRange(_notifier.InApp(assigned));
         await _db.SaveChangesAsync();
 
-        await _emailSender.SendAsync(assignee.Email!, "A task has been assigned to you",
-            EmailTemplates.WorkTaskAssigned(assignee.FirstName, task.Title, $"{assignedBy.FirstName} {assignedBy.LastName}"));
-        await _notificationPublisher.PushToUserAsync(assignee.Id, "taskAssigned", new { task.Id, task.Title });
+        await _notifier.DeliverAsync(assigned);
     }
 }

@@ -228,6 +228,7 @@ builder.Services.AddScoped<TicketSystemTech.Api.Users.IUserQueries, TicketSystem
 builder.Services.AddScoped<TicketSystemTech.Api.Tickets.ITicketAttachmentService, TicketSystemTech.Api.Tickets.TicketAttachmentService>();
 builder.Services.AddScoped<TicketSystemTech.Api.Mailbox.IMailboxService, TicketSystemTech.Api.Mailbox.MailboxService>();
 builder.Services.AddScoped<TicketSystemTech.Api.Notifications.INotificationService, TicketSystemTech.Api.Notifications.NotificationService>();
+builder.Services.AddScoped<TicketSystemTech.Api.Notifications.INotifier, TicketSystemTech.Api.Notifications.Notifier>();
 builder.Services.AddScoped<TicketSystemTech.Api.Settings.IOverdueSettingsService, TicketSystemTech.Api.Settings.OverdueSettingsService>();
 builder.Services.AddScoped<TicketSystemTech.Api.Auth.IAuthService, TicketSystemTech.Api.Auth.AuthService>();
 builder.Services.AddScoped<TicketSystemTech.Api.Reports.IReportService, TicketSystemTech.Api.Reports.ReportService>();

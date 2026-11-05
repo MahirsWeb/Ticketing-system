@@ -4,7 +4,7 @@ Ovaj dokument kaže **šta znači „prošlo“**, šta je u drugom krugu testir
 i čime, šta nije moguće dokazati na ovom računaru i šta je svjesno ostalo otvoreno. Cilj je da se pri sljedećem krugu ponovo
 provjerava **samo razlika**, a ne cijeli skup.
 
-Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 697 backend i 155 frontend testova.
+Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 718 backend i 164 frontend testova.
 
 ## 1. Statusi
 
@@ -171,3 +171,5 @@ T-15 (sedmi komad): kontroler prijave je sveden na 38 linija, a pravila su u `Ap
 T-15 je zatvoren: svi kontroleri su tanki (ukupno 1.022 linije), a pravila su u servisima; servisi koriste `AppDbContext` izravno i nisu iza interfejsa u `Application` sloju.
 
 T-17 (prvi dio): šifarnici na frontendu dolaze iz zajedničkog sloja upita (`src/api/lookupQueries.ts`), s osvježavanjem pri izmjeni i brisanjem pri odjavi; 164 frontend testa. Podaci tiketa, izvještaja, zadataka i naloga ostaju ručni.
+
+T-47 (prvi dio): riječi svih obavijesti nad tiketima i zadacima (lista, e-mail, push) pišu se na jednom mjestu (`Api/Notifications/Notifier.cs`); 21 novi test, uključujući deset nad pravom bazom koji provjeravaju da svaka radnja zaista nekoga obavijesti. Poruke o nalozima i sigurnosti i šabloni kao resursi nisu rađeni.

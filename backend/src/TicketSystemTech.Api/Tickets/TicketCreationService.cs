@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TicketSystemTech.Api.Contracts;
+using TicketSystemTech.Api.Notifications;
 using TicketSystemTech.Api.Emails;
 using TicketSystemTech.Api.Services;
 using TicketSystemTech.Application.Common;
@@ -32,8 +33,7 @@ public sealed class TicketCreationService : ITicketCreationService
     private readonly AppDbContext _db;
     private readonly ICurrentUserService _currentUser;
     private readonly ITicketNumberGenerator _ticketNumberGenerator;
-    private readonly IEmailSender _emailSender;
-    private readonly INotificationPublisher _notificationPublisher;
+    private readonly INotifier _notifier;
     private readonly IPiiProtector _piiProtector;
     private readonly IHtmlSanitizerService _html;
     private readonly ITicketQueries _queries;
@@ -43,15 +43,13 @@ public sealed class TicketCreationService : ITicketCreationService
     private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
 
     public TicketCreationService(
-        AppDbContext db, ICurrentUserService currentUser, ITicketNumberGenerator ticketNumberGenerator, IEmailSender emailSender,
-        INotificationPublisher notificationPublisher, IPiiProtector piiProtector, IHtmlSanitizerService html, ITicketQueries queries,
+        AppDbContext db, ICurrentUserService currentUser, ITicketNumberGenerator ticketNumberGenerator, INotifier notifier, IPiiProtector piiProtector, IHtmlSanitizerService html, ITicketQueries queries,
         ITicketRouting routing, ITicketIdempotency idempotency, TimeProvider time)
     {
         _db = db;
         _currentUser = currentUser;
         _ticketNumberGenerator = ticketNumberGenerator;
-        _emailSender = emailSender;
-        _notificationPublisher = notificationPublisher;
+        _notifier = notifier;
         _piiProtector = piiProtector;
         _html = html;
         _queries = queries;
@@ -95,28 +93,15 @@ public sealed class TicketCreationService : ITicketCreationService
 
         // Ticket is routed to the branch the client picked — only that branch's staff are notified/emailed for triage.
         var staff = await _db.Users.Where(u => u.Role == UserRole.Employee && u.IsActive && u.DepartmentId == department.Id).ToListAsync();
-        foreach (var member in staff)
-        {
-            _db.Notifications.Add(new Notification
-            {
-                UserId = member.Id,
-                Type = NotificationType.NewTicket,
-                Message = $"New ticket #{ticket.TicketNumber}: {ticket.Title}",
-                TicketId = ticket.Id
-            });
-        }
+        var submitted = new NewTicketEvent(ticket, staff, client, company.Name);
+        _db.Notifications.AddRange(_notifier.InApp(submitted));
 
         // The ticket, its in-app notifications and the idempotency record commit together or not at all, so a
         // retry can never find a ticket without its notifications (or notifications without a ticket).
         var raced = await _idempotency.SaveAsync(clientId, idempotencyKey, ticket.Id);
         if (raced is { } winner) return Outcome<TicketDetailDto>.Ok(await _queries.BuildDetailAsync(winner));
 
-        foreach (var member in staff)
-        {
-            await _emailSender.SendAsync(member.Email!, $"New ticket #{ticket.TicketNumber} submitted — {company.Name}",
-                EmailTemplates.NewTicketSubmitted(member.FirstName, ticket.TicketNumber, ticket.Title, $"{client.FirstName} {client.LastName}", company.Name));
-            await _notificationPublisher.PushToUserAsync(member.Id, "newTicket", new { ticket.Id, ticket.TicketNumber, ticket.Title });
-        }
+        await _notifier.DeliverAsync(submitted);
 
         return Outcome<TicketDetailDto>.Ok(await _queries.BuildDetailAsync(ticket.Id));
     }
@@ -185,16 +170,13 @@ public sealed class TicketCreationService : ITicketCreationService
             BodyHtml = $"<p>Ticket opened by {FullName(openedBy)} and assigned to {FullName(assignee)}.</p>"
         });
 
-        _db.Notifications.Add(new Notification { UserId = assignee.Id, Type = NotificationType.TicketAssigned, Message = $"Ticket #{ticket.TicketNumber} assigned to you", TicketId = ticket.Id });
-        _db.Notifications.Add(new Notification { UserId = client.Id, Type = NotificationType.TicketOpened, Message = $"Your ticket #{ticket.TicketNumber} has been opened", TicketId = ticket.Id });
+        var opened = new TicketOpenedEvent(ticket, client, assignee);
+        _db.Notifications.AddRange(_notifier.InApp(opened));
 
         var raced = await _idempotency.SaveAsync(_currentUser.UserId!.Value, idempotencyKey, ticket.Id);
         if (raced is { } winner) return Outcome<TicketDetailDto>.Ok(await _queries.BuildDetailAsync(winner));
 
-        await _emailSender.SendAsync(client.Email!, $"Your ticket #{ticket.TicketNumber} has been opened", EmailTemplates.TicketOpened(client.FirstName, ticket.TicketNumber));
-        await _emailSender.SendAsync(assignee.Email!, $"Ticket #{ticket.TicketNumber} assigned to you", EmailTemplates.TicketAssigned(assignee.FirstName, ticket.TicketNumber, ticket.Title));
-        await _notificationPublisher.PushToUserAsync(assignee.Id, "ticketAssigned", new { ticket.Id, ticket.TicketNumber, ticket.Title });
-        await _notificationPublisher.PushToUserAsync(client.Id, "ticketOpened", new { ticket.Id, ticket.TicketNumber, ticket.Title });
+        await _notifier.DeliverAsync(opened);
 
         return Outcome<TicketDetailDto>.Ok(await _queries.BuildDetailAsync(ticket.Id));
     }

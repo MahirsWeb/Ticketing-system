@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TicketSystemTech.Api.Contracts;
+using TicketSystemTech.Api.Notifications;
 using TicketSystemTech.Api.Emails;
 using TicketSystemTech.Api.Services;
 using TicketSystemTech.Application.Common;
@@ -40,8 +41,7 @@ public sealed class TicketLifecycleService : ITicketLifecycleService
 {
     private readonly AppDbContext _db;
     private readonly ICurrentUserService _currentUser;
-    private readonly IEmailSender _emailSender;
-    private readonly INotificationPublisher _notificationPublisher;
+    private readonly INotifier _notifier;
     private readonly IKnowledgeBaseIndexQueue _indexQueue;
     private readonly ITicketQueries _queries;
     private readonly ITicketRouting _routing;
@@ -49,13 +49,12 @@ public sealed class TicketLifecycleService : ITicketLifecycleService
     private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
 
     public TicketLifecycleService(
-        AppDbContext db, ICurrentUserService currentUser, IEmailSender emailSender, INotificationPublisher notificationPublisher,
+        AppDbContext db, ICurrentUserService currentUser, INotifier notifier,
         IKnowledgeBaseIndexQueue indexQueue, ITicketQueries queries, ITicketRouting routing, TimeProvider time)
     {
         _db = db;
         _currentUser = currentUser;
-        _emailSender = emailSender;
-        _notificationPublisher = notificationPublisher;
+        _notifier = notifier;
         _indexQueue = indexQueue;
         _queries = queries;
         _routing = routing;
@@ -112,15 +111,12 @@ public sealed class TicketLifecycleService : ITicketLifecycleService
             BodyHtml = $"<p>Ticket opened by {FullName(openedBy)} and assigned to {FullName(assignee)}.</p>"
         });
 
-        _db.Notifications.Add(new Notification { UserId = assignee.Id, Type = NotificationType.TicketAssigned, Message = $"Ticket #{ticket.TicketNumber} assigned to you", TicketId = ticket.Id });
-        _db.Notifications.Add(new Notification { UserId = client.Id, Type = NotificationType.TicketOpened, Message = $"Your ticket #{ticket.TicketNumber} has been opened", TicketId = ticket.Id });
+        var opened = new TicketOpenedEvent(ticket, client, assignee);
+        _db.Notifications.AddRange(_notifier.InApp(opened));
         _db.Audit(_currentUser.UserId, "TicketOpened", nameof(Ticket), ticket.Id, $"Assigned to {assignee.Id}; branch {ticket.DepartmentId}");
         await _db.SaveChangesAsync();
 
-        await _emailSender.SendAsync(client.Email!, $"Your ticket #{ticket.TicketNumber} has been opened", EmailTemplates.TicketOpened(client.FirstName, ticket.TicketNumber));
-        await _emailSender.SendAsync(assignee.Email!, $"Ticket #{ticket.TicketNumber} assigned to you", EmailTemplates.TicketAssigned(assignee.FirstName, ticket.TicketNumber, ticket.Title));
-        await _notificationPublisher.PushToUserAsync(assignee.Id, "ticketAssigned", new { ticket.Id, ticket.TicketNumber, ticket.Title });
-        await _notificationPublisher.PushToUserAsync(client.Id, "ticketOpened", new { ticket.Id, ticket.TicketNumber, ticket.Title });
+        await _notifier.DeliverAsync(opened);
 
         return Outcome<TicketDetailDto>.Ok(await _queries.BuildDetailAsync(id));
     }
@@ -166,25 +162,11 @@ public sealed class TicketLifecycleService : ITicketLifecycleService
             .Where(u => u.Role == UserRole.Employee && u.DepartmentId == toDepartment.Id && u.IsActive)
             .ToListAsync();
 
-        foreach (var member in destinationStaff)
-        {
-            _db.Notifications.Add(new Notification
-            {
-                UserId = member.Id,
-                Type = NotificationType.TicketTransferred,
-                Message = $"Ticket #{ticket.TicketNumber} transferred to {toDepartment.Name}",
-                TicketId = ticket.Id
-            });
-        }
+        var transferred = new TicketTransferredEvent(ticket, fromDepartment?.Name ?? "(unrouted)", toDepartment.Name, transferredBy, destinationStaff);
+        _db.Notifications.AddRange(_notifier.InApp(transferred));
         await _db.SaveChangesAsync();
 
-        foreach (var member in destinationStaff)
-        {
-            await _emailSender.SendAsync(member.Email!, $"Ticket #{ticket.TicketNumber} transferred to your branch",
-                EmailTemplates.TicketTransferred(member.FirstName, ticket.TicketNumber, ticket.Title,
-                    fromDepartment?.Name ?? "(unrouted)", toDepartment.Name, $"{transferredBy.FirstName} {transferredBy.LastName}"));
-            await _notificationPublisher.PushToUserAsync(member.Id, "ticketTransferred", new { ticket.Id, ticket.TicketNumber, ticket.Title, Branch = toDepartment.Name });
-        }
+        await _notifier.DeliverAsync(transferred);
 
         return Outcome<TicketDetailDto>.Ok(await _queries.BuildDetailAsync(id));
     }
@@ -218,13 +200,12 @@ public sealed class TicketLifecycleService : ITicketLifecycleService
             BodyHtml = $"<p>Ticket closed by {FullName(closedBy)}.</p>"
         });
 
-        _db.Notifications.Add(new Notification { UserId = client.Id, Type = NotificationType.TicketClosed, Message = $"Ticket #{ticket.TicketNumber} has been resolved", TicketId = ticket.Id });
+        var closedEvent = new TicketClosedEvent(ticket, client, closedBy);
+        _db.Notifications.AddRange(_notifier.InApp(closedEvent));
         _db.Audit(_currentUser.UserId, "TicketClosed", nameof(Ticket), ticket.Id, $"Ticket #{ticket.TicketNumber}");
         await _db.SaveChangesAsync();
 
-        await _emailSender.SendAsync(client.Email!, $"Your ticket #{ticket.TicketNumber} has been resolved",
-            EmailTemplates.TicketClosed(client.FirstName, ticket.TicketNumber, $"{closedBy.FirstName} {closedBy.LastName}"));
-        await _notificationPublisher.PushToUserAsync(client.Id, "ticketClosed", new { ticket.Id, ticket.TicketNumber });
+        await _notifier.DeliverAsync(closedEvent);
 
         // Embedding calls an external API that can take half a minute: the ticket is already closed, so the answer does not wait for
         // it. A background worker indexes the ticket (and a failure there is logged, never reported as a failed close).

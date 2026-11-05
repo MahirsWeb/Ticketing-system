@@ -30,6 +30,7 @@ public class OverdueNotifierTests : IAsyncLifetime
         await _world.Db(async db =>
         {
             await db.Notifications.Where(n => n.TicketId != null && _tickets.Contains(n.TicketId.Value)).ExecuteDeleteAsync();
+            await db.EmailOutbox.Where(m => m.Subject.Contains("OV-")).ExecuteDeleteAsync();
             await db.TicketAssignees.Where(a => _tickets.Contains(a.TicketId)).ExecuteDeleteAsync();
             await db.Tickets.Where(t => _tickets.Contains(t.Id)).ExecuteDeleteAsync();
             if (_createdSettings is { } created) await db.OverdueNotificationSettings.Where(s => s.Id == created).ExecuteDeleteAsync();
@@ -126,6 +127,25 @@ public class OverdueNotifierTests : IAsyncLifetime
 
         Assert.Equal(1, await WarningsAboutAsync(old));
         Assert.Equal(0, await WarningsAboutAsync(recent));
+    }
+
+    [SqlFact]
+    public async Task The_warning_is_also_mailed_to_the_assignee_and_says_which_rule_it_broke()
+    {
+        await UseSettingsAsync(true, 2);
+        var pastDue = await TicketAsync(TicketStatus.InProgress, DateTime.UtcNow.AddHours(-3), DateTime.UtcNow.AddDays(-1));
+        var open = await TicketAsync(TicketStatus.Open, null, DateTime.UtcNow.AddDays(-3));
+        var numbers = await _world.Db(db => db.Tickets.Where(t => t.Id == pastDue || t.Id == open).ToDictionaryAsync(t => t.Id, t => t.TicketNumber));
+
+        await RunJobAsync();
+
+        var mails = await _world.Db(db => db.EmailOutbox.AsNoTracking().ToListAsync());
+        var duePastMail = Assert.Single(mails, m => m.Subject == $"Ticket #{numbers[pastDue]} is overdue");
+        Assert.Equal(_world.EmpA1.Email, duePastMail.ToEmail);
+        Assert.Contains("it is past its SLA due date (", duePastMail.HtmlBody);
+        var openMail = Assert.Single(mails, m => m.Subject == $"Ticket #{numbers[open]} is overdue");
+        Assert.Equal(_world.EmpA1.Email, openMail.ToEmail);
+        Assert.Contains("it has been open for more than 2 day(s)", openMail.HtmlBody);
     }
 
     [SqlFact]

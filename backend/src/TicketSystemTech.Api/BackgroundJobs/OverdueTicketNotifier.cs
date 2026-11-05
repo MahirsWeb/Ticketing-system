@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using TicketSystemTech.Api.Emails;
+using TicketSystemTech.Api.Notifications;
 using TicketSystemTech.Application.Common.Interfaces;
 using TicketSystemTech.Domain.Entities;
 using TicketSystemTech.Domain.Enums;
@@ -61,8 +61,7 @@ public class OverdueTicketNotifier : BackgroundService
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var emailSender = scope.ServiceProvider.GetRequiredService<IEmailSender>();
-        var notificationPublisher = scope.ServiceProvider.GetRequiredService<INotificationPublisher>();
+        var notifier = scope.ServiceProvider.GetRequiredService<INotifier>();
 
         var settings = await db.OverdueNotificationSettings.AsNoTracking().FirstOrDefaultAsync(ct);
         if (settings is null || (!settings.NotifyOnSlaBreach && settings.ManualOverdueDays is null))
@@ -90,7 +89,7 @@ public class OverdueTicketNotifier : BackgroundService
 
         if (overdue.Count == 0) return 0;
 
-        var notified = new List<(OverdueTicket Ticket, List<Guid> UserIds)>();
+        var warned = 0;
         foreach (var (ticket, reason) in overdue)
         {
             // Claim the ticket BEFORE telling anyone, with one conditional UPDATE. Marking it after sending meant a
@@ -105,35 +104,16 @@ public class OverdueTicketNotifier : BackgroundService
             var assigneeIds = await db.TicketAssignees.Where(a => a.TicketId == ticket.Id).Select(a => a.UserId).ToListAsync(ct);
 
             var assignees = await db.Users.Where(u => assigneeIds.Contains(u.Id) && u.IsActive).ToListAsync(ct);
-            foreach (var assignee in assignees)
-            {
-                db.Notifications.Add(new Notification
-                {
-                    UserId = assignee.Id,
-                    Type = NotificationType.TicketOverdue,
-                    Message = $"Ticket #{ticket.TicketNumber} is overdue",
-                    TicketId = ticket.Id
-                });
-            }
+            // Only people who can still act on it hear about it: the list, the e-mail and the push all skip inactive accounts.
+            var warning = new TicketOverdueEvent(ticket.Id, ticket.TicketNumber, ticket.Title, reason, assignees);
+            db.Notifications.AddRange(notifier.InApp(warning));
             await db.SaveChangesAsync(ct);
 
-            foreach (var assignee in assignees)
-            {
-                await emailSender.SendAsync(assignee.Email!, $"Ticket #{ticket.TicketNumber} is overdue",
-                    EmailTemplates.TicketOverdue(assignee.FirstName, ticket.TicketNumber, ticket.Title, reason), ct);
-            }
-
-            // Only to people who can still act on it (the e-mails and in-app notifications above already skip inactive accounts).
-            notified.Add((ticket, assignees.Select(a => a.Id).ToList()));
+            await notifier.DeliverAsync(warning, ct);
+            warned++;
         }
 
-        foreach (var (ticket, userIds) in notified)
-        {
-            foreach (var userId in userIds)
-                await notificationPublisher.PushToUserAsync(userId, "ticketOverdue", new { ticket.Id, ticket.TicketNumber, ticket.Title }, ct);
-        }
-
-        _logger.LogInformation("Sent overdue notifications for {Count} ticket(s)", notified.Count);
-        return notified.Count;
+        _logger.LogInformation("Sent overdue notifications for {Count} ticket(s)", warned);
+        return warned;
     }
 }

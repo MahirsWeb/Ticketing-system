@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TicketSystemTech.Api.Contracts;
+using TicketSystemTech.Api.Notifications;
 using TicketSystemTech.Api.Emails;
 using TicketSystemTech.Api.Services;
 using TicketSystemTech.Application.Common;
@@ -24,21 +25,19 @@ public sealed class TicketMessageService : ITicketMessageService
 {
     private readonly AppDbContext _db;
     private readonly ICurrentUserService _currentUser;
-    private readonly IEmailSender _emailSender;
-    private readonly INotificationPublisher _notificationPublisher;
+    private readonly INotifier _notifier;
     private readonly IKnowledgeBaseIndexQueue _indexQueue;
     private readonly IHtmlSanitizerService _html;
     private readonly ITicketQueries _queries;
     private readonly ITicketIdempotency _idempotency;
 
     public TicketMessageService(
-        AppDbContext db, ICurrentUserService currentUser, IEmailSender emailSender, INotificationPublisher notificationPublisher,
+        AppDbContext db, ICurrentUserService currentUser, INotifier notifier,
         IKnowledgeBaseIndexQueue indexQueue, IHtmlSanitizerService html, ITicketQueries queries, ITicketIdempotency idempotency)
     {
         _db = db;
         _currentUser = currentUser;
-        _emailSender = emailSender;
-        _notificationPublisher = notificationPublisher;
+        _notifier = notifier;
         _indexQueue = indexQueue;
         _html = html;
         _queries = queries;
@@ -88,17 +87,11 @@ public sealed class TicketMessageService : ITicketMessageService
                 : new List<Guid> { ticket.ClientId };
 
             var recipients = await _db.Users.Where(u => recipientIds.Contains(u.Id) && u.IsActive).ToListAsync();
-            foreach (var recipient in recipients)
-            {
-                _db.Notifications.Add(new Notification { UserId = recipient.Id, Type = NotificationType.NewResponse, Message = $"New reply on ticket #{ticket.TicketNumber}", TicketId = ticket.Id });
-            }
+            var reply = new NewResponseEvent(ticket, recipients);
+            _db.Notifications.AddRange(_notifier.InApp(reply));
             if (recipients.Count > 0) await _db.SaveChangesAsync();
 
-            foreach (var recipient in recipients)
-            {
-                await _emailSender.SendAsync(recipient.Email!, $"New reply on ticket #{ticket.TicketNumber}", EmailTemplates.NewResponse(recipient.FirstName, ticket.TicketNumber));
-                await _notificationPublisher.PushToUserAsync(recipient.Id, "newResponse", new { ticket.Id, ticket.TicketNumber });
-            }
+            await _notifier.DeliverAsync(reply);
         }
 
         // Only worth embedding once the ticket is past triage (search never returns New/Open tickets), and the
