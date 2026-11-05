@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { workTasksApi } from '../../api/workTasks';
-import { usersApi } from '../../api/users';
+import { useEmployees } from '../../api/userQueries';
+import { messageOf } from '../../lib/messageOf';
 import type { WorkTaskDetailDto } from '../../types';
 import { Button, ErrorText, Select } from '../../components/ui';
 
@@ -25,7 +26,12 @@ export function TaskDetailPanel({
   canManage: boolean;
   onChanged: (t: WorkTaskDetailDto) => void;
 }) {
-  const [candidates, setCandidates] = useState<{ id: string; name: string }[]>([]);
+  // The colleagues of the branch the task is in, except the one who has it.
+  const colleagues = useEmployees({ departmentId: task.departmentId, enabled: canManage });
+  const candidates = useMemo(
+    () => (colleagues.data ?? []).filter((u) => u.id !== task.assignedToUserId).map((u) => ({ id: u.id, name: `${u.firstName} ${u.lastName}` })),
+    [colleagues.data, task.assignedToUserId]
+  );
   const [reassignTo, setReassignTo] = useState('');
   // The manual correction is of the LATEST work session; earlier ones are listed below and stay as they are.
   const latest = task.sessions.length > 0 ? task.sessions[task.sessions.length - 1] : null;
@@ -42,22 +48,16 @@ export function TaskDetailPanel({
     setEnded(toLocalInputValue(latest?.endedAtUtc ?? null));
   }, [latest?.startedAtUtc, latest?.endedAtUtc]);
 
-  useEffect(() => {
-    if (!canManage) return;
-    usersApi.list({ role: 'Employee', departmentId: task.departmentId }).then((employees) =>
-      setCandidates(
-        employees.filter((u) => u.id !== task.assignedToUserId).map((u) => ({ id: u.id, name: `${u.firstName} ${u.lastName}` }))
-      )
-    );
-  }, [canManage, task.departmentId, task.assignedToUserId]);
-
-  async function run(fn: () => Promise<WorkTaskDetailDto>) {
+  /** Does what was asked and hands the changed task on. Says whether it worked, so that what was chosen for it is only let go of when it did. */
+  async function run(fn: () => Promise<WorkTaskDetailDto>): Promise<boolean> {
     setBusy(true);
     setError(null);
     try {
       onChanged(await fn());
-    } catch (err: any) {
-      setError(err?.response?.data?.message ?? 'Action failed.');
+      return true;
+    } catch (err) {
+      setError(messageOf(err, 'Action failed.'));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -90,11 +90,12 @@ export function TaskDetailPanel({
                 variant="secondary"
                 className="text-xs"
                 disabled={!reassignTo || busy}
-                onClick={() => run(() => workTasksApi.reassign(task.id, reassignTo)).then(() => setReassignTo(''))}
+                onClick={() => run(() => workTasksApi.reassign(task.id, reassignTo)).then((worked) => worked && setReassignTo(''))}
               >
                 Reassign
               </Button>
             </div>
+            {colleagues.isError && <p className="mt-1 text-xs text-red-700">The list of colleagues could not be loaded.</p>}
           </div>
 
           {isAssignee && (
