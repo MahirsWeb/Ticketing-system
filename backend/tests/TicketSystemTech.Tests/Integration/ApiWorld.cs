@@ -18,6 +18,9 @@ namespace TicketSystemTech.Tests.Integration;
 /// <summary>One person in the seeded world, with a token the application accepts.</summary>
 public sealed record Actor(string Key, Guid Id, string Email, UserRole Role, Guid? DepartmentId, string Token);
 
+/// <summary>A file the API handed back: its bytes, how it announced itself and what name it offered.</summary>
+public sealed record ApiFile(int Code, byte[] Bytes, string? ContentType, string? FileName);
+
 public sealed record ApiResponse(HttpStatusCode Status, string Text, IReadOnlyDictionary<string, string>? Headers = null)
 {
     public int Code => (int)Status;
@@ -162,6 +165,16 @@ public sealed class ApiWorld : IAsyncLifetime
 
     public Task<ApiResponse> Get(Actor? actor, string url, IDictionary<string, string>? headers = null) =>
         Send(actor, HttpMethod.Get, url, null, headers);
+
+    /// <summary>A GET whose answer is a file (the answer of <see cref="Get"/> is text and would damage it).</summary>
+    public async Task<ApiFile> GetBytes(Actor? actor, string url)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        if (actor is not null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", actor.Token);
+        using var response = await _client.SendAsync(request);
+        return new ApiFile((int)response.StatusCode, await response.Content.ReadAsByteArrayAsync(), response.Content.Headers.ContentType?.MediaType,
+            response.Content.Headers.ContentDisposition?.FileNameStar ?? response.Content.Headers.ContentDisposition?.FileName?.Trim('"'));
+    }
 
     public Task<ApiResponse> Post(Actor? actor, string url, object? body = null) => Send(actor, HttpMethod.Post, url, body ?? "{}");
 
