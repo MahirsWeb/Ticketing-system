@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import AppLayout from './AppLayout';
+import { ticketsApi } from '../api/tickets';
 import { LanguageProvider } from '../i18n/LanguageContext';
 import { useAuthStore } from '../store/authStore';
+import { renderWithQuery } from '../test/renderWithQuery';
 import type { UserSummary } from '../types';
 
 vi.mock('../api/tickets', () => ({
@@ -18,7 +20,7 @@ vi.mock('../lib/notificationsHub', () => ({
 const employee = { id: 'u1', firstName: 'Amra', lastName: 'H', role: 'Employee', phoneNumberPrompted: true } as UserSummary;
 
 function renderLayout() {
-  return render(
+  return renderWithQuery(
     <LanguageProvider>
       <MemoryRouter initialEntries={['/tasks']}>
         <Routes>
@@ -48,6 +50,20 @@ describe('the tickets menu in the navigation', () => {
     expect(links.length).toBeGreaterThanOrEqual(4);
     expect(links.map((a) => a.getAttribute('href'))).toContain('/tickets?status=New');
     expect(document.querySelectorAll('div[role="link"]')).toHaveLength(0);
+  });
+
+  it('asks for the numbers again when the menu is opened or pointed at, so they are right when they are read', async () => {
+    const counts = vi.mocked(ticketsApi.counts);
+    counts.mockClear();
+    renderLayout();
+    const toggle = await screen.findByRole('button', { name: /shortcuts/i });
+    await waitFor(() => expect(counts).toHaveBeenCalledTimes(1));
+
+    await userEvent.hover(within(screen.getByRole('group', { name: /tickets/i })).getAllByRole('link')[0]);
+    await waitFor(() => expect(counts).toHaveBeenCalledTimes(2));
+
+    await userEvent.click(toggle);
+    await waitFor(() => expect(counts).toHaveBeenCalledTimes(3));
   });
 
   it('closes on Escape and when something else gets the focus', async () => {

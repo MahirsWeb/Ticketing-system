@@ -6,8 +6,7 @@ import { NotificationBell } from '../components/NotificationBell';
 import { PhoneNumberBanner } from '../components/PhoneNumberBanner';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { useLanguage } from '../i18n/LanguageContext';
-import { ticketsApi } from '../api/tickets';
-import type { TicketCountsDto } from '../types';
+import { useTicketCounts } from '../api/ticketQueries';
 import clsx from 'clsx';
 
 function useNavByRole(): Record<string, { to: string; label: string; ticketsDropdown?: boolean }[]> {
@@ -45,7 +44,9 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
 function TicketsNavItem({ to, label }: { to: string; label: string }) {
   const user = useAuthStore((s) => s.user);
   const { t } = useLanguage();
-  const [counts, setCounts] = useState<TicketCountsDto | null>(null);
+  const { data: counts, refetch } = useTicketCounts();
+  // Looking at the menu asks again, so the numbers are right when they are read even if a change was made somewhere the page did not hear about.
+  const load = () => void refetch();
   const [open, setOpen] = useState(false);
   const panelId = useId();
 
@@ -68,14 +69,6 @@ function TicketsNavItem({ to, label }: { to: string; label: string }) {
       document.removeEventListener('mousedown', away);
     };
   }, [open]);
-
-  function load() {
-    ticketsApi.counts().then(setCounts).catch(() => {});
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
 
   const rows: { label: string; value: number | undefined; status?: string; mine?: boolean }[] = [
     { label, value: counts?.total },

@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import clsx from 'clsx';
-import { ticketsApi } from '../../api/tickets';
+import { useEmployees, useTicketList } from '../../api/ticketQueries';
 import { useDepartments } from '../../api/lookupQueries';
-import { usersApi } from '../../api/users';
 import type { TicketListItem, UserListItemDto } from '../../types';
 import { Button, Card, ErrorText, Input, PriorityBadge, Select, Spinner } from '../../components/ui';
 import { DateRangePicker } from '../../components/DateRangePicker';
@@ -74,12 +73,8 @@ export default function TicketsListPage() {
   const isAdmin = user?.role === 'Admin';
   const isEmployee = user?.role === 'Employee';
   const isStaff = isAdmin || isEmployee;
-  const [items, setItems] = useState<TicketListItem[]>([]);
-  const [totalCount, setTotalCount] = useState(0);
   const { data: departments = [] } = useDepartments({ enabled: isAdmin });
-  const [employees, setEmployees] = useState<UserListItemDto[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { data: employees = [] } = useEmployees({ enabled: isStaff });
 
   // Everything the list is filtered, sorted and paged by lives in the address, so a refresh, the back button, a bookmark or a
   // link sent to a colleague shows the same list.
@@ -143,11 +138,6 @@ export default function TicketsListPage() {
     }
   }, [search]);
 
-  useEffect(() => {
-    if (!isStaff) return;
-    usersApi.list({ role: 'Employee' }).then(setEmployees);
-  }, [isStaff]);
-
   function selectTab(tab: TicketTab) {
     const p = tabToParams(tab);
     update({ status: p.status ?? null, answered: p.answered ?? null });
@@ -155,41 +145,27 @@ export default function TicketsListPage() {
 
   const effectiveAssignedToUserId = mineOnly && activeTab !== 'new' ? user?.id : assignedToUserId || undefined;
 
-  useEffect(() => {
-    // A slower answer to an earlier filter must not overwrite the answer to the current one.
-    let current = true;
-    setLoading(true);
-    ticketsApi
-      .list({
-        page,
-        pageSize: PAGE_SIZE,
-        status: statusParam || undefined,
-        answeredOnly: activeTab === 'answered',
-        departmentId: departmentId || undefined,
-        assignedToUserId: effectiveAssignedToUserId,
-        search: search || undefined,
-        createdFrom: createdFromIso ?? undefined,
-        createdTo: createdToIso ?? undefined,
-        sortBy: sortBy ?? undefined,
-        sortDir,
-      })
-      .then((res) => {
-        if (!current) return;
-        setItems(res.items);
-        setTotalCount(res.totalCount);
-        setLoadError(null);
-      })
-      .catch(() => {
-        if (!current) return;
-        setItems([]);
-        setTotalCount(0);
-        setLoadError('The tickets could not be loaded. Try again in a moment.');
-      })
-      .finally(() => current && setLoading(false));
-    return () => {
-      current = false;
-    };
-  }, [page, statusParam, activeTab, departmentId, effectiveAssignedToUserId, search, createdFromIso, createdToIso, sortBy, sortDir]);
+  // Each combination of filters is a list of its own: the answer to an earlier one can never be shown as the answer to the current one.
+  const {
+    data: loaded,
+    isPending: loading,
+    isError,
+  } = useTicketList({
+    page,
+    pageSize: PAGE_SIZE,
+    status: statusParam || undefined,
+    answeredOnly: activeTab === 'answered',
+    departmentId: departmentId || undefined,
+    assignedToUserId: effectiveAssignedToUserId,
+    search: search || undefined,
+    createdFrom: createdFromIso ?? undefined,
+    createdTo: createdToIso ?? undefined,
+    sortBy: sortBy ?? undefined,
+    sortDir,
+  });
+  const items: TicketListItem[] = loaded?.items ?? [];
+  const totalCount = loaded?.totalCount ?? 0;
+  const loadError = isError ? 'The tickets could not be loaded. Try again in a moment.' : null;
 
   const employeesByBranch = useMemo(() => {
     const scoped = departmentId ? employees.filter((e) => e.departmentId === departmentId) : employees;

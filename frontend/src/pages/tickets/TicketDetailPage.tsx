@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ticketsApi } from '../../api/tickets';
+import { ticketKeys, useTicket } from '../../api/ticketQueries';
 import type { TicketDetailDto } from '../../types';
 import { Card, ErrorText, PriorityBadge, Spinner, StatusBadge } from '../../components/ui';
 import { SafeHtml } from '../../components/SafeHtml';
@@ -30,9 +32,15 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 export default function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
   const user = useAuthStore((s) => s.user);
-  const [ticket, setTicket] = useState<TicketDetailDto | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  // Another ticket is another entry: the previous one is forgotten at once (its drafts and its data must not be shown under the new
+  // address) and a slow answer for a ticket that is no longer the one on screen has nowhere to land.
+  const { data: ticket, isPending: loading, error } = useTicket(id);
+  const loadError = error ? ((error as { response?: { data?: { message?: string } } }).response?.data?.message ?? 'Could not load this ticket.') : null;
+  /** Every change comes back as the whole ticket; it is written into the entry, or worked out from the one that is there now. */
+  function setTicket(next: TicketDetailDto | ((current: TicketDetailDto | undefined) => TicketDetailDto | undefined)) {
+    if (id) queryClient.setQueryData<TicketDetailDto>(ticketKeys.detail(id), next);
+  }
   const [confirmReopen, setConfirmReopen] = useState(false);
   const [reopening, setReopening] = useState(false);
 
@@ -46,24 +54,6 @@ export default function TicketDetailPage() {
       setReopening(false);
     }
   }
-
-  useEffect(() => {
-    if (!id) return;
-    // Another ticket was opened: forget the previous one at once (its drafts and its data must not be shown under the new
-    // address) and ignore a slow answer for a ticket that is no longer the one on screen.
-    let current = true;
-    setTicket(null);
-    setLoadError(null);
-    setLoading(true);
-    ticketsApi
-      .getById(id)
-      .then((loaded) => current && setTicket(loaded))
-      .catch((err: any) => current && setLoadError(err?.response?.data?.message ?? 'Could not load this ticket.'))
-      .finally(() => current && setLoading(false));
-    return () => {
-      current = false;
-    };
-  }, [id]);
 
   if (loading) {
     return (
@@ -106,7 +96,7 @@ export default function TicketDetailPage() {
         </p>
         {isStaff && (
           <div className="mt-3">
-            <TicketStatusActions key={ticket.id} ticket={ticket} onChanged={setTicket} />
+            <TicketStatusActions key={`status-${ticket.id}`} ticket={ticket} onChanged={setTicket} />
           </div>
         )}
       </div>
@@ -132,7 +122,7 @@ export default function TicketDetailPage() {
           )}
           {canTransfer && (
             <div className="mt-4 border-t border-slate-100 pt-3">
-              <TransferBranchForm key={ticket.id} ticket={ticket} onTransferred={setTicket} />
+              <TransferBranchForm key={`transfer-${ticket.id}`} ticket={ticket} onTransferred={setTicket} />
             </div>
           )}
         </Card>
@@ -171,14 +161,14 @@ export default function TicketDetailPage() {
         </Card>
       )}
 
-      {canSeeInternalNotes && <KnowledgeBaseSearchPanel key={ticket.id} initialQuery={ticket.title} />}
-      {!canSeeInternalNotes && <ClientAiHelpPanel key={ticket.id} initialQuery={ticket.title} />}
+      {canSeeInternalNotes && <KnowledgeBaseSearchPanel key={`knowledge-${ticket.id}`} initialQuery={ticket.title} />}
+      {!canSeeInternalNotes && <ClientAiHelpPanel key={`ai-help-${ticket.id}`} initialQuery={ticket.title} />}
 
-      {canOpen && <OpenTicketForm key={ticket.id} ticket={ticket} onOpened={setTicket} />}
+      {canOpen && <OpenTicketForm key={`open-${ticket.id}`} ticket={ticket} onOpened={setTicket} />}
 
       <Card className="p-5">
         <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-500">Activity</h2>
-        <TicketActivityFeed key={ticket.id}
+        <TicketActivityFeed key={`activity-${ticket.id}`}
           ticket={ticket}
           messages={ticket.messages}
           canReplyResponse={canReplyResponse}
@@ -189,7 +179,7 @@ export default function TicketDetailPage() {
         />
       </Card>
 
-      {canClose && <CloseTicketForm key={ticket.id} ticket={ticket} onClosed={setTicket} />}
+      {canClose && <CloseTicketForm key={`close-${ticket.id}`} ticket={ticket} onClosed={setTicket} />}
 
       {confirmReopen && (
         <ConfirmDialog

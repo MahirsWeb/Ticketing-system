@@ -36,9 +36,9 @@ function deferred<T>() {
 const page = (items: TicketListItem[]) => ({ items, totalCount: items.length, page: 1, pageSize: 20 });
 const searchesAsked = () => list.mock.calls.map((c) => c[0].search ?? null);
 
-function renderPage() {
+function renderPage(address = '/tickets') {
   return renderWithQuery(
-    <MemoryRouter initialEntries={['/tickets']}>
+    <MemoryRouter initialEntries={[address]}>
       <TicketsListPage />
     </MemoryRouter>
   );
@@ -49,7 +49,7 @@ describe('the tickets list', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     list.mockReset();
     vi.mocked(lookupsApi.departments).mockResolvedValue([]);
-    vi.mocked(usersApi.list).mockResolvedValue([]);
+    vi.mocked(usersApi.list).mockReset().mockResolvedValue([]);
     useAuthStore.setState({ accessToken: 't', user: { id: 'u1', role: 'Employee', firstName: 'A', lastName: 'B' } as never });
   });
   afterEach(() => vi.useRealTimers());
@@ -95,6 +95,68 @@ describe('the tickets list', () => {
 
     expect(screen.getByText('Izvještaj se ne generiše')).toBeInTheDocument();
     expect(screen.queryByText('Something older')).not.toBeInTheDocument();
+  });
+
+  it('asks the server for exactly what the address says', async () => {
+    list.mockResolvedValue(page([]));
+
+    renderPage('/tickets?status=Closed&dept=d1&assignee=e1&q=toner&sort=title&dir=desc&page=2&from=2026-01-01T00:00:00.000Z&to=2026-02-01T00:00:00.000Z');
+
+    await waitFor(() => expect(list).toHaveBeenCalled());
+    expect(list.mock.calls.at(-1)![0]).toEqual({
+      page: 2,
+      pageSize: 20,
+      status: 'Closed',
+      answeredOnly: false,
+      departmentId: 'd1',
+      assignedToUserId: 'e1',
+      search: 'toner',
+      createdFrom: '2026-01-01T00:00:00.000Z',
+      createdTo: '2026-02-01T00:00:00.000Z',
+      sortBy: 'title',
+      sortDir: 'desc',
+    });
+  });
+
+  it('asks for the tickets of the person who is signed in when "mine" is chosen, except among the new ones, which nobody has yet', async () => {
+    list.mockResolvedValue(page([]));
+
+    const mine = renderPage('/tickets?mine=1&status=Open,InProgress,Resolved');
+    await waitFor(() => expect(list).toHaveBeenCalled());
+    expect(list.mock.calls.at(-1)![0].assignedToUserId).toBe('u1');
+    mine.unmount();
+
+    list.mockClear();
+    renderPage('/tickets?mine=1&status=New');
+    await waitFor(() => expect(list).toHaveBeenCalled());
+    expect(list.mock.calls.at(-1)![0].assignedToUserId).toBeUndefined();
+  });
+
+  it('does not ask for the list of staff when the person is a client, who has no use for it', async () => {
+    useAuthStore.setState({ accessToken: 't', user: { id: 'c1', role: 'Client', firstName: 'A', lastName: 'B' } as never });
+    list.mockResolvedValue(page([ticket('100001', 'Printer')]));
+
+    renderPage();
+
+    expect(await screen.findByText('Printer')).toBeInTheDocument();
+    expect(usersApi.list).not.toHaveBeenCalled();
+  });
+
+  it('asks for the list of staff when the person is staff, for the "assigned to" filter', async () => {
+    list.mockResolvedValue(page([]));
+
+    renderPage();
+
+    await waitFor(() => expect(usersApi.list).toHaveBeenCalledWith({ role: 'Employee' }));
+  });
+
+  it('asks only for the tickets that have been answered on the "answered" tab', async () => {
+    list.mockResolvedValue(page([]));
+
+    renderPage('/tickets?answered=1&status=Open,InProgress,Resolved');
+
+    await waitFor(() => expect(list).toHaveBeenCalled());
+    expect(list.mock.calls.at(-1)![0].answeredOnly).toBe(true);
   });
 
   it('says so, instead of failing silently, when the list cannot be loaded', async () => {
