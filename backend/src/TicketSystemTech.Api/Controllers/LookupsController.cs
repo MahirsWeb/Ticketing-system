@@ -1,131 +1,68 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using TicketSystemTech.Api.Contracts;
-using TicketSystemTech.Api.Emails;
-using TicketSystemTech.Application.Common.Interfaces;
-using TicketSystemTech.Domain.Entities;
+using TicketSystemTech.Api.Lookups;
+using TicketSystemTech.Api.Services;
 using TicketSystemTech.Domain.Enums;
-using TicketSystemTech.Infrastructure.Persistence;
 
 namespace TicketSystemTech.Api.Controllers;
 
+/// <summary>The HTTP face of the lists the application is configured with: companies, branches, sub-branches, help topics, categories and SLA plans.</summary>
 [ApiController]
 [Route("api")]
 [Authorize]
 public class LookupsController : ControllerBase
 {
-    private readonly AppDbContext _db;
-    private readonly IEmailSender _emailSender;
-    private readonly ICurrentUserService _currentUser;
+    private readonly ICompanyService _companies;
+    private readonly IBranchService _branches;
+    private readonly ILookupTableService _lookups;
 
-    public LookupsController(AppDbContext db, IEmailSender emailSender, ICurrentUserService currentUser)
+    public LookupsController(ICompanyService companies, IBranchService branches, ILookupTableService lookups)
     {
-        _db = db;
-        _emailSender = emailSender;
-        _currentUser = currentUser;
+        _companies = companies;
+        _branches = branches;
+        _lookups = lookups;
     }
+
 
     // ---------------- Companies ----------------
 
     [HttpGet("companies")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    public async Task<ActionResult<List<CompanyItemFull>>> GetCompanies(CancellationToken ct, [FromQuery] bool includeInactive = false)
-    {
-        var isAdmin = User.IsInRole(nameof(UserRole.Admin));
-        var query = _db.Companies.AsQueryable();
-        if (!includeInactive || !isAdmin) query = query.Where(c => c.IsActive);
-
-        var items = await query.OrderBy(c => c.Name)
-            .Select(c => new CompanyItemFull(c.Id, c.Name, c.Address, c.ContactInfo, c.IsActive)).ToListAsync(ct);
-        return Ok(items);
-    }
+    public async Task<ActionResult<List<CompanyItemFull>>> GetCompanies(CancellationToken ct, [FromQuery] bool includeInactive = false) =>
+        Ok(await _companies.ListAsync(includeInactive, ct));
 
     [HttpGet("companies/{id:guid}")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    public async Task<ActionResult<CompanyItemFull>> GetCompany(Guid id, CancellationToken ct)
-    {
-        var c = await _db.Companies.FindAsync(new object[] { id }, ct);
-        if (c is null) return NotFound();
-        return Ok(new CompanyItemFull(c.Id, c.Name, c.Address, c.ContactInfo, c.IsActive));
-    }
+    public async Task<ActionResult<CompanyItemFull>> GetCompany(Guid id, CancellationToken ct) =>
+        this.ToActionResult(await _companies.GetAsync(id, ct));
 
     [HttpPost("companies")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    public async Task<ActionResult<LookupItem>> CreateCompany(CreateCompanyRequest request)
-    {
-        var company = new Company { Name = request.Name, Address = request.Address, ContactInfo = request.ContactInfo };
-        _db.Companies.Add(company);
-        await _db.SaveChangesAsync();
-        return Ok(new LookupItem(company.Id, company.Name));
-    }
+    public async Task<ActionResult<LookupItem>> CreateCompany(CreateCompanyRequest request) =>
+        Ok(await _companies.CreateAsync(request));
 
     [HttpPut("companies/{id:guid}")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    public async Task<ActionResult<CompanyItemFull>> UpdateCompany(Guid id, UpdateCompanyRequest request)
-    {
-        var c = await _db.Companies.FindAsync(id);
-        if (c is null) return NotFound();
+    public async Task<ActionResult<CompanyItemFull>> UpdateCompany(Guid id, UpdateCompanyRequest request) =>
+        this.ToActionResult(await _companies.UpdateAsync(id, request));
 
-        c.Name = request.Name;
-        c.Address = request.Address;
-        c.ContactInfo = request.ContactInfo;
-        c.IsActive = request.IsActive;
-        await _db.SaveChangesAsync();
-        return Ok(new CompanyItemFull(c.Id, c.Name, c.Address, c.ContactInfo, c.IsActive));
-    }
 
     // ---------------- Departments ----------------
 
     [HttpGet("departments")]
-    public async Task<ActionResult<List<object>>> GetDepartments(CancellationToken ct, [FromQuery] bool includeInactive = false)
-    {
-        var isAdmin = User.IsInRole(nameof(UserRole.Admin));
-        var query = _db.Departments.AsQueryable();
-        if (!includeInactive || !isAdmin) query = query.Where(d => d.IsActive);
-
-        // Every authenticated user may see branch names + emails (needed to display "your branch", pick a transfer target, etc.).
-        var full = await query.OrderBy(d => d.Name).Select(d => new DepartmentItemFull(d.Id, d.Name, d.Email, d.IsActive)).ToListAsync(ct);
-        return Ok(full);
-    }
+    public async Task<ActionResult<List<object>>> GetDepartments(CancellationToken ct, [FromQuery] bool includeInactive = false) =>
+        Ok(await _branches.ListAsync(includeInactive, ct));
 
     [HttpPost("departments")]
     [Authorize(Roles = nameof(UserRole.Admin))]
-    public async Task<ActionResult<DepartmentItemFull>> CreateDepartment(CreateDepartmentRequest request)
-    {
-        var emailTaken = await _db.Departments.AnyAsync(d => d.Email == request.Email);
-        if (emailTaken) return Conflict(new { message = "A branch with this email already exists." });
-
-        var entity = new Department { Name = request.Name, Email = request.Email };
-        _db.Departments.Add(entity);
-        _db.Audit(_currentUser.UserId, "DepartmentCreated", nameof(Department), entity.Id, $"Branch '{entity.Name}'");
-        await _db.SaveChangesAsync();
-
-        var creatorEmail = await _db.Users.Where(u => u.Id == _currentUser.UserId).Select(u => u.Email).FirstOrDefaultAsync();
-        await _emailSender.SendAsync(entity.Email, "Welcome to Ticket System Tech",
-            EmailTemplates.BranchWelcome(entity.Name, creatorEmail ?? "your administrator"));
-
-        return Ok(new DepartmentItemFull(entity.Id, entity.Name, entity.Email, entity.IsActive));
-    }
+    public async Task<ActionResult<DepartmentItemFull>> CreateDepartment(CreateDepartmentRequest request) =>
+        this.ToActionResult(await _branches.CreateAsync(request));
 
     [HttpPut("departments/{id:guid}")]
     [Authorize(Roles = nameof(UserRole.Admin))]
-    public async Task<ActionResult<DepartmentItemFull>> UpdateDepartment(Guid id, UpdateDepartmentRequest request)
-    {
-        var entity = await _db.Departments.FindAsync(id);
-        if (entity is null) return NotFound();
-
-        var emailTaken = await _db.Departments.AnyAsync(d => d.Email == request.Email && d.Id != id);
-        if (emailTaken) return Conflict(new { message = "A branch with this email already exists." });
-
-        _db.Audit(_currentUser.UserId, "DepartmentUpdated", nameof(Department), entity.Id,
-            $"Active: {entity.IsActive} -> {request.IsActive}; name changed: {entity.Name != request.Name}; e-mail changed: {entity.Email != request.Email}");
-        entity.Name = request.Name;
-        entity.Email = request.Email;
-        entity.IsActive = request.IsActive;
-        await _db.SaveChangesAsync();
-        return Ok(new DepartmentItemFull(entity.Id, entity.Name, entity.Email, entity.IsActive));
-    }
+    public async Task<ActionResult<DepartmentItemFull>> UpdateDepartment(Guid id, UpdateDepartmentRequest request) =>
+        this.ToActionResult(await _branches.UpdateAsync(id, request));
 
     /// <summary>
     /// Permanently removes a branch. Tickets, staff and sub-branches referencing it are not deleted —
@@ -136,259 +73,107 @@ public class LookupsController : ControllerBase
     [Authorize(Roles = nameof(UserRole.Admin))]
     public async Task<IActionResult> DeleteDepartment(Guid id)
     {
-        var entity = await _db.Departments.FindAsync(id);
-        if (entity is null) return NotFound();
-
-        var taskCount = await _db.WorkTasks.CountAsync(t => t.DepartmentId == id);
-        if (taskCount > 0)
-            return BadRequest(new { message = $"This branch still has {taskCount} task(s) assigned to it. Reassign or complete them first." });
-
-        var subBranchCount = await _db.SubBranches.CountAsync(s => s.DepartmentId == id);
-        if (subBranchCount > 0)
-            return BadRequest(new { message = $"This branch still has {subBranchCount} sub-branch(es). Remove them first." });
-
-        // A connected mailbox holds OAuth tokens for the branch; deleting the branch would strand them (and the database
-        // now refuses it with a foreign key), so ask for the mailbox to be disconnected first.
-        if (await _db.EmailConnections.AnyAsync(c => c.DepartmentId == id))
-            return BadRequest(new { message = "This branch still has a connected mailbox. Disconnect it first." });
-
-        // A ticket without a branch is treated as "unrouted" and is visible to every employee, and a staff member without a
-        // branch is lost to every list. Both used to be what the database did when the branch was deleted (ON DELETE SET NULL);
-        // now it refuses (RESTRICT), and these checks say why in words.
-        var staffCount = await _db.Users.CountAsync(u => u.DepartmentId == id);
-        if (staffCount > 0)
-            return BadRequest(new { message = $"This branch still has {staffCount} staff member(s). Move or remove them first." });
-
-        var ticketCount = await _db.Tickets.CountAsync(t => t.DepartmentId == id);
-        if (ticketCount > 0)
-            return BadRequest(new { message = $"This branch still owns {ticketCount} ticket(s). Transfer them to another branch first." });
-
-        _db.Departments.Remove(entity);
-        _db.Audit(_currentUser.UserId, "DepartmentDeleted", nameof(Department), entity.Id, $"Branch '{entity.Name}'");
-        await _db.SaveChangesAsync();
-        return NoContent();
+        var deleted = await _branches.DeleteAsync(id);
+        return deleted.Succeeded ? NoContent() : this.ToResult(deleted);
     }
+
 
     // ---------------- Sub-branches ----------------
 
     /// <summary>Every authenticated user may list a branch's sub-branches — needed to populate the required sub-branch picker when opening tickets or assigning employees.</summary>
     [HttpGet("departments/{departmentId:guid}/sub-branches")]
-    public async Task<ActionResult<List<SubBranchItemFull>>> GetSubBranches(Guid departmentId, CancellationToken ct, [FromQuery] bool includeInactive = false)
-    {
-        var isAdmin = User.IsInRole(nameof(UserRole.Admin));
-        var query = _db.SubBranches.Where(s => s.DepartmentId == departmentId);
-        if (!includeInactive || !isAdmin) query = query.Where(s => s.IsActive);
-
-        var items = await query.OrderBy(s => s.Name)
-            .Select(s => new SubBranchItemFull(s.Id, s.Name, s.IsActive, s.DepartmentId)).ToListAsync(ct);
-        return Ok(items);
-    }
+    public async Task<ActionResult<List<SubBranchItemFull>>> GetSubBranches(Guid departmentId, CancellationToken ct, [FromQuery] bool includeInactive = false) =>
+        Ok(await _branches.ListSubBranchesAsync(departmentId, includeInactive, ct));
 
     [HttpPost("departments/{departmentId:guid}/sub-branches")]
     [Authorize(Roles = nameof(UserRole.Admin))]
-    public async Task<ActionResult<SubBranchItemFull>> CreateSubBranch(Guid departmentId, CreateSubBranchRequest request)
-    {
-        var departmentExists = await _db.Departments.AnyAsync(d => d.Id == departmentId);
-        if (!departmentExists) return NotFound(new { message = "Branch not found." });
-
-        var nameTaken = await _db.SubBranches.AnyAsync(s => s.DepartmentId == departmentId && s.Name == request.Name);
-        if (nameTaken) return Conflict(new { message = "This branch already has a sub-branch with that name." });
-
-        var entity = new SubBranch { DepartmentId = departmentId, Name = request.Name };
-        _db.SubBranches.Add(entity);
-        await _db.SaveChangesAsync();
-        return Ok(new SubBranchItemFull(entity.Id, entity.Name, entity.IsActive, entity.DepartmentId));
-    }
+    public async Task<ActionResult<SubBranchItemFull>> CreateSubBranch(Guid departmentId, CreateSubBranchRequest request) =>
+        this.ToActionResult(await _branches.CreateSubBranchAsync(departmentId, request));
 
     [HttpPut("sub-branches/{id:guid}")]
     [Authorize(Roles = nameof(UserRole.Admin))]
-    public async Task<ActionResult<SubBranchItemFull>> UpdateSubBranch(Guid id, UpdateSubBranchRequest request)
-    {
-        var entity = await _db.SubBranches.FindAsync(id);
-        if (entity is null) return NotFound();
+    public async Task<ActionResult<SubBranchItemFull>> UpdateSubBranch(Guid id, UpdateSubBranchRequest request) =>
+        this.ToActionResult(await _branches.UpdateSubBranchAsync(id, request));
 
-        var nameTaken = await _db.SubBranches.AnyAsync(s => s.DepartmentId == entity.DepartmentId && s.Name == request.Name && s.Id != id);
-        if (nameTaken) return Conflict(new { message = "This branch already has a sub-branch with that name." });
-
-        entity.Name = request.Name;
-        entity.IsActive = request.IsActive;
-        await _db.SaveChangesAsync();
-        return Ok(new SubBranchItemFull(entity.Id, entity.Name, entity.IsActive, entity.DepartmentId));
-    }
 
     // ---------------- Help Topics ----------------
 
     [HttpGet("help-topics")]
-    public async Task<ActionResult<List<object>>> GetHelpTopics(CancellationToken ct, [FromQuery] bool includeInactive = false)
-    {
-        var isAdmin = User.IsInRole(nameof(UserRole.Admin));
-        var query = _db.HelpTopics.AsQueryable();
-        if (!includeInactive || !isAdmin) query = query.Where(h => h.IsActive);
-
-        if (isAdmin)
-        {
-            var full = await query.OrderBy(h => h.Name).Select(h => new LookupItemFull(h.Id, h.Name, h.IsActive)).ToListAsync(ct);
-            return Ok(full);
-        }
-        var items = await query.OrderBy(h => h.Name).Select(h => new LookupItem(h.Id, h.Name)).ToListAsync(ct);
-        return Ok(items);
-    }
+    public async Task<ActionResult<List<object>>> GetHelpTopics(CancellationToken ct, [FromQuery] bool includeInactive = false) =>
+        Ok(await _lookups.ListHelpTopicsAsync(includeInactive, ct));
 
     [HttpPost("help-topics")]
     [Authorize(Roles = nameof(UserRole.Admin))]
-    public async Task<ActionResult<LookupItemFull>> CreateHelpTopic(NameOnlyRequest request)
-    {
-        var entity = new HelpTopic { Name = request.Name };
-        _db.HelpTopics.Add(entity);
-        await _db.SaveChangesAsync();
-        return Ok(new LookupItemFull(entity.Id, entity.Name, entity.IsActive));
-    }
+    public async Task<ActionResult<LookupItemFull>> CreateHelpTopic(NameOnlyRequest request) =>
+        Ok(await _lookups.CreateHelpTopicAsync(request));
 
     [HttpPut("help-topics/{id:guid}")]
     [Authorize(Roles = nameof(UserRole.Admin))]
-    public async Task<ActionResult<LookupItemFull>> UpdateHelpTopic(Guid id, UpdateNameRequest request)
-    {
-        var entity = await _db.HelpTopics.FindAsync(id);
-        if (entity is null) return NotFound();
-        entity.Name = request.Name;
-        entity.IsActive = request.IsActive;
-        await _db.SaveChangesAsync();
-        return Ok(new LookupItemFull(entity.Id, entity.Name, entity.IsActive));
-    }
+    public async Task<ActionResult<LookupItemFull>> UpdateHelpTopic(Guid id, UpdateNameRequest request) =>
+        this.ToActionResult(await _lookups.UpdateHelpTopicAsync(id, request));
 
     /// <summary>Refused while any ticket uses the help topic: deleting it would erase it from those tickets' history. Deactivate it instead.</summary>
     [HttpDelete("help-topics/{id:guid}")]
     [Authorize(Roles = nameof(UserRole.Admin))]
     public async Task<IActionResult> DeleteHelpTopic(Guid id)
     {
-        var entity = await _db.HelpTopics.FindAsync(id);
-        if (entity is null) return NotFound();
-
-        var inUse = await _db.Tickets.CountAsync(t => t.HelpTopicId == id);
-        if (inUse > 0) return BadRequest(new { message = InUseMessage("help topic", inUse) });
-        _db.HelpTopics.Remove(entity);
-        await _db.SaveChangesAsync();
-        return NoContent();
+        var deleted = await _lookups.DeleteHelpTopicAsync(id);
+        return deleted.Succeeded ? NoContent() : this.ToResult(deleted);
     }
+
 
     // ---------------- Ticket Categories ----------------
     // Internal-only classification staff pick when opening a ticket — clients never see this list.
 
     [HttpGet("ticket-categories")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    public async Task<ActionResult<List<object>>> GetTicketCategories(CancellationToken ct, [FromQuery] bool includeInactive = false)
-    {
-        var isAdmin = User.IsInRole(nameof(UserRole.Admin));
-        var query = _db.TicketCategories.AsQueryable();
-        if (!includeInactive || !isAdmin) query = query.Where(c => c.IsActive);
-
-        if (isAdmin)
-        {
-            var full = await query.OrderBy(c => c.Name).Select(c => new LookupItemFull(c.Id, c.Name, c.IsActive)).ToListAsync(ct);
-            return Ok(full);
-        }
-        var items = await query.OrderBy(c => c.Name).Select(c => new LookupItem(c.Id, c.Name)).ToListAsync(ct);
-        return Ok(items);
-    }
+    public async Task<ActionResult<List<object>>> GetTicketCategories(CancellationToken ct, [FromQuery] bool includeInactive = false) =>
+        Ok(await _lookups.ListTicketCategoriesAsync(includeInactive, ct));
 
     [HttpPost("ticket-categories")]
     [Authorize(Roles = nameof(UserRole.Admin))]
-    public async Task<ActionResult<LookupItemFull>> CreateTicketCategory(NameOnlyRequest request)
-    {
-        var entity = new TicketCategory { Name = request.Name };
-        _db.TicketCategories.Add(entity);
-        await _db.SaveChangesAsync();
-        return Ok(new LookupItemFull(entity.Id, entity.Name, entity.IsActive));
-    }
+    public async Task<ActionResult<LookupItemFull>> CreateTicketCategory(NameOnlyRequest request) =>
+        Ok(await _lookups.CreateTicketCategoryAsync(request));
 
     [HttpPut("ticket-categories/{id:guid}")]
     [Authorize(Roles = nameof(UserRole.Admin))]
-    public async Task<ActionResult<LookupItemFull>> UpdateTicketCategory(Guid id, UpdateNameRequest request)
-    {
-        var entity = await _db.TicketCategories.FindAsync(id);
-        if (entity is null) return NotFound();
-        entity.Name = request.Name;
-        entity.IsActive = request.IsActive;
-        await _db.SaveChangesAsync();
-        return Ok(new LookupItemFull(entity.Id, entity.Name, entity.IsActive));
-    }
+    public async Task<ActionResult<LookupItemFull>> UpdateTicketCategory(Guid id, UpdateNameRequest request) =>
+        this.ToActionResult(await _lookups.UpdateTicketCategoryAsync(id, request));
 
     /// <summary>Refused while any ticket uses the category: deleting it would erase it from those tickets' history. Deactivate it instead.</summary>
     [HttpDelete("ticket-categories/{id:guid}")]
     [Authorize(Roles = nameof(UserRole.Admin))]
     public async Task<IActionResult> DeleteTicketCategory(Guid id)
     {
-        var entity = await _db.TicketCategories.FindAsync(id);
-        if (entity is null) return NotFound();
-
-        var inUse = await _db.Tickets.CountAsync(t => t.CategoryId == id);
-        if (inUse > 0) return BadRequest(new { message = InUseMessage("category", inUse) });
-        _db.TicketCategories.Remove(entity);
-        await _db.SaveChangesAsync();
-        return NoContent();
+        var deleted = await _lookups.DeleteTicketCategoryAsync(id);
+        return deleted.Succeeded ? NoContent() : this.ToResult(deleted);
     }
+
 
     // ---------------- SLA Plans ----------------
 
     [HttpGet("sla-plans")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    public async Task<ActionResult<List<object>>> GetSlaPlans(CancellationToken ct, [FromQuery] bool includeInactive = false)
-    {
-        var isAdmin = User.IsInRole(nameof(UserRole.Admin));
-        var query = _db.SlaPlans.AsQueryable();
-        if (!includeInactive || !isAdmin) query = query.Where(s => s.IsActive);
-
-        if (isAdmin)
-        {
-            var full = await query.OrderBy(s => s.ResolutionTimeHours)
-                .Select(s => new SlaPlanItemFull(s.Id, s.Name, s.ResolutionTimeHours, s.IsActive)).ToListAsync(ct);
-            return Ok(full);
-        }
-        var items = await query.OrderBy(s => s.ResolutionTimeHours)
-            .Select(s => new SlaPlanItem(s.Id, s.Name, s.ResolutionTimeHours)).ToListAsync(ct);
-        return Ok(items);
-    }
+    public async Task<ActionResult<List<object>>> GetSlaPlans(CancellationToken ct, [FromQuery] bool includeInactive = false) =>
+        Ok(await _lookups.ListSlaPlansAsync(includeInactive, ct));
 
     [HttpPost("sla-plans")]
     [Authorize(Roles = nameof(UserRole.Admin))]
-    public async Task<ActionResult<SlaPlanItemFull>> CreateSlaPlan(CreateSlaPlanRequest request)
-    {
-        var entity = new SlaPlan { Name = request.Name, ResolutionTimeHours = request.ResolutionTimeHours };
-        _db.SlaPlans.Add(entity);
-        await _db.SaveChangesAsync();
-        return Ok(new SlaPlanItemFull(entity.Id, entity.Name, entity.ResolutionTimeHours, entity.IsActive));
-    }
+    public async Task<ActionResult<SlaPlanItemFull>> CreateSlaPlan(CreateSlaPlanRequest request) =>
+        Ok(await _lookups.CreateSlaPlanAsync(request));
 
     [HttpPut("sla-plans/{id:guid}")]
     [Authorize(Roles = nameof(UserRole.Admin))]
-    public async Task<ActionResult<SlaPlanItemFull>> UpdateSlaPlan(Guid id, UpdateSlaPlanRequest request)
-    {
-        var entity = await _db.SlaPlans.FindAsync(id);
-        if (entity is null) return NotFound();
-        entity.Name = request.Name;
-        entity.ResolutionTimeHours = request.ResolutionTimeHours;
-        entity.IsActive = request.IsActive;
-        await _db.SaveChangesAsync();
-        return Ok(new SlaPlanItemFull(entity.Id, entity.Name, entity.ResolutionTimeHours, entity.IsActive));
-    }
+    public async Task<ActionResult<SlaPlanItemFull>> UpdateSlaPlan(Guid id, UpdateSlaPlanRequest request) =>
+        this.ToActionResult(await _lookups.UpdateSlaPlanAsync(id, request));
 
     /// <summary>Refused while any ticket uses the SLA plan: deleting it would erase it from those tickets' history. Deactivate it instead.</summary>
     [HttpDelete("sla-plans/{id:guid}")]
     [Authorize(Roles = nameof(UserRole.Admin))]
     public async Task<IActionResult> DeleteSlaPlan(Guid id)
     {
-        var entity = await _db.SlaPlans.FindAsync(id);
-        if (entity is null) return NotFound();
-
-        var inUse = await _db.Tickets.CountAsync(t => t.SlaPlanId == id);
-        if (inUse > 0) return BadRequest(new { message = InUseMessage("SLA plan", inUse) });
-
-        _db.SlaPlans.Remove(entity);
-        await _db.SaveChangesAsync();
-        return NoContent();
+        var deleted = await _lookups.DeleteSlaPlanAsync(id);
+        return deleted.Succeeded ? NoContent() : this.ToResult(deleted);
     }
 
-    private static string InUseMessage(string what, int tickets) =>
-        $"This {what} is used by {tickets} ticket(s) and cannot be deleted, because those tickets would lose it from their history. " +
-        "Deactivate it instead: it then disappears from the pickers, and everything that already uses it stays as it is.";
 }

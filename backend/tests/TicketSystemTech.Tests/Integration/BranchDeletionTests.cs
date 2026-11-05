@@ -20,6 +20,8 @@ public class BranchDeletionTests : IAsyncLifetime
     private readonly List<Guid> _branches = new();
     private readonly List<Actor> _people = new();
     private readonly List<Guid> _tickets = new();
+    private readonly List<Guid> _tasks = new();
+    private readonly List<Guid> _connections = new();
 
     public BranchDeletionTests(ApiWorld world) => _world = world;
 
@@ -31,6 +33,9 @@ public class BranchDeletionTests : IAsyncLifetime
         await _world.Db(async db =>
         {
             await db.Tickets.Where(t => _tickets.Contains(t.Id)).ExecuteDeleteAsync();
+            await db.WorkTasks.Where(t => _tasks.Contains(t.Id)).ExecuteDeleteAsync();
+            await db.EmailConnections.Where(c => _connections.Contains(c.Id)).ExecuteDeleteAsync();
+            await db.SubBranches.Where(s => _branches.Contains(s.DepartmentId)).ExecuteDeleteAsync();
             return await db.AuditLogs.Where(a => a.EntityId != null && _branches.Contains(a.EntityId.Value)).ExecuteDeleteAsync();
         });
         using var scope = _world.Factory.Services.CreateScope();
@@ -94,6 +99,35 @@ public class BranchDeletionTests : IAsyncLifetime
 
         var error = await Assert.ThrowsAsync<SqlException>(() => _world.Db(db => db.Departments.Where(d => d.Id == branch).ExecuteDeleteAsync()));
         Assert.Contains("FK_Tickets_Departments_DepartmentId", error.Message);
+    }
+
+    [SqlFact]
+    public async Task A_branch_with_tasks_a_mailbox_or_sub_branches_says_which_in_words()
+    {
+        var withTask = await NewBranchAsync();
+        var task = new WorkTask { Title = "t", Description = "d", DepartmentId = withTask, CreatedByUserId = _world.Admin.Id, AssignedByUserId = _world.Admin.Id, AssignedToUserId = _world.EmpA1.Id };
+        await _world.Db(async db => { db.WorkTasks.Add(task); return await db.SaveChangesAsync(); });
+        _tasks.Add(task.Id);
+        var byTask = await _world.Send(_world.Admin, HttpMethod.Delete, $"/api/departments/{withTask}");
+        Assert.Equal(400, byTask.Code);
+        Assert.Contains("task(s)", byTask.Text);
+
+        var withMailbox = await NewBranchAsync();
+        var connection = new EmailConnection { DepartmentId = withMailbox, ConnectedByUserId = _world.Admin.Id, ConnectedEmail = "servis@authz.test", AccessToken = "a", RefreshToken = "r", AccessTokenExpiresAtUtc = DateTime.UtcNow.AddHours(1), UpdatedAt = DateTime.UtcNow };
+        await _world.Db(async db => { db.EmailConnections.Add(connection); return await db.SaveChangesAsync(); });
+        _connections.Add(connection.Id);
+        var byMailbox = await _world.Send(_world.Admin, HttpMethod.Delete, $"/api/departments/{withMailbox}");
+        Assert.Equal(400, byMailbox.Code);
+        Assert.Contains("mailbox", byMailbox.Text);
+
+        var withSub = await NewBranchAsync();
+        Assert.Equal(200, (await _world.Post(_world.Admin, $"/api/departments/{withSub}/sub-branches", new { name = "Podposlovnica" })).Code);
+        var bySub = await _world.Send(_world.Admin, HttpMethod.Delete, $"/api/departments/{withSub}");
+        Assert.Equal(400, bySub.Code);
+        Assert.Contains("sub-branch", bySub.Text);
+
+        foreach (var branch in new[] { withTask, withMailbox, withSub })
+            Assert.True(await _world.Db(db => db.Departments.AnyAsync(d => d.Id == branch))); // nothing was deleted
     }
 
     [SqlFact]
