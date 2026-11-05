@@ -3,9 +3,9 @@ import { format } from 'date-fns';
 import clsx from 'clsx';
 import { workTasksApi } from '../../api/workTasks';
 import { usersApi } from '../../api/users';
-import { lookupsApi } from '../../api/lookups';
+import { useDepartments } from '../../api/lookupQueries';
 import { useAuthStore } from '../../store/authStore';
-import type { DepartmentItemFull, WorkTaskDetailDto, WorkTaskListItem, WorkTaskStatus } from '../../types';
+import type { WorkTaskDetailDto, WorkTaskListItem, WorkTaskStatus } from '../../types';
 import { Button, Card, ErrorText, Input, Label, Select, Textarea, Field } from '../../components/ui';
 import { TaskDetailPanel } from './TaskDetailPanel';
 
@@ -45,7 +45,7 @@ export default function TasksPage() {
   const canCreate = canManage || isAdmin;
 
   const [tasks, setTasks] = useState<WorkTaskListItem[]>([]);
-  const [departments, setDepartments] = useState<DepartmentItemFull[]>([]);
+  const { data: departments = [] } = useDepartments({ enabled: isAdmin });
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [mineOnly, setMineOnly] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -70,10 +70,6 @@ export default function TasksPage() {
       })
       .then(setTasks);
   }
-
-  useEffect(() => {
-    if (isAdmin) lookupsApi.departments().then(setDepartments);
-  }, [isAdmin]);
 
   useEffect(() => {
     refresh();

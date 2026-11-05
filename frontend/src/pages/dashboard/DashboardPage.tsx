@@ -2,13 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { format, subDays } from 'date-fns';
 import { zoomRange } from '../../lib/chartRange';
 import { reportsApi } from '../../api/reports';
-import { lookupsApi } from '../../api/lookups';
+import { useDepartments } from '../../api/lookupQueries';
 import { usersApi } from '../../api/users';
 import { workTasksApi } from '../../api/workTasks';
 import type {
   BranchBreakdownEntryDto,
   BranchGanttResponse,
-  DepartmentItemFull,
   GanttResponse,
   LeaderboardEntryDto,
   PeriodComparisonPointDto,
@@ -84,7 +83,7 @@ export default function DashboardPage() {
   const [departmentId, setDepartmentId] = useState('');
   const [agentId, setAgentId] = useState('');
 
-  const [departments, setDepartments] = useState<DepartmentItemFull[]>([]);
+  const { data: departments = [] } = useDepartments({ enabled: isAdmin });
   const [employees, setEmployees] = useState<UserListItemDto[]>([]);
 
   const [summary, setSummary] = useState<ReportSummaryDto | null>(null);
@@ -120,7 +119,6 @@ export default function DashboardPage() {
   const canRunAiInsights = rangeDays >= MIN_AI_INSIGHTS_DAYS;
 
   useEffect(() => {
-    if (isAdmin) lookupsApi.departments().then(setDepartments);
     const scope = isAdmin ? undefined : user?.departmentId ?? undefined;
     usersApi.list({ role: 'Employee', departmentId: scope }).then(setEmployees);
   }, [isAdmin, user?.departmentId]);

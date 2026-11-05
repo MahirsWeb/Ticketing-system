@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import clsx from 'clsx';
 import { ticketsApi } from '../../api/tickets';
-import { lookupsApi } from '../../api/lookups';
+import { useDepartments } from '../../api/lookupQueries';
 import { usersApi } from '../../api/users';
-import type { DepartmentItemFull, TicketListItem, UserListItemDto } from '../../types';
+import type { TicketListItem, UserListItemDto } from '../../types';
 import { Button, Card, ErrorText, Input, PriorityBadge, Select, Spinner } from '../../components/ui';
 import { DateRangePicker } from '../../components/DateRangePicker';
 import { useAuthStore } from '../../store/authStore';
@@ -76,7 +76,7 @@ export default function TicketsListPage() {
   const isStaff = isAdmin || isEmployee;
   const [items, setItems] = useState<TicketListItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
-  const [departments, setDepartments] = useState<DepartmentItemFull[]>([]);
+  const { data: departments = [] } = useDepartments({ enabled: isAdmin });
   const [employees, setEmployees] = useState<UserListItemDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -145,9 +145,8 @@ export default function TicketsListPage() {
 
   useEffect(() => {
     if (!isStaff) return;
-    if (isAdmin) lookupsApi.departments().then(setDepartments);
     usersApi.list({ role: 'Employee' }).then(setEmployees);
-  }, [isStaff, isAdmin]);
+  }, [isStaff]);
 
   function selectTab(tab: TicketTab) {
     const p = tabToParams(tab);

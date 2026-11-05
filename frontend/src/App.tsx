@@ -1,7 +1,8 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { DocumentMeta } from './components/DocumentMeta';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from './api/queryClient';
 import LoginPage from './pages/auth/LoginPage';
 import SetNewPasswordPage from './pages/auth/SetNewPasswordPage';
 import VerifyEmailPage from './pages/auth/VerifyEmailPage';
@@ -29,8 +30,6 @@ const EmailsPage = lazy(() => import('./pages/emails/EmailsPage'));
 const EmailCallbackPage = lazy(() => import('./pages/emails/EmailCallbackPage'));
 const AiAssistantPage = lazy(() => import('./pages/knowledgeBase/AiAssistantPage'));
 const SimilarTicketsPage = lazy(() => import('./pages/tickets/SimilarTicketsPage'));
-
-const queryClient = new QueryClient();
 
 function HomeRoute() {
   const user = useAuthStore((s) => s.user);

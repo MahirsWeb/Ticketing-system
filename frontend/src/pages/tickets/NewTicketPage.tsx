@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ticketsApi } from '../../api/tickets';
-import { lookupsApi } from '../../api/lookups';
-import type { DepartmentItemFull } from '../../types';
+import { useDepartments } from '../../api/lookupQueries';
 import { Button, Card, ErrorText, Input, Label, Select, Field } from '../../components/ui';
 import { RichTextEditor } from '../../components/RichTextEditor';
 import { newIdempotencyKey } from '../../lib/idempotency';
@@ -13,16 +12,12 @@ export default function NewTicketPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [departmentId, setDepartmentId] = useState('');
-  const [departments, setDepartments] = useState<DepartmentItemFull[]>([]);
+  const { data: departments = [] } = useDepartments();
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   // One key per visit to this form: a retry of the same submission gets the existing ticket back, not a duplicate.
   const [idempotencyKey] = useState(newIdempotencyKey);
-
-  useEffect(() => {
-    lookupsApi.departments().then(setDepartments);
-  }, []);
 
   function addFiles(newFiles: File[]) {
     setFiles((prev) => [...prev, ...newFiles]);

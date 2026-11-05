@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import TicketsListPage from './TicketsListPage';
@@ -7,6 +7,7 @@ import { ticketsApi } from '../../api/tickets';
 import { lookupsApi } from '../../api/lookups';
 import { usersApi } from '../../api/users';
 import { useAuthStore } from '../../store/authStore';
+import { renderWithQuery } from '../../test/renderWithQuery';
 import type { TicketListItem } from '../../types';
 
 vi.mock('../../api/tickets', () => ({ ticketsApi: { list: vi.fn() } }));
@@ -36,7 +37,7 @@ const page = (items: TicketListItem[]) => ({ items, totalCount: items.length, pa
 const searchesAsked = () => list.mock.calls.map((c) => c[0].search ?? null);
 
 function renderPage() {
-  return render(
+  return renderWithQuery(
     <MemoryRouter initialEntries={['/tickets']}>
       <TicketsListPage />
     </MemoryRouter>
