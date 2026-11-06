@@ -39,6 +39,11 @@ if (args.Length >= 1 && args[0] == "--create-key-certificate")
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Do not announce the web server in a "Server: Kestrel" response header: the software name (and, on some stacks, its
+// version) is of no use to a caller and only helps someone fingerprint the host. A reverse proxy in front may add its
+// own; strip that at the proxy. Set here so it holds however the app is hosted (Docker, IIS in-process, bare Kestrel).
+builder.WebHost.ConfigureKestrel(o => o.AddServerHeader = false);
+
 Log.Logger = LoggingSetup.Configure(new LoggerConfiguration(), builder.Configuration, builder.Environment.ContentRootPath).CreateLogger();
 builder.Host.UseSerilog();
 

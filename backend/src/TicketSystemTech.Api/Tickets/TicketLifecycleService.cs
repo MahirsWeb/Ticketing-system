@@ -276,6 +276,11 @@ public sealed class TicketLifecycleService : ITicketLifecycleService
     {
         ticket.ClosedByUserId = null;
         ticket.ClosedAtUtc = null;
+        // The resolution summary describes how the ticket was put to rest; once it is live again that no longer holds.
+        // Leaving it behind would show a stale "Resolution" on the working ticket and, the moment it reached Resolved
+        // again, feed that old text to the knowledge base and search as if it were this cycle's resolution. A fresh
+        // close always requires a new summary, so nothing is lost.
+        ticket.ResolutionSummary = null;
         // The ticket is live again: if it is (still) past its due date the overdue alert has to be able to fire again.
         ticket.OverdueNotifiedAtUtc = null;
     }

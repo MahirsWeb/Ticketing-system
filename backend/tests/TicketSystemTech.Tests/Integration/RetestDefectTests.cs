@@ -78,6 +78,7 @@ public class RetestDefectTests : IAsyncLifetime
             t.ClosedAtUtc = DateTime.UtcNow.AddHours(-2);
             t.ClosedByUserId = _world.EmpA1.Id;
             t.OverdueNotifiedAtUtc = DateTime.UtcNow.AddDays(-1);
+            t.ResolutionSummary = "Replaced the faulty cable.";
         });
 
         var response = await _world.Post(_world.EmpA1, $"/api/tickets/{id}/status", new { status = "Open" });
@@ -88,6 +89,9 @@ public class RetestDefectTests : IAsyncLifetime
         Assert.Null(ticket.ClosedAtUtc);
         Assert.Null(ticket.ClosedByUserId);
         Assert.Null(ticket.OverdueNotifiedAtUtc);
+        // The resolution describes a ticket at rest; once it is live again it must not linger (it would otherwise
+        // reappear as this cycle's "Resolution" the moment the ticket reached Resolved and re-entered the knowledge base).
+        Assert.Null(ticket.ResolutionSummary);
     }
 
     [SqlFact]
@@ -98,12 +102,14 @@ public class RetestDefectTests : IAsyncLifetime
             t.ClosedAtUtc = DateTime.UtcNow.AddHours(-2);
             t.ClosedByUserId = _world.EmpA1.Id;
             t.OverdueNotifiedAtUtc = DateTime.UtcNow.AddDays(-1);
+            t.ResolutionSummary = "Replaced the faulty cable.";
         });
 
         Assert.Equal(200, (await _world.Post(_world.EmpA1, $"/api/tickets/{id}/reopen")).Code);
 
         var ticket = await _world.Db(db => db.Tickets.AsNoTracking().SingleAsync(t => t.Id == id));
         Assert.Equal((null, null, null), (ticket.ClosedAtUtc, ticket.ClosedByUserId, ticket.OverdueNotifiedAtUtc));
+        Assert.Null(ticket.ResolutionSummary);
     }
 
     // ======================= TS-35.1: two requests racing for the same thing =======================

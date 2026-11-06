@@ -1,7 +1,8 @@
 # Otvorene stavke: šta nije ispravljeno i šta je ispravljeno samo djelimično
 
-**Stanje:** poslije šestog kruga ispravki (2026-11-05). Detalji i dokazi su u `IZVJESTAJ_ISPRAVKI.md` (odjeljci 9.8 do 9.12).
-**Testovi:** 754 backend i 1027 frontend testova prolaze, bez preskočenih. Format, ranjivi paketi, migracije u odnosu na model, lint, `tsc`, build i `npm audit` (visoke) su čisti.
+**Stanje:** poslije sedmog kruga (penetracijsko testiranje, 2026-11-06). Detalji i dokazi su u `IZVJESTAJ_ISPRAVKI.md` (odjeljci 9.8 do 9.13).
+**Testovi:** 756 backend i 1027 frontend testova prolaze, bez preskočenih. Format, ranjivi paketi, migracije u odnosu na model, lint, `tsc`, build i `npm audit` (visoke) su čisti.
+**Sedmi krug:** ~130 napada u izolovanom okruženju (autorizacija/IDOR, tokeni, ubacivanje, XSS, datoteke, zaglavlja, poslovna logika); nađene i ispravljene dvije niske stavke (`Server: Kestrel` zaglavlje; ponovno otvaranje nije brisalo `ResolutionSummary`). Vidi 9.13.
 **Izvor:** analiza `ANALYSIS_1` (T-01 … T-64), ponovno testiranje commita `7af778a` (149 scenarija) i moje ponovno izvođenje scenarija na izoliranoj kopiji.
 
 ## 1. Sažetak
