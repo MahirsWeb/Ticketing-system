@@ -8,6 +8,19 @@ export { userKeys };
 
 export type UserPageParams = Parameters<typeof usersApi.listPaged>[0];
 
+/**
+ * The client who has this e-mail address: asked for when a page is opened for an e-mail, to find out who wrote it. Asked once for each address,
+ * for nothing without one, cancelled when the page is left, and forgotten with it (an account may be made or changed in the meantime).
+ */
+export function useClientByEmail(email: string | undefined) {
+  return useQuery({
+    queryKey: userKeys.clientByEmail(email ?? ''),
+    queryFn: ({ signal }) => usersApi.lookupByEmail(email!, signal),
+    enabled: !!email,
+    gcTime: 0,
+  });
+}
+
 /** The clients of one company: asked for when the company is opened and forgotten when it is left. */
 export function useCompanyClients(companyId: string) {
   return useQuery({ queryKey: userKeys.companyClients(companyId), queryFn: () => usersApi.list({ role: 'Client', companyId }), gcTime: 0 });

@@ -4,7 +4,7 @@ Ovaj dokument kaže **šta znači „prošlo“**, šta je u drugom krugu testir
 i čime, šta nije moguće dokazati na ovom računaru i šta je svjesno ostalo otvoreno. Cilj je da se pri sljedećem krugu ponovo
 provjerava **samo razlika**, a ne cijeli skup.
 
-Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 747 backend i 969 frontend testova.
+Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 747 backend i 1015 frontend testova.
 
 ## 1. Statusi
 
@@ -213,3 +213,7 @@ T-37 (drugi dio): izvoz čita samo kolone koje ulaze u red, a list "Timeline" tr
 T-58 (drugi dio): pravila analizatora CA2016, CA1305, CA1068, CA1001 i jedanaest novih su greške koje prekidaju build (ranije su bila samo upozorenja, iako je dokumentacija tvrdila suprotno); ispravljeni nalazi o nezatvorenim dokumentima i porukama, blokirajućem čitanju JSON-a i ponovljenim nizovima; imena ograničavača zahtjeva su konstante, a `RateLimitPolicyTests` (3 testa) drži svaki endpoint uz postojeću politiku.
 
 T-47 (drugi dio): e-mailovi o nalozima, sigurnosti i novoj poslovnici biraju naslov i šablon na jednom mjestu (`AccountMessages`); imena deset push događaja su konstante (`PushEvents`), a test provjerava da preglednik sluša tačno ta imena; dva push događaja koje šalju servisi sada vidi test (`RecordingPublisher`); 14 novih testova.
+
+SEC-03: izgrađena stranica nosi vlastiti Content-Security-Policy (skripte samo s adrese aplikacije, veza samo s njom i s API-jem, slike i s API-ja), napravljen od `VITE_API_BASE_URL`; adresa API-ja se prihvata samo kao običan http(s) izvor; 31 test; `img-src` u README-u i u primjerima za server sada ima i adresu API-ja.
+
+T-17 (petnaesti dio): traženje klijenta po e-mailu pošiljaoca je na zajedničkom sloju upita; automatski odgovor više ne zamjenjuje klijenta kojeg je osoba našla sama, a njegov neuspjeh se ne ispisuje poslije uspješne ručne pretrage; 15 testova. T-17 je time riješen (pisanje ostaje u rukovaocima, po odluci).

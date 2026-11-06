@@ -12,8 +12,8 @@ function accountMade<T>(request: Promise<T>): Promise<T> {
 }
 
 export const usersApi = {
-  lookupByEmail: (email: string) =>
-    apiClient.get<ClientLookupResult>('/api/users/lookup-by-email', { params: { email } }).then((r) => r.data),
+  lookupByEmail: (email: string, signal?: AbortSignal) =>
+    apiClient.get<ClientLookupResult>('/api/users/lookup-by-email', { params: { email }, signal }).then((r) => r.data),
 
   createEmployee: (firstName: string, lastName: string, email: string, role: UserRole, departmentId?: string, subBranchId?: string) =>
     accountMade(

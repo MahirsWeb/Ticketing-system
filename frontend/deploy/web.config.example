@@ -28,7 +28,7 @@
         <add name="Referrer-Policy" value="strict-origin-when-cross-origin" />
         <add name="Permissions-Policy" value="camera=(), microphone=(), geolocation=()" />
         <add name="Strict-Transport-Security" value="max-age=15552000" />
-        <add name="Content-Security-Policy" value="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://api.firma.ba wss://api.firma.ba; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" />
+        <add name="Content-Security-Policy" value="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://api.firma.ba; font-src 'self' data:; connect-src 'self' https://api.firma.ba wss://api.firma.ba; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" />
       </customHeaders>
     </httpProtocol>
   </system.webServer>

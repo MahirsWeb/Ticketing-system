@@ -407,7 +407,7 @@ Ostalo što vrijedi znati:
   `vercel.json`, ali **primijenjeno**, ne samo prijavljivano):
 
   ```
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://api.firma.ba wss://api.firma.ba; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://api.firma.ba; font-src 'self' data:; connect-src 'self' https://api.firma.ba wss://api.firma.ba; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
@@ -416,7 +416,12 @@ Ostalo što vrijedi znati:
 
   Isprobajte ga najprije kao `Content-Security-Policy-Report-Only` dok konzola preglednika ne prestane prijavljivati
   prekršaje. Slike s tuđih adresa u sadržaju tiketa i email-ova se ionako uklanjaju (server ih čisti pri upisu, a preglednik
-  pri prikazu), pa `img-src` ne treba `https:`. Zaglavlja za sam API se ne podešavaju. U `Cors:AllowedOrigins` mora biti
+  pri prikazu), pa `img-src` ne treba `https:`, ali treba adresu API-ja: slike profila i prilozi se učitavaju s nje.
+  Izgrađena stranica (`npm run build`) već nosi vlastiti `Content-Security-Policy` u `index.html`, napravljen od iste
+  `VITE_API_BASE_URL` (skripte samo s adrese aplikacije, veza samo s njom i s API-jem, bez ugrađenih objekata), pa vrijedi
+  i ako server ne šalje zaglavlje. Pravilo u stranici ne može reći ko smije aplikaciju okvirom prikazati (`frame-ancestors`)
+  niti prijavljivati prekršaje, zato zaglavlje servera ostaje bolje mjesto za cijelo pravilo; kad postoje oba, vrijedi
+  ono što oba dopuštaju. Zaglavlja za sam API se ne podešavaju. U `Cors:AllowedOrigins` mora biti
   adresa na kojoj se frontend otvara. Gotovi primjeri (nisu isprobani u CI-ju): `frontend/deploy/nginx.conf.example` i
   `frontend/deploy/web.config.example` (IIS), oba s zamjenom na `index.html`, zaglavljima i keširanjem; i
   `docker-compose.example.yml` (API + SQL Server, uz `docker-compose.env.example`).

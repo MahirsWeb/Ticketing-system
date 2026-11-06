@@ -180,7 +180,8 @@ describe('opening a ticket on behalf of a client', () => {
       expect(screen.getByText(/pulled from the marked email/)).toBeInTheDocument();
       expect(screen.getByText(/Its attachments will be added to the ticket automatically/)).toBeInTheDocument();
       expect(vi.mocked(emailIntegrationApi.getPrefill).mock.calls).toEqual([['m1']]);
-      expect(vi.mocked(usersApi.lookupByEmail).mock.calls).toEqual([['k@x.test']]);
+      // asked once, with the means of cancelling it when the page is left
+      expect(vi.mocked(usersApi.lookupByEmail).mock.calls).toEqual([['k@x.test', expect.any(AbortSignal)]]);
     });
 
     it('does not promise attachments when the e-mail has none', async () => {
