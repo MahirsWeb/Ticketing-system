@@ -8,6 +8,7 @@ public class LookupRulesTests : IAsyncLifetime
 {
     private readonly ApiWorld _world;
     private readonly List<Guid> _branches = new();
+    private readonly List<Guid> _companies = new();
 
     public LookupRulesTests(ApiWorld world) => _world = world;
 
@@ -15,11 +16,12 @@ public class LookupRulesTests : IAsyncLifetime
 
     public async ValueTask DisposeAsync()
     {
-        if (!_world.Available || _branches.Count == 0) return;
+        if (!_world.Available || (_branches.Count == 0 && _companies.Count == 0)) return;
         await _world.Db(async db =>
         {
             await db.SubBranches.Where(s => _branches.Contains(s.DepartmentId)).ExecuteDeleteAsync();
             await db.AuditLogs.Where(a => a.EntityId != null && _branches.Contains(a.EntityId.Value)).ExecuteDeleteAsync();
+            await db.Companies.Where(c => _companies.Contains(c.Id)).ExecuteDeleteAsync();
             return await db.Departments.Where(d => _branches.Contains(d.Id)).ExecuteDeleteAsync();
         });
     }
@@ -50,6 +52,36 @@ public class LookupRulesTests : IAsyncLifetime
 
         // a branch may keep its own address when it is saved again
         var own = await _world.Send(_world.Admin, HttpMethod.Put, $"/api/departments/{first}", new { name = "Prvi", email, isActive = true });
+        Assert.Equal(200, own.Code);
+    }
+
+    [SqlFact]
+    public async Task Two_companies_cannot_share_a_name_case_insensitively()
+    {
+        var name = "Lookup firm " + Guid.NewGuid().ToString("N")[..6];
+
+        var first = await _world.Post(_world.Admin, "/api/companies", new { name, address = (string?)null, contactInfo = (string?)null });
+        Assert.Equal(200, first.Code);
+        _companies.Add(first.Json.GetProperty("id").GetGuid());
+
+        // same name in a different case must be refused, with the exact message the frontend shows
+        var dup = await _world.Post(_world.Admin, "/api/companies", new { name = name.ToUpperInvariant(), address = (string?)null, contactInfo = (string?)null });
+        Assert.Equal(400, dup.Code);
+        Assert.Contains("already exists", dup.Text);
+
+        // a second, differently named company can still be made, then cannot be renamed onto the first
+        var second = await _world.Post(_world.Admin, "/api/companies", new { name = name + " druga", address = (string?)null, contactInfo = (string?)null });
+        Assert.Equal(200, second.Code);
+        var secondId = second.Json.GetProperty("id").GetGuid();
+        _companies.Add(secondId);
+
+        var rename = await _world.Send(_world.Admin, HttpMethod.Put, $"/api/companies/{secondId}",
+            new { name, address = (string?)null, contactInfo = (string?)null, isActive = true });
+        Assert.Equal(400, rename.Code);
+
+        // a company may be saved again under its own name
+        var own = await _world.Send(_world.Admin, HttpMethod.Put, $"/api/companies/{secondId}",
+            new { name = name + " druga", address = (string?)null, contactInfo = (string?)null, isActive = true });
         Assert.Equal(200, own.Code);
     }
 

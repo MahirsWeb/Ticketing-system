@@ -14,7 +14,7 @@ public interface ICompanyService
 {
     Task<List<CompanyItemFull>> ListAsync(bool includeInactive, CancellationToken ct);
     Task<Outcome<CompanyItemFull>> GetAsync(Guid id, CancellationToken ct);
-    Task<LookupItem> CreateAsync(CreateCompanyRequest request);
+    Task<Outcome<LookupItem>> CreateAsync(CreateCompanyRequest request);
     Task<Outcome<CompanyItemFull>> UpdateAsync(Guid id, UpdateCompanyRequest request);
 }
 
@@ -47,18 +47,34 @@ public sealed class CompanyService : ICompanyService
         return Outcome<CompanyItemFull>.Ok(new CompanyItemFull(c.Id, c.Name, c.Address, c.ContactInfo, c.IsActive));
     }
 
-    public async Task<LookupItem> CreateAsync(CreateCompanyRequest request)
+    // A company name is how staff pick the firm when opening a ticket on someone's behalf and how reports group the work;
+    // two firms with the same name would be indistinguishable in every list. Enforced here (there is no unique index, so an
+    // older database that already holds duplicates still starts). Compared case-insensitively and across inactive firms too,
+    // so a switched-off firm's name cannot quietly be reused. The message is the one the frontend already shows.
+    private const string NameTakenMessage = "A company with that name already exists.";
+
+    private Task<bool> NameTakenAsync(string name, Guid? exceptId = null)
     {
+        var normalized = (name ?? string.Empty).Trim().ToLower();
+        return _db.Companies.AnyAsync(c => c.Name.ToLower() == normalized && (exceptId == null || c.Id != exceptId));
+    }
+
+    public async Task<Outcome<LookupItem>> CreateAsync(CreateCompanyRequest request)
+    {
+        if (await NameTakenAsync(request.Name))
+            return Outcome<LookupItem>.Invalid(NameTakenMessage);
         var company = new Company { Name = request.Name, Address = request.Address, ContactInfo = request.ContactInfo };
         _db.Companies.Add(company);
         await _db.SaveChangesAsync();
-        return new LookupItem(company.Id, company.Name);
+        return Outcome<LookupItem>.Ok(new LookupItem(company.Id, company.Name));
     }
 
     public async Task<Outcome<CompanyItemFull>> UpdateAsync(Guid id, UpdateCompanyRequest request)
     {
         var c = await _db.Companies.FindAsync(id);
         if (c is null) return Outcome<CompanyItemFull>.NotFound();
+        if (await NameTakenAsync(request.Name, id))
+            return Outcome<CompanyItemFull>.Invalid(NameTakenMessage);
 
         c.Name = request.Name;
         c.Address = request.Address;

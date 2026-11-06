@@ -614,3 +614,19 @@ Vlasnik je tražio detaljno ispitivanje propusta na osnovu paketa testera (`Desk
 **Testovi poslije ispravki:** **756 backend** (2 nova: `SecurityHeadersTests`; plus prošireni TS-ARC-02 testovi), 1027 frontend, svi prolaze. `dotnet format --verify-no-changes` čist, nema promjena modela u odnosu na migracije.
 
 **Zaključak:** osim dvije navedene niske stavke, nije nađen nijedan nov propust — autorizacija po ulogama i poslovnicama, izolacija klijenata, sanitizacija HTML-a, potpisani linkovi za datoteke, idempotentnost, zaključavanje naloga, rate-limit i otpornost na ubacivanje drže se kako je opisano u ranijim krugovima.
+
+### 9.14 Dublja provjera: logika naloga, konkurentnost i jedinstvenost firme (2026-11-06)
+
+Na zahtjev vlasnika („provjeriti još jednom detaljno", pred produkciju) urađen je drugi, dublji krug na izolovanoj probnoj bazi (`TicketSystemTech_Retest_1106b`, ista izolacija kao 9.13; prava baza nije dirana). Pregledani su putevi koji mogu srušiti aplikaciju ili uništiti podatke u produkciji, uz ~30 dodatnih provjera.
+
+**Potvrđeno da drži (uživo):**
+- **Opoziv tokena:** postojeći token deaktiviranog zaposlenika odbija se odmah (keš `UserStatusValidationMiddleware` se briše pri deaktivaciji); promjena uloge čini stari token nevažećim; security stamp se rotira pri promjeni lozinke.
+- **Zaštita naloga:** admin ne može deaktivirati vlastiti nalog ni promijeniti vlastitu ulogu — nemoguće je doći do nula aktivnih admina.
+- **Konkurentnost:** pet istovremenih zatvaranja istog tiketa → tačno jedan 200 i četiri **409** (rowversion), nijedan 500 i bez izgubljene izmjene; isto za konkurentnu dodjelu zaduženog (bez 500, doda se najviše jednom).
+- **Pravila dodjele:** klijent se ne može staviti kao izvršilac; zaposlenik druge poslovnice se ne može dodati; on-behalf ne prima izvršioca iz druge poslovnice; deaktivacija zaposlenika ga skida sa živih tiketa.
+- **Robusnost ulaza:** `sortBy` sa smećem/injekcijom ne ruši upit i daje stabilan poredak; negativne/ogromne vrijednosti SLA sati i dana prekoračenja ne daju 500; prazno ime šifarnika odbijeno.
+- **Idempotentnost je po korisniku:** isti `Idempotency-Key` od drugog korisnika pravi nov tiket (nema ponavljanja/curenja tuđeg odgovora), i taj korisnik ne može pročitati tuđi tiket.
+
+**Nađena i ispravljena greška (1, srednje/nisko — integritet podataka + neslaganje s frontendom):** **naziv firme nije bio jedinstven.** `CompanyService.CreateAsync`/`UpdateAsync` nisu provjeravali naziv, pa se moglo napraviti više firmi istog imena. Frontend (i njegovi testovi) već očekuju poruku **„A company with that name already exists."** (stranice `CompaniesPage`/`CompanyDetailPage`), a lažni API je to odbijao — pravi server nije, pa je ta putanja greške u UI-ju bila mrtva, a duplikati su prolazili u produkciju (zbuna pri otvaranju tiketa u ime klijenta, u filterima i izvještajima po firmi). Sada se naziv provjerava neosjetljivo na velika/mala slova i uključujući isključene firme, na kreiranju i preimenovanju (osim vlastitog imena), uz 400 i tačno tu poruku. **Bez migracije namjerno** — nema jedinstvenog indeksa, pa se baza koja već ima duplikate i dalje pokreće (novi duplikati se samo više ne prave). Dodat test `Two_companies_cannot_share_a_name_case_insensitively` (`LookupRulesTests`). Dosljedno s poslovnicama (jedinstven email) i podposlovnicama (jedinstven naziv).
+
+**Testovi:** **757 backend** (1 nov), 1027 frontend, svi prolaze; `dotnet format` čist; nema promjena modela vs. migracije. Osim ove jedne stavke, u dubljem krugu nije nađen nijedan nov propust.

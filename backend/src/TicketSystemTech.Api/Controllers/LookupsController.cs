@@ -40,7 +40,7 @@ public class LookupsController : ControllerBase
     [HttpPost("companies")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
     public async Task<ActionResult<LookupItem>> CreateCompany(CreateCompanyRequest request) =>
-        Ok(await _companies.CreateAsync(request));
+        this.ToActionResult(await _companies.CreateAsync(request));
 
     [HttpPut("companies/{id:guid}")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
