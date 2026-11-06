@@ -4,7 +4,7 @@ Ovaj dokument kaže **šta znači „prošlo“**, šta je u drugom krugu testir
 i čime, šta nije moguće dokazati na ovom računaru i šta je svjesno ostalo otvoreno. Cilj je da se pri sljedećem krugu ponovo
 provjerava **samo razlika**, a ne cijeli skup.
 
-Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 718 backend i 859 frontend testova.
+Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 718 backend i 912 frontend testova.
 
 ## 1. Statusi
 
@@ -203,3 +203,5 @@ T-17 (dvanaesti dio): zvonce obavijesti je na zajedničkom sloju upita; 19 testo
 T-17 (trinaesti dio): izvještaj o sličnim problemima je na zajedničkom sloju upita; 25 testova koji ranije nisu postojali, uključujući odbijen zahtjev koji je ostavljao vječno čekanje, odgovore van reda, tekst bez sadržaja i otvaranje tiketa tastaturom.
 
 T-17 (četrnaesti dio): status ponovnog indeksiranja baze znanja je jedno zajedničko stanje za oba panela; 25 novih testova, uključujući gutanje grešaka pri učitavanju i praćenju, zakasnjeli odgovor koji je poništavao pokretanje, gomilanje pitanja i panele koji nisu znali jedan za drugi.
+
+T-42 (deseti dio): izbornik raspona datuma je razbijen na model, kuku i prikaze (361 → 111 linija); 53 nova testa, uključujući raspon bez kraja koji se mijenjao samo otvaranjem i napuštanjem izbornika, Escape i tastaturu.
