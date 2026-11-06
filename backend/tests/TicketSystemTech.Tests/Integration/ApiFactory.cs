@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using TicketSystemTech.Application.Common.Interfaces;
+using TicketSystemTech.Infrastructure.Persistence;
 
 namespace TicketSystemTech.Tests.Integration;
 
@@ -20,6 +22,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     /// <summary>The wire to the mail server. Everything above it is real: the application files e-mail in the outbox table as it does in
     /// production, and the tests run the worker by hand against this fake.</summary>
     public FakeEmailTransport Transport { get; } = new();
+    /// <summary>What the application asked the database, for tests that say how many queries something costs.</summary>
+    public CommandLog Commands { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -32,6 +36,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             services.AddSingleton<IChatCompletionService>(Chat);
             services.RemoveAll<IEmailTransport>();
             services.AddSingleton<IEmailTransport>(Transport);
+            services.ConfigureDbContext<AppDbContext>(options => options.AddInterceptors(Commands));
         });
     }
 }

@@ -23,24 +23,50 @@ public static class TicketWorkBlocks
     /// (or a session that is running) is not at work on every future day.
     /// </summary>
     public static async Task<List<TicketWorkBlock>> ForUserAsync(AppDbContext db, Guid userId, DateTime from, DateTime to,
-        Guid? onlyBranch, DateTime nowUtc, CancellationToken ct = default)
+        Guid? onlyBranch, DateTime nowUtc, CancellationToken ct = default) =>
+        (await ForUsersAsync(db, new[] { userId }, from, to, onlyBranch, nowUtc, ct))[userId];
+
+    /// <summary>
+    /// The same for several people at once, in two queries whatever their number (the timeline export used to ask twice for each
+    /// employee, so its cost grew with the staff). Everyone asked for has an entry, empty when they have no blocks.
+    /// </summary>
+    public static async Task<Dictionary<Guid, List<TicketWorkBlock>>> ForUsersAsync(AppDbContext db, IReadOnlyCollection<Guid> userIds,
+        DateTime from, DateTime to, Guid? onlyBranch, DateTime nowUtc, CancellationToken ct = default)
     {
+        var blocks = userIds.Distinct().ToDictionary(id => id, _ => new List<TicketWorkBlock>());
+        if (blocks.Count == 0) return blocks;
+        var ids = blocks.Keys.ToList();
+
         var logged = await db.TicketWorkSessions.AsNoTracking()
-            .Where(s => s.UserId == userId && s.StartedAtUtc < to && (s.EndedAtUtc ?? nowUtc) >= from)
+            .Where(s => ids.Contains(s.UserId) && s.StartedAtUtc < to && (s.EndedAtUtc ?? nowUtc) >= from)
             .Where(s => onlyBranch == null || s.Ticket!.DepartmentId == onlyBranch)
-            .Select(s => new TicketWorkBlock(s.TicketId, s.Ticket!.TicketNumber, s.Ticket.Title, s.Ticket.Status, s.StartedAtUtc, s.EndedAtUtc, true))
+            .Select(s => new { s.UserId, s.TicketId, s.Ticket!.TicketNumber, s.Ticket.Title, s.Ticket.Status, s.StartedAtUtc, s.EndedAtUtc })
             .ToListAsync(ct);
+        foreach (var s in logged)
+            blocks[s.UserId].Add(new TicketWorkBlock(s.TicketId, s.TicketNumber, s.Title, s.Status, s.StartedAtUtc, s.EndedAtUtc, true));
 
         // A ticket nobody has logged any work on still appears for the person it is assigned to, from when it was opened until
         // it was closed, so a ticket does not vanish from the chart just because nobody typed in a time. It is not a measure
         // of effort (the export leaves its hours empty).
         var standIn = await db.Tickets.AsNoTracking()
-            .Where(t => t.Assignees.Any(a => a.IsPrimary && a.UserId == userId) && !t.WorkSessions.Any()
+            .Where(t => t.Assignees.Any(a => a.IsPrimary && ids.Contains(a.UserId)) && !t.WorkSessions.Any()
                 && t.OpenedAtUtc != null && t.OpenedAtUtc < to && (t.ClosedAtUtc ?? nowUtc) >= from)
             .Where(t => onlyBranch == null || t.DepartmentId == onlyBranch)
-            .Select(t => new TicketWorkBlock(t.Id, t.TicketNumber, t.Title, t.Status, t.OpenedAtUtc!.Value, t.ClosedAtUtc, false))
+            .Select(t => new
+            {
+                WorkerId = t.Assignees.Where(a => a.IsPrimary).Select(a => a.UserId).First(),
+                t.Id,
+                t.TicketNumber,
+                t.Title,
+                t.Status,
+                Start = t.OpenedAtUtc!.Value,
+                t.ClosedAtUtc,
+            })
             .ToListAsync(ct);
+        foreach (var t in standIn)
+            blocks[t.WorkerId].Add(new TicketWorkBlock(t.Id, t.TicketNumber, t.Title, t.Status, t.Start, t.ClosedAtUtc, false));
 
-        return logged.Concat(standIn).OrderBy(b => b.Start).ToList();
+        foreach (var id in ids) blocks[id] = blocks[id].OrderBy(b => b.Start).ToList();
+        return blocks;
     }
 }

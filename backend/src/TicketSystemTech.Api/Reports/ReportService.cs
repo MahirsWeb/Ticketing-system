@@ -106,10 +106,12 @@ public sealed class ReportService : IReportService
         var (from, to, companyId, agentId, departmentId, subBranchId) = filter;
         var (f, t) = NormalizeRange(from, to);
 
-        var createdStatuses = await Scoped(f, t, companyId, agentId, departmentId, subBranchId).Select(x => x.Status).ToListAsync(ct);
-        var totalNew = createdStatuses.Count(x => x == TicketStatus.New);
+        // The database counts the statuses; what comes back is one row for each status, not one for each ticket.
+        var perStatus = await Scoped(f, t, companyId, agentId, departmentId, subBranchId)
+            .GroupBy(x => x.Status).Select(g => new { Status = g.Key, Count = g.Count() }).ToListAsync(ct);
+        var totalNew = perStatus.Where(x => x.Status == TicketStatus.New).Sum(x => x.Count);
         // Resolved is not closed yet, so it is still work in progress.
-        var totalOpen = createdStatuses.Count(x => x is TicketStatus.Open or TicketStatus.InProgress or TicketStatus.Resolved);
+        var totalOpen = perStatus.Where(x => x.Status is TicketStatus.Open or TicketStatus.InProgress or TicketStatus.Resolved).Sum(x => x.Count);
 
         var closed = await ClosedIn(f, t, companyId, agentId, departmentId, subBranchId)
             .Select(x => new { x.OpenedAtUtc, x.ClosedAtUtc, x.DueDateUtc })
@@ -178,7 +180,8 @@ public sealed class ReportService : IReportService
         var (f, t) = NormalizeRange(from, to);
         var created = await _db.Tickets.AsNoTracking()
             .Where(x => x.CreatedAt >= f && x.CreatedAt <= t && x.DepartmentId.HasValue)
-            .Select(x => new { DepartmentId = x.DepartmentId!.Value, x.Status })
+            .GroupBy(x => new { DepartmentId = x.DepartmentId!.Value, x.Status })
+            .Select(g => new { g.Key.DepartmentId, g.Key.Status, Count = g.Count() })
             .ToListAsync(ct);
         var closedPerBranch = await _db.Tickets.AsNoTracking()
             .Where(x => x.ClosedAtUtc != null && x.ClosedAtUtc >= f && x.ClosedAtUtc <= t && x.DepartmentId.HasValue)
@@ -193,8 +196,8 @@ public sealed class ReportService : IReportService
             .Select(id => new BranchBreakdownEntryDto(
                 id,
                 departments.GetValueOrDefault(id, "Unknown"),
-                created.Count(x => x.DepartmentId == id && x.Status == TicketStatus.New),
-                created.Count(x => x.DepartmentId == id && x.Status is TicketStatus.Open or TicketStatus.InProgress or TicketStatus.Resolved),
+                created.Where(x => x.DepartmentId == id && x.Status == TicketStatus.New).Sum(x => x.Count),
+                created.Where(x => x.DepartmentId == id && x.Status is TicketStatus.Open or TicketStatus.InProgress or TicketStatus.Resolved).Sum(x => x.Count),
                 closedPerBranch.GetValueOrDefault(id)))
             .OrderBy(x => x.DepartmentName)
             .ToList();
@@ -292,14 +295,29 @@ public sealed class ReportService : IReportService
     {
         var (from, to, companyId, agentId, departmentId, subBranchId) = filter;
         var (f, t) = NormalizeRange(from, to);
+        // Only the columns that go into a row: the text of a ticket (description, notes, resolution) is not read, and neither are its assignees,
+        // of which only the main one is wanted.
         var tickets = await Scoped(f, t, companyId, agentId, departmentId, subBranchId)
-            .Include(x => x.Assignees)
             .OrderBy(x => x.CreatedAt)
+            .Select(x => new
+            {
+                x.TicketNumber,
+                x.Title,
+                x.Status,
+                x.DepartmentId,
+                x.CompanyId,
+                x.ClientId,
+                PrimaryAssigneeId = x.Assignees.Where(a => a.IsPrimary).Select(a => (Guid?)a.UserId).FirstOrDefault(),
+                x.CreatedAt,
+                x.OpenedAtUtc,
+                x.ClosedAtUtc,
+                x.ClosedByUserId,
+            })
             .ToListAsync(ct);
 
-        var userIds = tickets.SelectMany(x => new[] { x.ClientId, x.PrimaryAssigneeId, x.ClosedByUserId })
+        var userIds = tickets.SelectMany(x => new[] { (Guid?)x.ClientId, x.PrimaryAssigneeId, x.ClosedByUserId })
             .Where(id => id.HasValue).Select(id => id!.Value)
-            .Concat(tickets.Select(x => x.ClientId)).Distinct().ToList();
+            .Distinct().ToList();
         var names = await _db.Users.Where(u => userIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => $"{u.FirstName} {u.LastName}", ct);
         var companies = await _db.Companies.ToDictionaryAsync(c => c.Id, c => c.Name, ct);
         var departments = await _db.Departments.ToDictionaryAsync(d => d.Id, d => d.Name, ct);
@@ -340,6 +358,16 @@ public sealed class ReportService : IReportService
         else if (isAdmin && departmentId.HasValue) employeeQuery = employeeQuery.Where(u => u.DepartmentId == departmentId.Value);
         var employees = await employeeQuery.OrderBy(u => u.FirstName).ToListAsync(ct);
 
+        // The work of all of them is asked for at once (three queries, whatever the number of employees; it used to be three for each).
+        var employeeIds = employees.Select(e => e.Id).ToList();
+        var now = UtcNow;
+        var ticketBlocksOf = await Queries.TicketWorkBlocks.ForUsersAsync(_db, employeeIds, from, to, isAdmin ? null : _currentUser.DepartmentId, now, ct);
+        var taskBlocksOf = (await _db.WorkTaskSessions.AsNoTracking()
+                .Where(x => employeeIds.Contains(x.UserId) && x.StartedAtUtc < to && (x.EndedAtUtc ?? now) >= from)
+                .Select(x => new { x.UserId, x.WorkTask!.Title, x.StartedAtUtc, x.EndedAtUtc })
+                .ToListAsync(ct))
+            .ToLookup(x => x.UserId);
+
         var timelineRows = new List<TimelineExportRow>();
         foreach (var employee in employees)
         {
@@ -347,8 +375,7 @@ public sealed class ReportService : IReportService
 
             // Same blocks as the Gantt chart. Hours are only given for logged work; the stand-in for a ticket nobody logged time on
             // would otherwise report "opened to closed" as if it were effort.
-            var ticketBlocks = await Queries.TicketWorkBlocks.ForUserAsync(_db, employee.Id, from, to, isAdmin ? null : _currentUser.DepartmentId, UtcNow, ct);
-            foreach (var b in ticketBlocks)
+            foreach (var b in ticketBlocksOf[employee.Id])
             {
                 timelineRows.Add(new TimelineExportRow(
                     employeeName, "Ticket", $"#{b.TicketNumber} — {b.Title}", b.Status.ToString(), b.Start, b.End,
@@ -356,12 +383,7 @@ public sealed class ReportService : IReportService
             }
 
             // One row per stretch of work, as on the chart.
-            var now = UtcNow;
-            var taskBlocks = await _db.WorkTaskSessions.AsNoTracking()
-                .Where(x => x.UserId == employee.Id && x.StartedAtUtc < to && (x.EndedAtUtc ?? now) >= from)
-                .Select(x => new { x.WorkTask!.Title, x.StartedAtUtc, x.EndedAtUtc })
-                .ToListAsync(ct);
-            foreach (var b in taskBlocks)
+            foreach (var b in taskBlocksOf[employee.Id])
             {
                 timelineRows.Add(new TimelineExportRow(
                     employeeName, "Task", b.Title, b.EndedAtUtc.HasValue ? "Done" : "InProgress", b.StartedAtUtc, b.EndedAtUtc,
