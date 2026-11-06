@@ -35,7 +35,7 @@ if (args.Length >= 1 && args[0] == "--create-key-certificate")
 {
     if (args.Length != 3)
     {
-        Console.Error.WriteLine("Usage: --create-key-certificate <file.pfx> <password>");
+        await Console.Error.WriteLineAsync("Usage: --create-key-certificate <file.pfx> <password>");
         Environment.ExitCode = 2;
         return;
     }
@@ -159,7 +159,7 @@ builder.Services.AddRateLimiter(options =>
     // Sign-in and the other account endpoints, per network address (RateLimits:AuthPerMinute). Sign-in has a second ceiling per
     // account, see LoginAttemptLimiter.
     var authPerMinute = builder.Configuration.GetValue("RateLimits:AuthPerMinute", 15);
-    options.AddPolicy("auth", context =>
+    options.AddPolicy(TicketSystemTech.Api.Security.RateLimitPolicies.Auth, context =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             factory: _ => new FixedWindowRateLimiterOptions
@@ -179,7 +179,7 @@ builder.Services.AddRateLimiter(options =>
         ?? "unknown";
 
     // Client-facing AI chat.
-    options.AddPolicy("ai", context =>
+    options.AddPolicy(TicketSystemTech.Api.Security.RateLimitPolicies.Ai, context =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: PersonOrAddress(context),
             factory: _ => new FixedWindowRateLimiterOptions
@@ -192,7 +192,7 @@ builder.Services.AddRateLimiter(options =>
     // Staff: AI search, questions, "similar tickets" and the AI summary of a period. Generous for real work (a question a
     // few seconds apart for ten minutes), tight for a script. Configurable: RateLimits:AiStaffPerTenMinutes.
     var aiStaffLimit = builder.Configuration.GetValue("RateLimits:AiStaffPerTenMinutes", 60);
-    options.AddPolicy("ai-staff", context =>
+    options.AddPolicy(TicketSystemTech.Api.Security.RateLimitPolicies.AiStaff, context =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: PersonOrAddress(context),
             factory: _ => new FixedWindowRateLimiterOptions
@@ -274,7 +274,8 @@ builder.Services.AddHttpContextAccessor();
 // Gemini, embeddings and Microsoft Graph: one typed client each, with its own timeouts, retries and circuit breaker.
 builder.Services.AddOutboundHttpClients();
 builder.Services.AddMemoryCache();
-builder.Services.AddHealthChecks().AddCheck<TicketSystemTech.Api.Health.DatabaseHealthCheck>("database", tags: new[] { "ready" });
+string[] readyTag = ["ready"];
+builder.Services.AddHealthChecks().AddCheck<TicketSystemTech.Api.Health.DatabaseHealthCheck>("database", tags: readyTag);
 builder.Services.AddScoped<TicketSystemTech.Api.Middleware.UserStatusValidationMiddleware>();
 // Key ring persisted to the database (not local disk) so encrypted OAuth tokens survive redeploys.
 var keyRing = builder.Services.AddDataProtection()
@@ -473,7 +474,7 @@ app.MapHub<NotificationsHub>("/hubs/notifications", options => options.CloseOnAu
 
 try
 {
-    app.Run();
+    await app.RunAsync();
 }
 catch (Exception ex) when (ex is not Microsoft.Extensions.Hosting.HostAbortedException)
 {

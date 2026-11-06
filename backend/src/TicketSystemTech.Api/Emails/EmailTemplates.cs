@@ -38,7 +38,7 @@ public static class EmailTemplates
                   <h2 style="margin-top:0;color:#1a2b4c;font-size:18px;">{title}</h2>
                   {bodyHtml}
                 </td></tr>
-                {(button != "" ? $"<tr><td style=\"padding:0 32px 32px;\">{button}</td></tr>" : "")}
+                {(!string.IsNullOrEmpty(button) ? $"<tr><td style=\"padding:0 32px 32px;\">{button}</td></tr>" : "")}
                 <tr><td style="padding:16px 32px;background:#f8f9fb;color:#888888;font-size:11px;">
                   This is an automated message from Ticket System Tech. Please do not reply directly to this email.
                 </td></tr>

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using TicketSystemTech.Api.Auth;
 using TicketSystemTech.Api.Contracts;
+using TicketSystemTech.Api.Security;
 using TicketSystemTech.Api.Services;
 
 namespace TicketSystemTech.Api.Controllers;
@@ -9,7 +10,7 @@ namespace TicketSystemTech.Api.Controllers;
 /// <summary>The HTTP face of signing in and the passwords. Every rule, and the careful sameness of the answers, is in <see cref="IAuthService"/>.</summary>
 [ApiController]
 [Route("api/auth")]
-[EnableRateLimiting("auth")]
+[EnableRateLimiting(RateLimitPolicies.Auth)]
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _auth;

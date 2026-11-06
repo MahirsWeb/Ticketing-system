@@ -29,8 +29,8 @@ public class DocumentTextExtractor : IDocumentTextExtractor
             string? text = extension switch
             {
                 ".docx" => ExtractDocx(content),
-                ".xlsx" => ExtractWorkbook(new XSSFWorkbook(content)),
-                ".xls" => ExtractWorkbook(new HSSFWorkbook(content)),
+                ".xlsx" => ExtractXlsx(content),
+                ".xls" => ExtractXls(content),
                 ".pdf" => ExtractPdf(content),
                 _ => null
             };
@@ -43,9 +43,21 @@ public class DocumentTextExtractor : IDocumentTextExtractor
         }
     }
 
+    private static string ExtractXlsx(Stream stream)
+    {
+        using var workbook = new XSSFWorkbook(stream);
+        return ExtractWorkbook(workbook);
+    }
+
+    private static string ExtractXls(Stream stream)
+    {
+        using var workbook = new HSSFWorkbook(stream);
+        return ExtractWorkbook(workbook);
+    }
+
     private static string ExtractDocx(Stream stream)
     {
-        var doc = new XWPFDocument(stream);
+        using var doc = new XWPFDocument(stream);
         var sb = new StringBuilder();
         foreach (var p in doc.Paragraphs)
             sb.AppendLine(p.Text);

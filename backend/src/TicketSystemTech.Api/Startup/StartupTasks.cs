@@ -27,8 +27,6 @@ namespace TicketSystemTech.Api.Startup;
 /// </summary>
 public static class StartupTasks
 {
-    private static readonly TimeSpan LockTimeout = TimeSpan.FromMinutes(5);
-
     public static async Task RunAsync(IServiceProvider services, IConfiguration configuration, ILogger logger, CancellationToken ct = default)
     {
         using var scope = services.CreateScope();
@@ -97,6 +95,8 @@ internal sealed class SqlStartupLock : IAsyncDisposable
 
     private const int WaitSeconds = 300;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+        Justification = "The connection is handed to the lock that is returned, which closes it when it is disposed; every path that does not return the lock disposes it here.")]
     public static async Task<SqlStartupLock> AcquireAsync(string connectionString, ILogger logger, CancellationToken ct)
     {
         var builder = new SqlConnectionStringBuilder(connectionString);

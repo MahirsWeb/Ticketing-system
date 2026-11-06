@@ -76,10 +76,13 @@ public static class PiiBackfillMigration
             while (await reader.ReadAsync(ct))
             {
                 var id = reader.GetGuid(0);
+                // The row is already in memory (the reader is not sequential), so asking whether a column is null does not wait for anything.
+#pragma warning disable CA1849
                 var email = reader.IsDBNull(1) ? null : reader.GetString(1);
                 var userName = reader.IsDBNull(2) ? null : reader.GetString(2);
                 var phone = reader.IsDBNull(3) ? null : reader.GetString(3);
                 var storedHash = reader.IsDBNull(4) ? null : reader.GetString(4);
+#pragma warning restore CA1849
 
                 if (email is null) continue;
 

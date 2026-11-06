@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using TicketSystemTech.Api.Contracts;
 using TicketSystemTech.Api.KnowledgeBase;
+using TicketSystemTech.Api.Security;
 using TicketSystemTech.Api.Services;
 using TicketSystemTech.Application.KnowledgeBase;
 using TicketSystemTech.Domain.Enums;
@@ -67,7 +68,7 @@ public class KnowledgeBaseController : ControllerBase
     /// </summary>
     [HttpGet("search")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    [EnableRateLimiting("ai-staff")]
+    [EnableRateLimiting(RateLimitPolicies.AiStaff)]
     public async Task<ActionResult<List<KnowledgeBaseSearchResultDto>>> Search([FromQuery] string query, CancellationToken ct, [FromQuery] int take = 10) =>
         this.ToActionResult(await _search.SearchAsync(query, take, ct));
 
@@ -78,7 +79,7 @@ public class KnowledgeBaseController : ControllerBase
     /// </summary>
     [HttpPost("ask")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    [EnableRateLimiting("ai-staff")]
+    [EnableRateLimiting(RateLimitPolicies.AiStaff)]
     public async Task<ActionResult<KnowledgeBaseAskResponseDto>> Ask(KnowledgeBaseAskRequest request, CancellationToken ct) =>
         this.ToActionResult(await _search.AskAsync(request, ct));
 
@@ -90,7 +91,7 @@ public class KnowledgeBaseController : ControllerBase
     /// </summary>
     [HttpPost("ask-client")]
     [Authorize(Roles = nameof(UserRole.Client))]
-    [EnableRateLimiting("ai")]
+    [EnableRateLimiting(RateLimitPolicies.Ai)]
     public async Task<ActionResult<KnowledgeBaseAskResponseDto>> AskClient(KnowledgeBaseAskRequest request, CancellationToken ct) =>
         this.ToActionResult(await _search.AskClientAsync(request, ct));
 
@@ -101,7 +102,7 @@ public class KnowledgeBaseController : ControllerBase
     /// </summary>
     [HttpGet("similar-tickets")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
-    [EnableRateLimiting("ai-staff")]
+    [EnableRateLimiting(RateLimitPolicies.AiStaff)]
     public async Task<ActionResult<SimilarTicketsResponseDto>> SimilarTickets([FromQuery] string query, CancellationToken ct) =>
         this.ToActionResult(await _search.SimilarTicketsAsync(query, ct));
 

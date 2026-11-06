@@ -110,11 +110,12 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
         var refreshToken = tokenResponse.GetProperty("refresh_token").GetString()!;
         var expiresIn = tokenResponse.GetProperty("expires_in").GetInt32();
 
-        var request = new HttpRequestMessage(HttpMethod.Get, $"{GraphBase}/me?$select=mail,userPrincipalName");
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{GraphBase}/me?$select=mail,userPrincipalName");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         var meResponse = await SendAsync(request, ct);
         if (!meResponse.IsSuccessStatusCode) throw RejectedBy(meResponse.StatusCode, null);
-        using var meDoc = JsonDocument.Parse(await meResponse.Content.ReadAsStreamAsync(ct));
+        await using var meStream = await meResponse.Content.ReadAsStreamAsync(ct);
+        using var meDoc = await JsonDocument.ParseAsync(meStream, cancellationToken: ct);
         var mail = meDoc.RootElement.TryGetProperty("mail", out var m) && m.ValueKind == JsonValueKind.String
             ? m.GetString()
             : meDoc.RootElement.GetProperty("userPrincipalName").GetString();
@@ -379,7 +380,7 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
 
     private async Task<JsonDocument> GetGraphOnceAsync(EmailConnection conn, string url, CancellationToken ct)
     {
-        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Unprotect(conn.AccessToken));
         var response = await SendAsync(request, ct);
         if (!response.IsSuccessStatusCode)
@@ -388,12 +389,13 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
             _logger.LogWarning("Microsoft Graph request failed ({Status}): {Body}", response.StatusCode, body);
             throw RejectedBy(response.StatusCode, body);
         }
-        return JsonDocument.Parse(await response.Content.ReadAsStreamAsync(ct));
+        await using var stream = await response.Content.ReadAsStreamAsync(ct);
+        return await JsonDocument.ParseAsync(stream, cancellationToken: ct);
     }
 
     private async Task<JsonElement> PostFormAsync(string url, Dictionary<string, string> form, CancellationToken ct)
     {
-        var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = new FormUrlEncodedContent(form) };
+        using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = new FormUrlEncodedContent(form) };
         var response = await SendAsync(request, ct);
         var body = await response.Content.ReadAsStringAsync(ct);
         if (!response.IsSuccessStatusCode)

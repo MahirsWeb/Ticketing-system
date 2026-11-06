@@ -77,7 +77,7 @@ public static class DbSeeder
             // otherwise it is not shown at all, and --reset-admin-password gives a new one when it is needed.
             if (configuration.GetValue("SeedAdmin:PrintGeneratedPassword", false))
             {
-                Console.Out.WriteLine(
+                await Console.Out.WriteLineAsync(
                     $"Generated initial password for {seedEmail} (valid {tempPasswordOptions.Value.ValidityMinutes} min, must be changed on first login): {seedPassword}");
             }
             else

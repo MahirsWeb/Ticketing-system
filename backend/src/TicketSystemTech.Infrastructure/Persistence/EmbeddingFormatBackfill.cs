@@ -46,8 +46,9 @@ public static class EmbeddingFormatBackfill
                 await using (var read = connection.CreateCommand())
                 {
                     read.CommandText =
-                        $"SELECT TOP ({BatchSize}) [Id], [EmbeddingJson] FROM [KnowledgeBaseChunks] " +
+                        "SELECT TOP (@batch) [Id], [EmbeddingJson] FROM [KnowledgeBaseChunks] " +
                         "WHERE [Id] > @last AND [EmbeddingBinary] IS NULL AND [EmbeddingJson] IS NOT NULL ORDER BY [Id]";
+                    read.Parameters.AddWithValue("@batch", BatchSize);
                     read.Parameters.AddWithValue("@last", lastId);
                     await using var reader = await read.ExecuteReaderAsync(ct);
                     while (await reader.ReadAsync(ct))
@@ -97,6 +98,8 @@ public static class EmbeddingFormatBackfill
         await CountAsync(connection,
             "SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID(N'[KnowledgeBaseChunks]') AND name = N'EmbeddingJson'", ct) > 0;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "Only this class calls it, with fixed text and no input of any kind.")]
     private static async Task<int> CountAsync(SqlConnection connection, string sql, CancellationToken ct)
     {
         await using var cmd = connection.CreateCommand();

@@ -46,22 +46,31 @@ public sealed class SmtpEmailTransport : IEmailTransport
             return EmailSendResult.Skipped("Smtp:FromAddress is not configured.");
         }
 
-        MimeMessage message;
+        // The message is closed when it has been sent, or has failed to be.
+        MimeMessage? message = null;
         try
         {
             message = BuildMessage(settings, toEmail, subject, htmlBody);
+            return await SendMessageAsync(settings, message, subject, ct);
         }
-        catch (ParseException ex)
+        catch (ParseException ex) when (message is null)
         {
             // An address that cannot be written down as an address will never be accepted by any server.
             _logger.LogWarning(ex, "An email with subject '{Subject}' has an address that cannot be used.", subject);
             return EmailSendResult.Failed("An address in the message is not a valid e-mail address.");
         }
+        finally
+        {
+            message?.Dispose();
+        }
+    }
 
+    private async Task<EmailSendResult> SendMessageAsync(SmtpSettings settings, MimeMessage message, string subject, CancellationToken ct)
+    {
         try
         {
             using var client = new SmtpClient { Timeout = settings.TimeoutSeconds * 1000 };
-            await client.ConnectAsync(settings.Host, settings.Port, settings.Security, ct);
+            await client.ConnectAsync(settings.Host!, settings.Port, settings.Security, ct); // SendAsync has seen that there is a host
             if (!string.IsNullOrEmpty(settings.Username))
                 await client.AuthenticateAsync(settings.Username, settings.Password ?? string.Empty, ct);
 

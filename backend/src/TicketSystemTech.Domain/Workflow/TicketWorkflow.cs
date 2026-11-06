@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using TicketSystemTech.Domain.Enums;
 
 namespace TicketSystemTech.Domain.Workflow;
@@ -15,7 +16,7 @@ namespace TicketSystemTech.Domain.Workflow;
 /// </summary>
 public static class TicketWorkflow
 {
-    private static readonly IReadOnlyDictionary<TicketStatus, TicketStatus[]> Allowed =
+    private static readonly FrozenDictionary<TicketStatus, TicketStatus[]> Allowed =
         new Dictionary<TicketStatus, TicketStatus[]>
         {
             [TicketStatus.New] = new[] { TicketStatus.Open },
@@ -23,7 +24,7 @@ public static class TicketWorkflow
             [TicketStatus.InProgress] = new[] { TicketStatus.Open, TicketStatus.Resolved, TicketStatus.Closed },
             [TicketStatus.Resolved] = new[] { TicketStatus.Open, TicketStatus.InProgress, TicketStatus.Closed },
             [TicketStatus.Closed] = new[] { TicketStatus.Open }
-        };
+        }.ToFrozenDictionary();
 
     public static bool CanTransition(TicketStatus from, TicketStatus to) =>
         Allowed.TryGetValue(from, out var targets) && targets.Contains(to);

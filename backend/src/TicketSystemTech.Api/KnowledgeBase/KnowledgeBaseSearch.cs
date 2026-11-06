@@ -189,7 +189,10 @@ public sealed class KnowledgeBaseSearch : IKnowledgeBaseSearch
     // ---------------- matching ----------------
 
     /// <summary>A retrieved source, either a resolved ticket or a chunk of uploaded documentation — exactly one of Ticket/Document is set.</summary>
-    private record ChunkMatch(Ticket? Ticket, KnowledgeBaseDocument? Document, string Content, int Score);
+    /// <summary>What separates the words of a question when it is cut into the words that are searched for.</summary>
+    private static readonly char[] KeywordSeparators = { ' ', ',', '.', '?', '!' };
+
+    private sealed record ChunkMatch(Ticket? Ticket, KnowledgeBaseDocument? Document, string Content, int Score);
 
     /// <summary>
     /// The eligible-chunk filter, pushed all the way into SQL: a document chunk always qualifies; a ticket
@@ -267,7 +270,7 @@ public sealed class KnowledgeBaseSearch : IKnowledgeBaseSearch
     private async Task<List<ChunkMatch>> FindMatchesByKeywordAsync(string query, int take, bool includeTicketSources, CancellationToken ct)
     {
         var keywords = query.ToLowerInvariant()
-            .Split(new[] { ' ', ',', '.', '?', '!' }, StringSplitOptions.RemoveEmptyEntries)
+            .Split(KeywordSeparators, StringSplitOptions.RemoveEmptyEntries)
             .Where(w => w.Length > 2)
             .Distinct()
             .ToList();
@@ -333,7 +336,7 @@ public sealed class KnowledgeBaseSearch : IKnowledgeBaseSearch
 
     // ---------------- similar-tickets report ----------------
 
-    private record SimilarTicketStats(int SimilarCount, int TotalEligible, double Percentage, List<ChunkMatch> Matches);
+    private sealed record SimilarTicketStats(int SimilarCount, int TotalEligible, double Percentage, List<ChunkMatch> Matches);
 
     /// <summary>
     /// "How common is this problem" — scores every eligible ticket against the query and counts how many
@@ -387,7 +390,7 @@ public sealed class KnowledgeBaseSearch : IKnowledgeBaseSearch
         else
         {
             var keywords = query.ToLowerInvariant()
-                .Split(new[] { ' ', ',', '.', '?', '!' }, StringSplitOptions.RemoveEmptyEntries)
+                .Split(KeywordSeparators, StringSplitOptions.RemoveEmptyEntries)
                 .Where(w => w.Length > 2)
                 .Distinct()
                 .ToList();

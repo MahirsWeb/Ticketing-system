@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text.RegularExpressions;
 
 namespace TicketSystemTech.Infrastructure.Services;
@@ -11,6 +12,9 @@ internal static partial class StoredFileKey
 {
     [GeneratedRegex(@"^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}(\.[a-z0-9]{1,10})?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex Shape();
+
+    private static readonly SearchValues<char> QueryOrFragment = SearchValues.Create("?#");
+    private static readonly SearchValues<char> PathSeparators = SearchValues.Create("/\\");
 
     public static bool IsSafe(string? key) => key is not null && Shape().IsMatch(key);
 
@@ -26,9 +30,9 @@ internal static partial class StoredFileKey
     {
         if (string.IsNullOrWhiteSpace(reference)) return null;
         var path = reference;
-        var q = path.IndexOfAny(new[] { '?', '#' });
+        var q = path.AsSpan().IndexOfAny(QueryOrFragment);
         if (q >= 0) path = path[..q];
-        var slash = path.LastIndexOfAny(new[] { '/', '\\' });
+        var slash = path.AsSpan().LastIndexOfAny(PathSeparators);
         var key = slash >= 0 ? path[(slash + 1)..] : path;
         return IsSafe(key) ? key : null;
     }

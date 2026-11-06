@@ -109,7 +109,8 @@ public class AiEmbeddingService : IEmbeddingService
                     return null;
                 }
 
-                using var doc = JsonDocument.Parse(await response.Content.ReadAsStreamAsync(ct));
+                await using var stream = await response.Content.ReadAsStreamAsync(ct);
+                using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
                 return ReadVector(settings, doc.RootElement);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)

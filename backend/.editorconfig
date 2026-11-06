@@ -3,14 +3,40 @@ root = true
 [*.cs]
 # A method that takes a CancellationToken has to hand it on to everything it awaits. Left at its default ("suggestion") the
 # build says nothing, and a forgotten token only shows when a user leaves a slow page and the query keeps running (T-40).
-dotnet_diagnostic.CA2016.severity = warning
+# A rule that is an error stops the build, here and in CI; a warning would only have been printed.
+dotnet_diagnostic.CA2016.severity = error
 
 # The application's own code (not the tests) is held to a few more rules that decide what a user sees or what keeps running:
 [src/**.cs]
 # Text, numbers and dates are written the same whatever language the server is set to (a month name in an Excel sheet,
 # a decimal point in a log line).
-dotnet_diagnostic.CA1305.severity = warning
+dotnet_diagnostic.CA1305.severity = error
 # The cancellation token is the last parameter, so callers can leave it out and named arguments are not needed to pass it.
-dotnet_diagnostic.CA1068.severity = warning
+dotnet_diagnostic.CA1068.severity = error
 # A type that owns something disposable can be disposed.
-dotnet_diagnostic.CA1001.severity = warning
+dotnet_diagnostic.CA1001.severity = error
+# What was opened is closed: a file, a connection, a request. Where an object is handed on to something that closes it, the place says so
+# (SuppressMessage with the reason).
+dotnet_diagnostic.CA2000.severity = error
+# A method that waits for things does not block a thread while it does (a stream read or written, a response parsed).
+dotnet_diagnostic.CA1849.severity = error
+# SQL text is not put together from anything that could come from outside; where it is built from fixed text, the place says so.
+dotnet_diagnostic.CA2100.severity = error
+# Small things that cost something every time they run, or that hide a mistake: an array made again for each call, a search for
+# characters that is not prepared once, a field nobody reads, a value set to what it already is, a type that nothing derives from.
+dotnet_diagnostic.CA1861.severity = error
+dotnet_diagnostic.CA1870.severity = error
+dotnet_diagnostic.CA1825.severity = error
+dotnet_diagnostic.CA1823.severity = error
+dotnet_diagnostic.CA1805.severity = error
+dotnet_diagnostic.CA1820.severity = error
+dotnet_diagnostic.CA1852.severity = error
+dotnet_diagnostic.CA1859.severity = error
+# Not enforced, on purpose: CA1848 (every log call a source-generated method) and CA1873 (arguments that "may be expensive"). Every log
+# call of the application is on a path that runs rarely (a failure, a start-up step, a backfill, the end of a background job), where
+# the saving cannot be measured, and the 72 calls would turn 21 classes into partial classes for it.
+
+# What the tool wrote (the migrations) is not held to the rules about arrays and the like.
+[src/**/Migrations/*.cs]
+dotnet_diagnostic.CA1861.severity = none
+dotnet_diagnostic.CA1825.severity = none

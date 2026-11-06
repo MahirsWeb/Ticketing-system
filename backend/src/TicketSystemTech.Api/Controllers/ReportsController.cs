@@ -57,7 +57,7 @@ public class ReportsController : ControllerBase
     /// in the help-topic breakdown for that period — no general knowledge, no invented details.
     /// </summary>
     [HttpPost("ai-insights")]
-    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("ai-staff")]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(TicketSystemTech.Api.Security.RateLimitPolicies.AiStaff)]
     public async Task<ActionResult<AiInsightsResponseDto>> AiInsights(AiInsightsRequest request, CancellationToken ct) =>
         this.ToActionResult(await _reports.AiInsightsAsync(request, ct));
 

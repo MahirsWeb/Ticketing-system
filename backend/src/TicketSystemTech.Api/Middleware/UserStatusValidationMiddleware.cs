@@ -37,7 +37,7 @@ public class UserStatusValidationMiddleware : IMiddleware
         _cache = cache;
     }
 
-    private record LiveStatus(bool Exists, bool IsActive, UserRole Role, Guid? DepartmentId, Guid? CompanyId, string? SecurityStamp);
+    private sealed record LiveStatus(bool Exists, bool IsActive, UserRole Role, Guid? DepartmentId, Guid? CompanyId, string? SecurityStamp);
 
     public async Task InvokeAsync(HttpContext context, RequestDelegate next)
     {
