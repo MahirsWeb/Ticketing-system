@@ -669,14 +669,16 @@ describe('the settings page', () => {
       expect(server.sent('POST', /documents\/k1\/reindex/)).toHaveLength(1);
     });
 
-    it('shows the state of a run that is already going when another one is asked for', async () => {
+    it('shows the state of a run that was started elsewhere after the page was opened, when another one is asked for', async () => {
       const user = userEvent.setup();
-      server.state.reindex = { ...server.state.reindex, state: 'Running', total: 20, processed: 4, message: 'Working on it.' };
       renderPage();
       await openTab(/Notifications/);
-      await user.click(within(rowOf(await screen.findByText('Manual'))).getByRole('button', { name: 'Re-index' }));
+      const row = rowOf(await screen.findByText('Manual'));
+      server.state.reindex = { ...server.state.reindex, state: 'Running', total: 20, processed: 4, message: 'Working on it.' };
+      await user.click(within(row).getByRole('button', { name: 'Re-index' }));
 
       expect(await screen.findByText(/4 \/ 20 · Working on it\./)).toBeInTheDocument();
+      expect(within(rowOf('Manual')).getByRole('button', { name: 'Re-index' })).toBeDisabled();
     });
 
     it('says plainly that it could not start the re-index when the server gave no reason', async () => {

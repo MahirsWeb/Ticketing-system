@@ -48,7 +48,7 @@ export const knowledgeBaseApi = {
   /** Rebuilds one uploaded document from its stored original, in the background (poll reindexStatus). Rejects with 409 if a reindex is running. */
   reindexDocument: (id: string) => apiClient.post<ReindexStatus>(`/api/knowledge-base/documents/${id}/reindex`).then((r) => r.data),
 
-  reindexStatus: () => apiClient.get<ReindexStatus>('/api/knowledge-base/reindex-status').then((r) => r.data),
+  reindexStatus: (signal?: AbortSignal) => apiClient.get<ReindexStatus>('/api/knowledge-base/reindex-status', { signal }).then((r) => r.data),
 
   listDocuments: () =>
     apiClient.get<KnowledgeBaseDocumentDto[]>('/api/knowledge-base/documents').then((r) => r.data),

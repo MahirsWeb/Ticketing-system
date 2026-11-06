@@ -1,41 +1,24 @@
-import { useEffect, useState } from 'react';
-import { knowledgeBaseApi, type ReindexStatus } from '../../api/knowledgeBase';
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { knowledgeBaseApi } from '../../api/knowledgeBase';
+import { startReindex, useReindexStatus } from '../../api/knowledgeBaseQueries';
 import { Button, ErrorText } from '../../components/ui';
-import { messageOf } from './settingsHelpers';
+import { ReindexStatusError } from './ReindexStatusError';
 import { Panel } from './settingsUi';
 
 /** Embeds the tickets that still lack an entry, in the background; follows the run until it ends. */
 export function KnowledgeBaseMaintenancePanel() {
-  const [status, setStatus] = useState<ReindexStatus | null>(null);
+  const queryClient = useQueryClient();
+  const run = useReindexStatus();
+  const status = run.data;
   const [error, setError] = useState<string | null>(null);
 
+  // A run that is already going (started earlier, or from another tab, or from the panel of a document) is picked up as soon as the panel opens.
   const running = status?.state === 'Running';
-
-  // Picks up a run that is already in progress (started earlier, or from another tab) as soon as the panel opens.
-  useEffect(() => {
-    knowledgeBaseApi.reindexStatus().then(setStatus).catch(() => undefined);
-  }, []);
-
-  // The reindex runs on the server in the background; poll until it finishes.
-  useEffect(() => {
-    if (!running) return;
-    const timer = window.setInterval(() => {
-      knowledgeBaseApi.reindexStatus().then(setStatus).catch(() => undefined);
-    }, 3000);
-    return () => window.clearInterval(timer);
-  }, [running]);
 
   async function handleReindex() {
     setError(null);
-    try {
-      setStatus(await knowledgeBaseApi.reindexAll());
-    } catch (err: any) {
-      if (err?.response?.status === 409 && err.response.data?.status) {
-        setStatus(err.response.data.status as ReindexStatus);
-      } else {
-        setError(messageOf(err, 'Could not start the reindex.'));
-      }
-    }
+    setError(await startReindex(queryClient, knowledgeBaseApi.reindexAll, 'Could not start the reindex.'));
   }
 
   const progress = status && status.total > 0 ? `${status.processed} / ${status.total}` : null;
@@ -51,6 +34,7 @@ export function KnowledgeBaseMaintenancePanel() {
         Safe to run any time, and it continues where it stopped.
       </p>
       <ErrorText>{error}</ErrorText>
+      <ReindexStatusError run={run} />
       {status && status.state !== 'Idle' && (
         <p className={`mb-3 text-sm ${status.state === 'Failed' ? 'text-red-700' : status.state === 'Completed' ? 'text-green-700' : 'text-slate-700'}`}>
           {progress && <span className="font-semibold">{progress}</span>} {progress && '· '}

@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { knowledgeBaseApi, type ReindexStatus } from '../../api/knowledgeBase';
+import { knowledgeBaseApi } from '../../api/knowledgeBase';
+import { startReindex, useReindexStatus } from '../../api/knowledgeBaseQueries';
 import { settingsKeys, useKnowledgeBaseDocuments } from '../../api/settingsQueries';
 import { ErrorText } from '../../components/ui';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import type { KnowledgeBaseDocumentDto } from '../../types';
 import { messageOf } from './settingsHelpers';
+import { ReindexStatusError } from './ReindexStatusError';
 import { ListRow, Panel } from './settingsUi';
 
 function formatBytesAsChunks(chunkCount: number) {
@@ -20,31 +22,27 @@ export function KnowledgeBaseDocumentsPanel() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<KnowledgeBaseDocumentDto | null>(null);
-  const [reindex, setReindex] = useState<ReindexStatus | null>(null);
+  // There is one run at a time, whoever started it: this panel does not offer another while one is going, and shows how it is going only
+  // when the run was started here (the panel above shows it for every run).
+  const run = useReindexStatus();
+  const reindex = run.data;
+  const reindexRunning = reindex?.state === 'Running';
+  const [watching, setWatching] = useState(false);
 
   const refresh = () => void queryClient.invalidateQueries({ queryKey: settingsKeys.documents });
 
-  // While a document is being rebuilt, follow its progress; when it ends, reload the list (the chunk count may have changed).
-  const reindexRunning = reindex?.state === 'Running';
+  // When a run ends the list is loaded again: a document that was rebuilt may have another number of chunks.
+  const wasRunning = useRef(false);
   useEffect(() => {
-    if (!reindexRunning) return;
-    const timer = window.setInterval(() => {
-      knowledgeBaseApi.reindexStatus().then((s) => {
-        setReindex(s);
-        if (s.state !== 'Running') void queryClient.invalidateQueries({ queryKey: settingsKeys.documents });
-      }).catch(() => undefined);
-    }, 2000);
-    return () => window.clearInterval(timer);
+    if (wasRunning.current && !reindexRunning) void queryClient.invalidateQueries({ queryKey: settingsKeys.documents });
+    wasRunning.current = reindexRunning;
   }, [reindexRunning, queryClient]);
 
   async function handleReindexDocument(d: KnowledgeBaseDocumentDto) {
     setError(null);
-    try {
-      setReindex(await knowledgeBaseApi.reindexDocument(d.id));
-    } catch (err: any) {
-      if (err?.response?.status === 409 && err.response.data?.status) setReindex(err.response.data.status as ReindexStatus);
-      else setError(messageOf(err, 'Could not start the re-index.'));
-    }
+    const failure = await startReindex(queryClient, () => knowledgeBaseApi.reindexDocument(d.id), 'Could not start the re-index.');
+    setError(failure);
+    if (!failure) setWatching(true);
   }
 
   async function handleFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
@@ -114,7 +112,7 @@ export function KnowledgeBaseDocumentsPanel() {
                   className="text-xs text-blue-700 hover:underline disabled:opacity-50"
                   disabled={reindexRunning}
                   onClick={() => handleReindexDocument(d)}
-                  title="Re-read the stored original and rebuild its searchable content"
+                  title={reindexRunning ? 'A re-index is already running.' : 'Re-read the stored original and rebuild its searchable content'}
                 >
                   Re-index
                 </button>
@@ -127,7 +125,8 @@ export function KnowledgeBaseDocumentsPanel() {
         </ul>
       )}
       {list.isSuccess && documents.length === 0 && <p className="mt-4 text-sm text-slate-500">No documentation uploaded yet.</p>}
-      {reindex && reindex.state !== 'Idle' && (
+      {watching && <ReindexStatusError run={run} />}
+      {watching && reindex && reindex.state !== 'Idle' && (
         <p className={`mt-3 text-xs ${reindex.state === 'Failed' ? 'text-red-700' : reindex.state === 'Completed' ? 'text-green-700' : 'text-slate-600'}`}>
           {reindex.state === 'Running' && reindex.total > 0 ? `${reindex.processed} / ${reindex.total} · ` : ''}
           {reindex.message}
