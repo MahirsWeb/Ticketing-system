@@ -8,7 +8,7 @@ export function AccountsTable({ rows, staff, message }: { rows: UserListItemDto[
   return (
     <Card className="overflow-hidden">
       <table className="w-full text-sm">
-        <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
+        <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-600">
           <tr>
             <th scope="col" className="px-4 py-2">
               Name
@@ -33,7 +33,7 @@ export function AccountsTable({ rows, staff, message }: { rows: UserListItemDto[
                 </Link>
               </td>
               <td className="px-4 py-2">{u.email}</td>
-              <td className="px-4 py-2 text-slate-500">{(staff ? u.departmentName : u.companyName) ?? '—'}</td>
+              <td className="px-4 py-2 text-slate-600">{(staff ? u.departmentName : u.companyName) ?? '—'}</td>
               <td className="px-4 py-2">
                 <StatusPill active={u.isActive} />
               </td>
@@ -41,7 +41,7 @@ export function AccountsTable({ rows, staff, message }: { rows: UserListItemDto[
           ))}
           {rows.length === 0 && message && (
             <tr>
-              <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
+              <td colSpan={4} className="px-4 py-8 text-center text-slate-600">
                 {message}
               </td>
             </tr>

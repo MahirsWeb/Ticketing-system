@@ -104,7 +104,7 @@ export function SimpleLookupTab({
             Existing {plural}
             {list.isSuccess ? ` (${count})` : ''}
           </h2>
-          <Input placeholder={`Search ${plural}…`} value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+          <Input aria-label={`Search ${plural}`} placeholder={`Search ${plural}…`} value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
         </div>
         <ErrorText>{editError ?? actions.changeError}</ErrorText>
         <ListStatus loading={list.isPending} failed={list.isError} plural={plural} />
@@ -123,7 +123,7 @@ export function SimpleLookupTab({
                       <button className="font-medium text-blue-700 hover:underline" onClick={() => handleSaveEdit(item)}>
                         Save
                       </button>
-                      <button className="text-slate-500 hover:underline" onClick={() => setEditingId(null)}>
+                      <button className="text-slate-600 hover:underline" onClick={() => setEditingId(null)}>
                         Cancel
                       </button>
                     </>
@@ -140,7 +140,7 @@ export function SimpleLookupTab({
                       >
                         Rename
                       </button>
-                      <button className="text-slate-500 hover:underline" onClick={() => actions.toggle(item)}>
+                      <button className="text-slate-600 hover:underline" onClick={() => actions.toggle(item)}>
                         {item.isActive ? 'Deactivate' : 'Reactivate'}
                       </button>
                       <button className="font-medium text-red-600 hover:underline" onClick={() => actions.askDelete(item)}>
@@ -151,7 +151,7 @@ export function SimpleLookupTab({
                 </div>
               </ListRow>
             ))}
-            {filtered.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No {plural} found.</p>}
+            {filtered.length === 0 && <p className="py-8 text-center text-sm text-slate-600">No {plural} found.</p>}
           </div>
         )}
       </Panel>

@@ -96,7 +96,7 @@ export function NotificationBell() {
       </button>
       {open && (
         <div role="group" aria-label="Notifications" className="absolute right-0 z-50 mt-2 w-80 rounded-md border border-slate-200 bg-white shadow-lg">
-          <div className="border-b border-slate-100 px-3 py-2 text-xs font-semibold text-slate-500">Notifications</div>
+          <div className="border-b border-slate-100 px-3 py-2 text-xs font-semibold text-slate-600">Notifications</div>
           <div className="max-h-96 overflow-y-auto">
             {list.isError && (
               <div className="border-b border-slate-100 px-3 py-3 text-sm text-red-700">
@@ -106,18 +106,18 @@ export function NotificationBell() {
                 </button>
               </div>
             )}
-            {list.isPending && <p className="px-3 py-4 text-sm text-slate-500">Loading notifications…</p>}
-            {list.isSuccess && items.length === 0 && <p className="px-3 py-4 text-sm text-slate-500">No notifications yet.</p>}
+            {list.isPending && <p className="px-3 py-4 text-sm text-slate-600">Loading notifications…</p>}
+            {list.isSuccess && items.length === 0 && <p className="px-3 py-4 text-sm text-slate-600">No notifications yet.</p>}
             {items.map((n) => (
               <button
                 key={n.id}
                 onClick={() => handleClick(n)}
                 className={`block w-full border-b border-slate-50 px-3 py-2 text-left text-sm hover:bg-slate-50 ${
-                  n.isRead ? 'text-slate-500' : 'font-medium text-slate-800'
+                  n.isRead ? 'text-slate-600' : 'font-medium text-slate-800'
                 }`}
               >
                 <div>{n.message}</div>
-                <div className="mt-0.5 text-xs text-slate-500">{formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}</div>
+                <div className="mt-0.5 text-xs text-slate-600">{formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}</div>
               </button>
             ))}
           </div>

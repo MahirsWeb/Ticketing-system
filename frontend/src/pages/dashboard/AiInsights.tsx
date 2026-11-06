@@ -41,7 +41,7 @@ export function AiInsights({ from, to, departmentId, agentId }: { from: Date; to
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-sm font-semibold text-slate-700">AI insights</h3>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-slate-600">
             {canRun
               ? 'Ask AI to summarize what went wrong most in the selected period and what to do about it.'
               : `Select a period of at least ${MIN_AI_INSIGHTS_DAYS} days to run AI analysis.`}

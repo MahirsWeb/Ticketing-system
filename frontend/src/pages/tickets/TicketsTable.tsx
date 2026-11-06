@@ -56,7 +56,7 @@ export function TicketsTable({
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <caption className="sr-only">Tickets</caption>
-        <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
+        <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-600">
           <tr>
             <SortableHeader colKey="ticketNumber" label="#" {...sorting} />
             <SortableHeader colKey="title" label="Title" {...sorting} />
@@ -86,7 +86,7 @@ export function TicketsTable({
                 </Link>
               </td>
               <td className="max-w-[220px] truncate px-3 py-1.5">{t.title}</td>
-              <td className="whitespace-nowrap px-3 py-1.5 text-slate-500">{format(new Date(t.createdAt), 'dd.MM.yyyy HH:mm')}</td>
+              <td className="whitespace-nowrap px-3 py-1.5 text-slate-600">{format(new Date(t.createdAt), 'dd.MM.yyyy HH:mm')}</td>
               {isStaff && (
                 <td className="whitespace-nowrap px-3 py-1.5">
                   <Link to={`/users/${t.clientId}`} onClick={(e) => e.stopPropagation()} className="text-blue-700 hover:underline">
@@ -104,7 +104,7 @@ export function TicketsTable({
           ))}
           {items.length === 0 && (
             <tr>
-              <td colSpan={isStaff ? 6 : 4} className="px-3 py-8 text-center text-slate-500">
+              <td colSpan={isStaff ? 6 : 4} className="px-3 py-8 text-center text-slate-600">
                 {emptyText}
               </td>
             </tr>

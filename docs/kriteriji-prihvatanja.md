@@ -4,7 +4,7 @@ Ovaj dokument kaže **šta znači „prošlo“**, šta je u drugom krugu testir
 i čime, šta nije moguće dokazati na ovom računaru i šta je svjesno ostalo otvoreno. Cilj je da se pri sljedećem krugu ponovo
 provjerava **samo razlika**, a ne cijeli skup.
 
-Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 747 backend i 1015 frontend testova.
+Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 754 backend i 1027 frontend testova.
 
 ## 1. Statusi
 
@@ -45,7 +45,7 @@ Svaki red je jedan scenario testera. „Test“ je klasa u `backend/tests/Ticket
 | TS-17.2 | Pretraga liste prikazuje stari upit | Jedan zahtjev po zastoju u kucanju; odgovor starijeg upita se odbacuje; isto za KPI i Gantt | `TicketsListPage.test.tsx` |
 | TS-18.5 | SignalR odustaje nakon 42 s | Beskonačno ponovno povezivanje s rastućim razmakom i razmicanjem; osvježavanje nakon povratka | `notificationsHub.test.ts`, `small-lib.test.ts` |
 | TS-18.6 | Istek sesije briše nacrt odgovora | Nacrt ostaje u kartici, vraća se nakon prijave; prijava kaže zašto je korisnik opet tu | `LoginPage.test.tsx`, `TicketActivityFeed.test.tsx`, `small-lib.test.ts` |
-| TS-19.1 | Polja bez programske labele | `Field` povezuje labelu i polje; izbor veličine fonta i skriveni birač priloga u uređivaču imaju `aria-label`. Provjereno i u pregledniku (upit iz scenarija vraća prazan niz) | `ui.test.tsx`, `RichTextEditor.test.tsx` |
+| TS-19.1 | Polja bez programske labele | `Field` povezuje labelu i polje; izbor veličine fonta i skriveni birač priloga u uređivaču imaju `aria-label`. Pregled u pregledniku 2026-11-06 našao je još 12 polja bez imena (dashboard, AI asistent, postavke, tiket u ime klijenta); imenovana su, a `DashboardPage`, `SettingsPage`, `AiAssistantPage` i `ClientLookupCard` testovi to drže | `ui.test.tsx`, `RichTextEditor.test.tsx` |
 | TS-46.5 | Kontrole bez pristupačnog naziva | Imenovana dugmad (zvonce, strelice kalendara), emoji sakriven od čitača, fokus i kontrast | `NotificationBell.test.tsx`, `DateRangePicker.test.tsx`, `ui.test.tsx` |
 | T-46 (naslov, `lang`) | Naslov stranice i `lang` | Naslov po ruti, `<html lang>` prati izabrani jezik | `DocumentMeta.test.tsx` |
 | TS-ONP-02.3 | Isti key ring, drugi `Pii:HashKey`: podaci se čitaju, niko se ne može prijaviti | Pri startu se uz svaki šifrovani email provjerava i sačuvani hash; ne poklapa li se, start se odbija uz jasnu poruku (isprobano i uživo na instanci) | `RetestDefectTests` (`Starting_over_existing_accounts_with_a_different_Pii_HashKey_is_refused`), mutacije 3 od 3 |
@@ -217,3 +217,5 @@ T-47 (drugi dio): e-mailovi o nalozima, sigurnosti i novoj poslovnici biraju nas
 SEC-03: izgrađena stranica nosi vlastiti Content-Security-Policy (skripte samo s adrese aplikacije, veza samo s njom i s API-jem, slike i s API-ja), napravljen od `VITE_API_BASE_URL`; adresa API-ja se prihvata samo kao običan http(s) izvor; 31 test; `img-src` u README-u i u primjerima za server sada ima i adresu API-ja.
 
 T-17 (petnaesti dio): traženje klijenta po e-mailu pošiljaoca je na zajedničkom sloju upita; automatski odgovor više ne zamjenjuje klijenta kojeg je osoba našla sama, a njegov neuspjeh se ne ispisuje poslije uspješne ručne pretrage; 15 testova. T-17 je time riješen (pisanje ostaje u rukovaocima, po odluci).
+
+Ponovno izvođenje 2026-11-06: scenariji paketa izvedeni su na svježoj probnoj bazi, a trenutni build i nad pravom bazom (30 provjera; AI i slanje pošte isključeni). TS-46.1: kontrast teksta je 4,5:1 ili bolji na svim ekranima (`text-slate-500` na sivoj pozadini imao je 3,86:1, zamijenjeno sa `text-slate-600`), čuva ga `contrast.test.ts`. TS-19.1: imenovano je još 12 polja. TS-HOST-02.1: komanda `--create-key-certificate` za postojeću datoteku ispisuje poruku (izlazni kod 1), ne neobrađen izuzetak.

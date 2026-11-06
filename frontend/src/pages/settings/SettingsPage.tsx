@@ -44,7 +44,7 @@ export default function SettingsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-bold text-slate-900">Settings</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm text-slate-600">
           Manage the dropdown values agents choose from when opening a ticket. Only Admins can change these.
         </p>
       </div>
@@ -58,7 +58,7 @@ export default function SettingsPage() {
             onClick={() => setTab(t.key)}
             className={clsx(
               'flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-semibold transition',
-              tab === t.key ? 'border-blue-700 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+              tab === t.key ? 'border-blue-700 text-blue-700' : 'border-transparent text-slate-600 hover:text-slate-700'
             )}
           >
             <span>{t.icon}</span>

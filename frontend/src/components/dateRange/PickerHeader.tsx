@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 function Arrow({ label, onClick, symbol }: { label: string; onClick: () => void; symbol: string }) {
   return (
-    <button type="button" onClick={onClick} aria-label={label} className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700">
+    <button type="button" onClick={onClick} aria-label={label} className="rounded p-1 text-slate-600 hover:bg-slate-100 hover:text-slate-700">
       <span aria-hidden>{symbol}</span>
     </button>
   );

@@ -69,7 +69,7 @@ export function BranchesTab() {
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[300px_1fr]">
       <Panel className="h-fit">
         <h2 className="text-sm font-bold text-slate-800">Add new branch</h2>
-        <p className="mt-0.5 mb-4 text-xs text-slate-500">Every branch needs a dedicated email address.</p>
+        <p className="mt-0.5 mb-4 text-xs text-slate-600">Every branch needs a dedicated email address.</p>
         <form onSubmit={handleCreate} className="space-y-3">
           <Field>
             <Label>Branch name</Label>
@@ -106,7 +106,7 @@ export function BranchesTab() {
       <Panel>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-sm font-bold text-slate-800">Existing branches{departments.isSuccess ? ` (${count})` : ''}</h2>
-          <Input placeholder="Search branches…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+          <Input aria-label="Search branches" placeholder="Search branches…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
         </div>
         <ErrorText>{editError ?? actions.changeError}</ErrorText>
         <ListStatus loading={departments.isPending} failed={departments.isError} plural="branches" />
@@ -122,7 +122,7 @@ export function BranchesTab() {
                     </div>
                   ) : (
                     <span className="text-sm text-slate-800">
-                      {item.name} <span className="text-xs text-slate-500">— {item.email}</span>
+                      {item.name} <span className="text-xs text-slate-600">— {item.email}</span>
                     </span>
                   )}
                   <div className="flex shrink-0 items-center gap-3 text-xs">
@@ -131,14 +131,14 @@ export function BranchesTab() {
                         <button className="font-medium text-blue-700 hover:underline" onClick={() => handleSaveEdit(item)}>
                           Save
                         </button>
-                        <button className="text-slate-500 hover:underline" onClick={() => setEditingId(null)}>
+                        <button className="text-slate-600 hover:underline" onClick={() => setEditingId(null)}>
                           Cancel
                         </button>
                       </>
                     ) : (
                       <>
                         <StatusPill active={item.isActive} />
-                        <button className="text-slate-500 hover:underline" onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}>
+                        <button className="text-slate-600 hover:underline" onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}>
                           {expandedId === item.id ? 'Hide sub-branches' : 'Sub-branches'}
                         </button>
                         <button
@@ -152,7 +152,7 @@ export function BranchesTab() {
                         >
                           Edit
                         </button>
-                        <button className="text-slate-500 hover:underline" onClick={() => actions.toggle(item)}>
+                        <button className="text-slate-600 hover:underline" onClick={() => actions.toggle(item)}>
                           {item.isActive ? 'Deactivate' : 'Reactivate'}
                         </button>
                         <button className="font-medium text-red-600 hover:underline" onClick={() => actions.askDelete(item)}>
@@ -165,7 +165,7 @@ export function BranchesTab() {
                 {expandedId === item.id && <SubBranchesInline departmentId={item.id} />}
               </div>
             ))}
-            {filtered.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No branches found.</p>}
+            {filtered.length === 0 && <p className="py-8 text-center text-sm text-slate-600">No branches found.</p>}
           </div>
         )}
       </Panel>

@@ -57,12 +57,12 @@ describe('the date range picker', () => {
       const user = setup();
       await user.click(trigger());
 
-      const outside = document.querySelectorAll('button.text-slate-500');
+      const outside = document.querySelectorAll('button.text-slate-600');
       expect(document.querySelector('.text-slate-300')).toBeNull();
       expect(outside.length).toBeGreaterThan(0);
-      expect(screen.getByRole('button', { name: '26 October 2026' }).className).toContain('text-slate-500');
-      expect(screen.getByRole('button', { name: '1 December 2026' }).className).toContain('text-slate-500');
-      expect(day(12).className).not.toContain('text-slate-500');
+      expect(screen.getByRole('button', { name: '26 October 2026' }).className).toContain('text-slate-600');
+      expect(screen.getByRole('button', { name: '1 December 2026' }).className).toContain('text-slate-600');
+      expect(day(12).className).not.toContain('text-slate-600');
     });
 
     it('shows whole weeks, Monday to Sunday, with the days of the months next to the month that fill the first and the last one', async () => {

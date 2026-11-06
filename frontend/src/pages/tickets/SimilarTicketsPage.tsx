@@ -24,15 +24,15 @@ export default function SimilarTicketsPage() {
           ← Back
         </button>
         <h1 className="text-xl font-bold text-slate-900">Similar problems report</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm text-slate-600">
           Every closed ticket whose internal documentation looks similar to: <span className="font-medium text-slate-700">“{query}”</span>
         </p>
       </div>
 
-      {noText && <p className="text-sm text-slate-500">There is nothing to look for: no problem was described.</p>}
+      {noText && <p className="text-sm text-slate-600">There is nothing to look for: no problem was described.</p>}
 
       {report.isLoading && (
-        <div role="status" className="flex items-center gap-2 py-8 text-sm text-slate-500">
+        <div role="status" className="flex items-center gap-2 py-8 text-sm text-slate-600">
           <Spinner className="h-4 w-4" /> Analyzing the knowledge base…
         </div>
       )}
@@ -51,28 +51,28 @@ export default function SimilarTicketsPage() {
           <div className="grid grid-cols-3 gap-4">
             <Card className="p-5 text-center">
               <div className="text-3xl font-bold text-slate-900">{data.similarTicketCount}</div>
-              <div className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Similar tickets</div>
+              <div className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-600">Similar tickets</div>
             </Card>
             <Card className="p-5 text-center">
               <div className="text-3xl font-bold text-slate-900">{data.totalEligibleTicketCount}</div>
-              <div className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Total documented tickets</div>
+              <div className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-600">Total documented tickets</div>
             </Card>
             <Card className="p-5 text-center">
               <div className="text-3xl font-bold text-blue-700">{data.similarPercentage}%</div>
-              <div className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Share of the whole base</div>
+              <div className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-600">Share of the whole base</div>
             </Card>
           </div>
 
           <Card className="overflow-hidden">
-            <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
               Matching tickets
             </div>
             {data.tickets.length === 0 ? (
-              <p className="p-5 text-sm text-slate-500">No similar tickets found.</p>
+              <p className="p-5 text-sm text-slate-600">No similar tickets found.</p>
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase text-slate-500">
+                  <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase text-slate-600">
                     <th className="px-4 py-2">#</th>
                     <th className="px-4 py-2">Title</th>
                     <th className="px-4 py-2">Status</th>
@@ -101,10 +101,10 @@ export default function SimilarTicketsPage() {
                       </td>
                       <td className="px-4 py-2">{t.title}</td>
                       <td className="px-4 py-2">{t.status && <StatusBadge status={t.status} />}</td>
-                      <td className="px-4 py-2 text-slate-500">
+                      <td className="px-4 py-2 text-slate-600">
                         {t.closedAtUtc ? new Date(t.closedAtUtc).toLocaleDateString() : '—'}
                       </td>
-                      <td className="px-4 py-2 text-slate-500">{t.matchScore}%</td>
+                      <td className="px-4 py-2 text-slate-600">{t.matchScore}%</td>
                     </tr>
                   ))}
                 </tbody>

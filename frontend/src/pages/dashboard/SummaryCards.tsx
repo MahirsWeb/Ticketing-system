@@ -4,9 +4,9 @@ import type { ReportSummaryDto } from '../../types';
 function KpiCard({ label, value, hint, accent }: { label: string; value: string | number; hint: string; accent?: string }) {
   return (
     <Card className="p-4" title={hint}>
-      <div className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+      <div className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
         {label}
-        <span className="flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full border border-slate-300 text-[9px] font-bold text-slate-500">
+        <span className="flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full border border-slate-300 text-[9px] font-bold text-slate-600">
           ?
         </span>
       </div>
@@ -23,7 +23,7 @@ export function SummaryCards({ summary }: { summary: ReportSummaryDto | null }) 
       <KpiCard
         label="Open / In progress"
         value={summary?.totalOpen ?? '—'}
-        accent="text-amber-600"
+        accent="text-amber-700"
         hint="Tickets submitted in this period that are opened, in progress or resolved, but not yet closed."
       />
       <KpiCard label="Closed" value={summary?.totalClosed ?? '—'} accent="text-green-700" hint="Tickets resolved and closed in this period." />

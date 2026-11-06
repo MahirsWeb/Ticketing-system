@@ -24,7 +24,7 @@ export default function ForgotPasswordPage() {
     <AuthSplitLayout>
       <Card className="w-full max-w-sm p-8">
         <h1 className="mb-1 text-xl font-bold text-slate-900">Forgot password</h1>
-        <p className="mb-6 text-sm text-slate-500">Enter your email and we'll send you a reset link.</p>
+        <p className="mb-6 text-sm text-slate-600">Enter your email and we'll send you a reset link.</p>
         {!sent ? (
           <form onSubmit={handleSubmit} className="space-y-4">
             <Field>

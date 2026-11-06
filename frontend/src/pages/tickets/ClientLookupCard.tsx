@@ -60,9 +60,9 @@ export function ClientLookupCard({
 
   return (
     <Card className="p-5">
-      <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">1. Find the client</h2>
+      <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">1. Find the client</h2>
       <form onSubmit={handleLookup} className="flex gap-2">
-        <Input type="email" required placeholder="client@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <Input type="email" required aria-label="Client email" placeholder="client@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
         <Button type="submit" disabled={looking}>
           {looking ? 'Looking…' : 'Find client'}
         </Button>

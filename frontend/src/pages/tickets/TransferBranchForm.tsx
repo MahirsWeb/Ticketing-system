@@ -50,7 +50,7 @@ export function TransferBranchForm({ ticket, onTransferred }: { ticket: TicketDe
       <button
         type="button"
         onClick={() => setExpanded(true)}
-        className="text-xs text-slate-500 hover:text-slate-600 hover:underline"
+        className="text-xs text-slate-600 hover:text-slate-800 hover:underline"
       >
         Transfer to another branch…
       </button>
@@ -85,7 +85,7 @@ export function TransferBranchForm({ ticket, onTransferred }: { ticket: TicketDe
         <Button type="submit" variant="secondary" disabled={loading} className="text-xs">
           {loading ? 'Transferring…' : 'Transfer'}
         </Button>
-        <button type="button" onClick={() => setExpanded(false)} className="text-xs text-slate-500 hover:underline">
+        <button type="button" onClick={() => setExpanded(false)} className="text-xs text-slate-600 hover:underline">
           Cancel
         </button>
       </form>

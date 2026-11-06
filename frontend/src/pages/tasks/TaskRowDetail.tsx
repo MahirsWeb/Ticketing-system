@@ -31,7 +31,7 @@ export function TaskRowDetail({
   return (
     <tr>
       <td colSpan={colSpan} className="px-4 py-3">
-        {isError ? <ErrorText>{messageOf(error, 'Could not load this task.')}</ErrorText> : <p className="text-sm text-slate-500">Loading the task…</p>}
+        {isError ? <ErrorText>{messageOf(error, 'Could not load this task.')}</ErrorText> : <p className="text-sm text-slate-600">Loading the task…</p>}
       </td>
     </tr>
   );

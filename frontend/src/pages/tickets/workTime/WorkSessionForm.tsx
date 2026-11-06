@@ -11,7 +11,7 @@ export function WorkSessionForm({ form, workerName }: { form: ReturnType<typeof 
 
   return (
     <form onSubmit={form.submit}>
-      <div className="mb-1 text-xs text-slate-500">{editingId ? 'Change this session' : `Log work by ${workerName}`}</div>
+      <div className="mb-1 text-xs text-slate-600">{editingId ? 'Change this session' : `Log work by ${workerName}`}</div>
       <div className="flex flex-wrap items-end gap-4">
         <div role="group" aria-label="Started">
           <Label>Started</Label>
@@ -35,9 +35,9 @@ export function WorkSessionForm({ form, workerName }: { form: ReturnType<typeof 
             Cancel
           </Button>
         )}
-        {form.draftDuration && <span className="text-xs font-medium text-slate-500">Duration: {form.draftDuration}</span>}
+        {form.draftDuration && <span className="text-xs font-medium text-slate-600">Duration: {form.draftDuration}</span>}
       </div>
-      <p className="mt-2 text-xs text-slate-500">
+      <p className="mt-2 text-xs text-slate-600">
         Time is logged for the main assignee only. People added as extra help are listed on the ticket but log no time of their own.
       </p>
     </form>

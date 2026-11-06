@@ -47,7 +47,7 @@ export default function TicketsListPage() {
       <TicketFilterBar filters={filters} isAdmin={isAdmin} isEmployee={isEmployee} />
 
       {isError && <ErrorText>The tickets could not be loaded. Try again in a moment.</ErrorText>}
-      <p className="mb-2 px-1 text-xs text-slate-500" role="status">
+      <p className="mb-2 px-1 text-xs text-slate-600" role="status">
         {countText}
       </p>
 

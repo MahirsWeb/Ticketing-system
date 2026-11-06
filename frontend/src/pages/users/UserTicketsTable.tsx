@@ -15,11 +15,11 @@ export function UserTicketsTable({ user }: { user: UserListItemDto }) {
 
   return (
     <div>
-      <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">
+      <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">
         Tickets {isClient ? 'submitted' : 'assigned'}
         {list.isSuccess ? ` (${total})` : ''}
       </h2>
-      {list.isSuccess && total > tickets.length && <p className="mb-2 text-xs text-slate-500">Showing the first {tickets.length}.</p>}
+      {list.isSuccess && total > tickets.length && <p className="mb-2 text-xs text-slate-600">Showing the first {tickets.length}.</p>}
       <Card className="overflow-hidden">
         {list.isPending ? (
           <div className="flex justify-center py-10">
@@ -31,7 +31,7 @@ export function UserTicketsTable({ user }: { user: UserListItemDto }) {
           </div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
+            <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-600">
               <tr>
                 <th className="px-3 py-1.5">#</th>
                 <th className="px-3 py-1.5">Title</th>
@@ -61,12 +61,12 @@ export function UserTicketsTable({ user }: { user: UserListItemDto }) {
                     <PriorityBadge priority={t.priority} />
                   </td>
                   <td className="whitespace-nowrap px-3 py-1.5">{isClient ? t.assignedToName ?? '—' : t.clientName}</td>
-                  <td className="whitespace-nowrap px-3 py-1.5 text-slate-500">{format(new Date(t.createdAt), 'dd.MM.yyyy HH:mm')}</td>
+                  <td className="whitespace-nowrap px-3 py-1.5 text-slate-600">{format(new Date(t.createdAt), 'dd.MM.yyyy HH:mm')}</td>
                 </tr>
               ))}
               {tickets.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center text-slate-500">
+                  <td colSpan={6} className="px-3 py-8 text-center text-slate-600">
                     No tickets found.
                   </td>
                 </tr>

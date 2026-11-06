@@ -31,12 +31,12 @@ export function SubBranchesInline({ departmentId }: { departmentId: string }) {
     }
   }
 
-  if (subBranches.isPending) return <p className="py-2 text-xs text-slate-500">Loading sub-branches…</p>;
+  if (subBranches.isPending) return <p className="py-2 text-xs text-slate-600">Loading sub-branches…</p>;
   if (subBranches.isError) return <ErrorText>The sub-branches could not be loaded. Try again in a moment.</ErrorText>;
 
   return (
     <div className="mt-1 mb-2 rounded-lg border border-slate-100 bg-slate-50/60 p-3">
-      <p className="mb-2 text-xs text-slate-500">
+      <p className="mb-2 text-xs text-slate-600">
         Optional finer units within this branch, sharing its email but tracked separately for statistics and
         ticket assignment. If any exist, staff and tickets in this branch must pick one.
       </p>
@@ -62,13 +62,13 @@ export function SubBranchesInline({ departmentId }: { departmentId: string }) {
             <span className="text-sm text-slate-700">{item.name}</span>
             <div className="flex items-center gap-2">
               <StatusPill active={item.isActive} />
-              <button className="text-xs text-slate-500 hover:underline" onClick={() => actions.toggle(item)}>
+              <button className="text-xs text-slate-600 hover:underline" onClick={() => actions.toggle(item)}>
                 {item.isActive ? 'Deactivate' : 'Reactivate'}
               </button>
             </div>
           </ListRow>
         ))}
-        {items.length === 0 && <p className="py-2 text-xs text-slate-500">No sub-branches — this branch is used as a single unit.</p>}
+        {items.length === 0 && <p className="py-2 text-xs text-slate-600">No sub-branches — this branch is used as a single unit.</p>}
       </div>
 
       <LookupDialogs

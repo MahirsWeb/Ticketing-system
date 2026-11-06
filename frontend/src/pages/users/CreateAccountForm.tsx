@@ -17,7 +17,7 @@ export function CreateAccountForm({
 
   return (
     <Card className="p-5">
-      <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-500">Create account</h2>
+      <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-600">Create account</h2>
       <form onSubmit={form.submit} className="grid grid-cols-2 gap-4">
         <Field>
           <Label>First name</Label>

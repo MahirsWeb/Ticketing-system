@@ -36,11 +36,11 @@ export function AccountsList({ isAdmin }: { isAdmin: boolean }) {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <span className="text-xs text-slate-500">{count}</span>
+        <span className="text-xs text-slate-600">{count}</span>
       </div>
       {query.isError && <ErrorText>{messageOf(query.error, 'Could not load the accounts.')}</ErrorText>}
       {!isAdmin && (
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-slate-600">
           You see the clients who have tickets in your branch. To open a ticket for any other client, use "New ticket on behalf" and type their full email address.
         </p>
       )}

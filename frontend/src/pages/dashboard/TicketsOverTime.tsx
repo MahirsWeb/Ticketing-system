@@ -59,7 +59,7 @@ export function TicketsOverTime({
   return (
     <Card className="p-5">
       <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Tickets over time</h2>
+        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">Tickets over time</h2>
         <div className="flex items-center gap-3">
           {zoomStack.length > 0 && (
             <button
@@ -69,18 +69,18 @@ export function TicketsOverTime({
                 onRangeChange(first.from, first.to);
                 setZoomStack([]);
               }}
-              className="text-xs text-slate-500 hover:text-slate-600 hover:underline"
+              className="text-xs text-slate-600 hover:text-slate-800 hover:underline"
             >
               Reset zoom
             </button>
           )}
-          <label className="flex items-center gap-1.5 text-xs text-slate-500">
+          <label className="flex items-center gap-1.5 text-xs text-slate-600">
             <input type="checkbox" checked={hideWeekends} onChange={(e) => setHideWeekends(e.target.checked)} />
             Hide weekends
           </label>
         </div>
       </div>
-      <p className="mb-3 text-xs text-slate-500">Drag to zoom into a range · right-click to zoom back out</p>
+      <p className="mb-3 text-xs text-slate-600">Drag to zoom into a range · right-click to zoom back out</p>
       <div onContextMenu={handleContextMenu} className="select-none">
         <ResponsiveContainer width="100%" height={280}>
           <LineChart data={chartData} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>

@@ -43,20 +43,20 @@ export function DailyTimeline({
     <Card className="p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Daily timeline</h2>
-          <p className="text-xs text-slate-500">Tickets and tasks for one person, on the same hour axis — see what was squeezed in alongside a ticket.</p>
+          <h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">Daily timeline</h2>
+          <p className="text-xs text-slate-600">Tickets and tasks for one person, on the same hour axis — see what was squeezed in alongside a ticket.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {isAdmin && (
             <div className="flex rounded-md border border-slate-300 p-0.5 text-xs">
               <button
-                className={`rounded px-2.5 py-1 font-medium ${mode === 'person' ? 'bg-blue-700 text-white' : 'text-slate-500'}`}
+                className={`rounded px-2.5 py-1 font-medium ${mode === 'person' ? 'bg-blue-700 text-white' : 'text-slate-600'}`}
                 onClick={() => setMode('person')}
               >
                 One person
               </button>
               <button
-                className={`rounded px-2.5 py-1 font-medium ${mode === 'branch' ? 'bg-blue-700 text-white' : 'text-slate-500'}`}
+                className={`rounded px-2.5 py-1 font-medium ${mode === 'branch' ? 'bg-blue-700 text-white' : 'text-slate-600'}`}
                 onClick={() => setMode('branch')}
               >
                 Whole branch
@@ -65,14 +65,14 @@ export function DailyTimeline({
           )}
           {mode === 'person' ? (
             <div className="w-72">
-              <Select value={personId} onChange={(e) => setPersonId(e.target.value)}>
+              <Select aria-label="Person" value={personId} onChange={(e) => setPersonId(e.target.value)}>
                 <option value="">Select a person…</option>
                 <PersonOptions groups={people} />
               </Select>
             </div>
           ) : (
             <div className="w-56">
-              <Select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
+              <Select aria-label="Branch" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
                 <option value="">Select a branch…</option>
                 {departments.map((d) => (
                   <option key={d.id} value={d.id}>
@@ -84,6 +84,7 @@ export function DailyTimeline({
           )}
           <input
             type="date"
+            aria-label="Day"
             value={day}
             onChange={(e) => e.target.value && setDate(new Date(`${e.target.value}T00:00:00`))}
             className="rounded-md border border-slate-300 px-3 py-2 text-sm"
@@ -95,13 +96,13 @@ export function DailyTimeline({
       </div>
       {mode === 'branch' ? (
         !departmentId ? (
-          <p className="py-10 text-center text-sm text-slate-500">Choose a branch above to see everyone's timeline.</p>
+          <p className="py-10 text-center text-sm text-slate-600">Choose a branch above to see everyone's timeline.</p>
         ) : loading ? (
-          <p className="py-10 text-center text-sm text-slate-500">Loading…</p>
+          <p className="py-10 text-center text-sm text-slate-600">Loading…</p>
         ) : error ? (
           <ErrorText>{error}</ErrorText>
         ) : !branchData || branchData.users.length === 0 ? (
-          <p className="py-10 text-center text-sm text-slate-500">No active employees in this branch.</p>
+          <p className="py-10 text-center text-sm text-slate-600">No active employees in this branch.</p>
         ) : (
           <div className="space-y-5">
             {branchData.users.map((u) => (
@@ -113,9 +114,9 @@ export function DailyTimeline({
           </div>
         )
       ) : !personId ? (
-        <p className="py-10 text-center text-sm text-slate-500">Choose a person above to see their timeline.</p>
+        <p className="py-10 text-center text-sm text-slate-600">Choose a person above to see their timeline.</p>
       ) : loading ? (
-        <p className="py-10 text-center text-sm text-slate-500">Loading…</p>
+        <p className="py-10 text-center text-sm text-slate-600">Loading…</p>
       ) : error ? (
         <ErrorText>{error}</ErrorText>
       ) : (

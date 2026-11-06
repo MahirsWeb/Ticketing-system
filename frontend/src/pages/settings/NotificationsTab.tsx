@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { settingsApi } from '../../api/settings';
 import { settingsKeys, useOverdueSettings } from '../../api/settingsQueries';
-import { Button, ErrorText, Input, Label, SuccessText } from '../../components/ui';
+import { Button, ErrorText, Field, Input, Label, SuccessText } from '../../components/ui';
 import type { OverdueNotificationSettingsDto } from '../../types';
 import { KnowledgeBaseDocumentsPanel } from './KnowledgeBaseDocumentsPanel';
 import { KnowledgeBaseMaintenancePanel } from './KnowledgeBaseMaintenancePanel';
@@ -36,23 +36,25 @@ function OverdueForm({ initial }: { initial: OverdueNotificationSettingsDto }) {
   return (
     <Panel className="max-w-lg">
       <h2 className="text-sm font-bold text-slate-800">Overdue ticket notifications</h2>
-      <p className="mt-0.5 mb-4 text-xs text-slate-500">
+      <p className="mt-0.5 mb-4 text-xs text-slate-600">
         Emails every assignee once a ticket first becomes overdue. Each ticket is only notified once.
       </p>
       <label className="mb-3 flex items-center gap-2 text-sm text-slate-700">
         <input type="checkbox" checked={notifyOnSlaBreach} onChange={(e) => setNotifyOnSlaBreach(e.target.checked)} />
         Notify when a ticket passes its SLA due date
       </label>
-      <Label>Also notify after this many days open (optional)</Label>
-      <Input
-        type="number"
-        min={1}
-        max={365}
-        placeholder="e.g. 3"
-        value={manualOverdueDays}
-        onChange={(e) => setManualOverdueDays(e.target.value)}
-        className="max-w-[8rem]"
-      />
+      <Field>
+        <Label>Also notify after this many days open (optional)</Label>
+        <Input
+          type="number"
+          min={1}
+          max={365}
+          placeholder="e.g. 3"
+          value={manualOverdueDays}
+          onChange={(e) => setManualOverdueDays(e.target.value)}
+          className="max-w-[8rem]"
+        />
+      </Field>
       <div className="mt-4">
         <ErrorText>{error}</ErrorText>
         <SuccessText>{saved ? 'Saved.' : null}</SuccessText>

@@ -87,7 +87,7 @@ export function SlaPlansTab() {
       <Panel>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-sm font-bold text-slate-800">Existing SLA plans{plans.isSuccess ? ` (${count})` : ''}</h2>
-          <Input placeholder="Search SLA plans…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+          <Input aria-label="Search SLA plans" placeholder="Search SLA plans…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
         </div>
         <ErrorText>{actions.changeError}</ErrorText>
         <ListStatus loading={plans.isPending} failed={plans.isError} plural="SLA plans" />
@@ -96,11 +96,11 @@ export function SlaPlansTab() {
             {filtered.map((item) => (
               <ListRow key={item.id}>
                 <span className="text-sm text-slate-800">
-                  {item.name} <span className="text-xs text-slate-500">— {item.resolutionTimeHours}h resolution</span>
+                  {item.name} <span className="text-xs text-slate-600">— {item.resolutionTimeHours}h resolution</span>
                 </span>
                 <div className="flex items-center gap-3 text-xs">
                   <StatusPill active={item.isActive} />
-                  <button className="text-slate-500 hover:underline" onClick={() => actions.toggle(item)}>
+                  <button className="text-slate-600 hover:underline" onClick={() => actions.toggle(item)}>
                     {item.isActive ? 'Deactivate' : 'Reactivate'}
                   </button>
                   <button className="font-medium text-red-600 hover:underline" onClick={() => actions.askDelete(item)}>
@@ -109,7 +109,7 @@ export function SlaPlansTab() {
                 </div>
               </ListRow>
             ))}
-            {filtered.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No SLA plans found.</p>}
+            {filtered.length === 0 && <p className="py-8 text-center text-sm text-slate-600">No SLA plans found.</p>}
           </div>
         )}
       </Panel>

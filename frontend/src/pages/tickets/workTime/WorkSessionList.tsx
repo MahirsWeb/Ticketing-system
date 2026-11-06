@@ -21,7 +21,7 @@ export function WorkSessionList({
   onEdit: (s: TicketWorkSessionDto) => void;
   onDelete: (s: TicketWorkSessionDto) => void;
 }) {
-  if (sessions.length === 0) return <p className="mb-3 text-sm text-slate-500">No work logged yet.</p>;
+  if (sessions.length === 0) return <p className="mb-3 text-sm text-slate-600">No work logged yet.</p>;
 
   return (
     <ul className="mb-3 divide-y divide-slate-100 rounded-md border border-slate-100 bg-white text-sm">
@@ -31,11 +31,11 @@ export function WorkSessionList({
           <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
             <div>
               <span className="font-medium text-slate-700">{s.userName}</span>
-              <span className="ml-2 tabular-nums text-slate-500">
+              <span className="ml-2 tabular-nums text-slate-600">
                 {when(s.startedAtUtc)} –{' '}
                 {s.endedAtUtc ? when(s.endedAtUtc) : <span className="font-semibold text-green-700">running</span>}
               </span>
-              <span className="ml-2 text-xs text-slate-500">{formatDuration(durationOf(s, now))}</span>
+              <span className="ml-2 text-xs text-slate-600">{formatDuration(durationOf(s, now))}</span>
             </div>
             <div className="flex items-center gap-1">
               {!s.endedAtUtc && (

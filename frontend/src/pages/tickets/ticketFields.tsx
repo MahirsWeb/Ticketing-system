@@ -34,7 +34,7 @@ export function DueDateField({ value, onChange }: { value: string; onChange: (va
     <Field>
       <Label>Due date (optional)</Label>
       <Input type="date" value={value} onChange={(e) => onChange(e.target.value)} />
-      <p className="mt-1 text-xs text-slate-500">Leave empty to use the SLA plan&apos;s resolution time.</p>
+      <p className="mt-1 text-xs text-slate-600">Leave empty to use the SLA plan&apos;s resolution time.</p>
     </Field>
   );
 }

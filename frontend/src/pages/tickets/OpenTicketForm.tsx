@@ -82,7 +82,7 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
 
   return (
     <Card className="p-5">
-      <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-500">Open ticket</h2>
+      <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-600">Open ticket</h2>
       <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
         <SelectField label="Ticket source" value={source} onChange={(v) => setSource(v as TicketSource)} options={SOURCES.map((s) => ({ value: s, label: s }))} />
         <SelectField label="Help topic" value={helpTopicId} onChange={setHelpTopicId} options={lists.helpTopics.map((t) => ({ value: t.id, label: t.name }))} />

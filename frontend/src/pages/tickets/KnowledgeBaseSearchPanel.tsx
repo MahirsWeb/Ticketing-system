@@ -20,8 +20,8 @@ function SourceRow({ r }: { r: KnowledgeBaseSearchResultDto }) {
           <>📄 {r.title}</>
         )}
       </div>
-      {r.resolutionSummary && <p className="mt-1 line-clamp-2 text-xs text-slate-500">{r.resolutionSummary}</p>}
-      {r.sourceType === 'Document' && <p className="mt-1 text-xs text-slate-500">Uploaded documentation</p>}
+      {r.resolutionSummary && <p className="mt-1 line-clamp-2 text-xs text-slate-600">{r.resolutionSummary}</p>}
+      {r.sourceType === 'Document' && <p className="mt-1 text-xs text-slate-600">Uploaded documentation</p>}
     </>
   );
 
@@ -108,19 +108,19 @@ export function KnowledgeBaseSearchPanel({ initialQuery = '', alwaysOpen = false
         />
       )}
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">AI Assistant — Knowledge Base</h2>
+        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">AI Assistant — Knowledge Base</h2>
         {!alwaysOpen && (
-          <button className="text-xs text-slate-500 hover:underline" onClick={() => setOpen(false)}>
+          <button className="text-xs text-slate-600 hover:underline" onClick={() => setOpen(false)}>
             Hide
           </button>
         )}
       </div>
-      <p className="mb-3 text-xs text-slate-500">
+      <p className="mb-3 text-xs text-slate-600">
         Answers are generated only from your organization's own closed tickets and uploaded documentation — never
         from general internet knowledge.
       </p>
       <form onSubmit={handleAsk} className="mb-3 flex gap-2">
-        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Describe the problem in a few keywords…" />
+        <Input aria-label="Describe the problem" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Describe the problem in a few keywords…" />
         {loading ? (
           <Button type="button" variant="danger" onClick={requestStop}>
             Stop
@@ -131,7 +131,7 @@ export function KnowledgeBaseSearchPanel({ initialQuery = '', alwaysOpen = false
       </form>
 
       {loading && (
-        <div className="flex items-center gap-2 py-4 text-sm text-slate-500">
+        <div className="flex items-center gap-2 py-4 text-sm text-slate-600">
           <Spinner className="h-4 w-4" /> Searching the knowledge base and asking the AI…
         </div>
       )}
@@ -150,7 +150,7 @@ export function KnowledgeBaseSearchPanel({ initialQuery = '', alwaysOpen = false
 
       {!loading && sources.length > 0 && (
         <>
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Sources used as context</div>
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">Sources used as context</div>
           <ul className="space-y-2">
             {(showAllSources ? sources : sources.slice(0, SOURCES_PREVIEW_COUNT)).map((r) => (
               <li key={`${r.sourceType}-${r.ticketId ?? r.documentId}`}>
@@ -189,7 +189,7 @@ export function KnowledgeBaseSearchPanel({ initialQuery = '', alwaysOpen = false
       )}
 
       {!loading && asked && sources.length === 0 && !answer && (
-        <p className="text-sm text-slate-500">No similar tickets or documentation found yet.</p>
+        <p className="text-sm text-slate-600">No similar tickets or documentation found yet.</p>
       )}
     </Card>
   );

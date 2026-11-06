@@ -41,7 +41,7 @@ export default function TasksPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-bold text-slate-900">Tasks</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm text-slate-600">
           {isAdmin
             ? 'You can create and assign tasks into any branch. Otherwise you only have read-only insight — reassigning or timing an existing task stays with the staff involved.'
             : 'Quick, informal work items you and your colleagues hand to each other alongside ticket work.'}

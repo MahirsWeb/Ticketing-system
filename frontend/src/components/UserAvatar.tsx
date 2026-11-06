@@ -28,7 +28,7 @@ export function UserAvatar({
       {url ? (
         <img src={url} alt="" className="h-full w-full object-cover" />
       ) : (
-        <svg viewBox="0 0 24 24" fill="currentColor" className="h-full w-full p-2 text-slate-300">
+        <svg aria-hidden viewBox="0 0 24 24" fill="currentColor" className="h-full w-full p-2 text-slate-300">
           <path d="M12 12c2.7 0 4.9-2.2 4.9-4.9S14.7 2.2 12 2.2 7.1 4.4 7.1 7.1 9.3 12 12 12zm0 2.4c-3.3 0-9.8 1.6-9.8 4.9v1.5c0 .8.6 1.4 1.4 1.4h16.8c.8 0 1.4-.6 1.4-1.4v-1.5c0-3.3-6.5-4.9-9.8-4.9z" />
         </svg>
       )}

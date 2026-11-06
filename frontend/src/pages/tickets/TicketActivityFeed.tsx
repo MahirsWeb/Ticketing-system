@@ -84,11 +84,11 @@ export function TicketActivityFeed({
   return (
     <div className="space-y-4">
       <div className="space-y-3">
-        {messages.length === 0 && <p className="text-sm text-slate-500">No activity yet.</p>}
+        {messages.length === 0 && <p className="text-sm text-slate-600">No activity yet.</p>}
         {messages.map((m) => {
           if (m.type === 'SystemEvent') {
             return (
-              <div key={m.id} className="flex items-center justify-center gap-2 py-1 text-center text-xs text-slate-500">
+              <div key={m.id} className="flex items-center justify-center gap-2 py-1 text-center text-xs text-slate-600">
                 <span className="h-px flex-1 bg-slate-100" />
                 <span className="whitespace-nowrap" dangerouslySetInnerHTML={{ __html: sanitizeHtml(m.bodyHtml) }} />
                 <span>· {format(new Date(m.createdAt), 'dd.MM.yyyy HH:mm')}</span>
@@ -103,7 +103,7 @@ export function TicketActivityFeed({
               key={m.id}
               className={`rounded-lg border p-4 ${isInternal ? 'border-amber-200 bg-amber-50' : 'border-blue-100 bg-blue-50'}`}
             >
-              <div className="mb-2 flex items-center justify-between text-xs text-slate-500">
+              <div className="mb-2 flex items-center justify-between text-xs text-slate-600">
                 <span className="flex items-center gap-2">
                   <span className="font-semibold text-slate-700">{m.authorName}</span>
                   <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${isInternal ? 'bg-amber-200 text-amber-800' : 'bg-blue-200 text-blue-800'}`}>
@@ -160,7 +160,7 @@ export function TicketActivityFeed({
               {files.map((f, i) => (
                 <li key={`${f.name}-${i}`} className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">
                   <span aria-hidden>📎</span> {f.name}
-                  <button type="button" onClick={() => removeFile(i)} className="ml-1 font-bold text-slate-500 hover:text-red-600">
+                  <button type="button" onClick={() => removeFile(i)} className="ml-1 font-bold text-slate-600 hover:text-red-600">
                     ×
                   </button>
                 </li>

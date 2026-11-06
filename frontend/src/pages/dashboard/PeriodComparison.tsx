@@ -35,10 +35,10 @@ export function PeriodComparison({
   return (
     <Card className="p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Period comparison</h2>
+        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">Period comparison</h2>
         <div className="flex items-center gap-2">
           <div className="w-36">
-            <Select value={groupBy} onChange={(e) => onGroupByChange(e.target.value as GroupBy)}>
+            <Select aria-label="Compare by" value={groupBy} onChange={(e) => onGroupByChange(e.target.value as GroupBy)}>
               {GROUP_BY_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
@@ -76,7 +76,7 @@ export function PeriodComparison({
         </BarChart>
       </ResponsiveContainer>
       {busiest && quietest && (
-        <p className="mt-3 text-xs text-slate-500">
+        <p className="mt-3 text-xs text-slate-600">
           <span className="font-semibold text-red-600">Busiest: {busiest.label}</span> ({busiest.count} tickets) ·{' '}
           <span className="font-semibold text-green-700">Quietest: {quietest.label}</span> ({quietest.count} tickets)
         </p>

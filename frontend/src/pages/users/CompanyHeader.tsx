@@ -16,7 +16,7 @@ export function CompanyHeader({ company, editing, onToggleEdit }: { company: Com
           <StatusPill active={company.isActive} />
         </div>
         {(company.address || company.contactInfo) && (
-          <p className="mt-1 text-sm text-slate-500">{[company.address, company.contactInfo].filter(Boolean).join(' · ')}</p>
+          <p className="mt-1 text-sm text-slate-600">{[company.address, company.contactInfo].filter(Boolean).join(' · ')}</p>
         )}
       </div>
       <button

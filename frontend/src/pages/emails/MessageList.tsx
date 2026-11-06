@@ -23,7 +23,7 @@ export function MessageList({
 }) {
   return (
     <Card className="w-96 shrink-0 divide-y divide-slate-100 overflow-y-auto" style={{ maxHeight: '32rem' }}>
-      {messages.length === 0 && message && <p className="px-4 py-8 text-center text-sm text-slate-500">{message}</p>}
+      {messages.length === 0 && message && <p className="px-4 py-8 text-center text-sm text-slate-600">{message}</p>}
       {messages.map((m) => (
         <div
           key={m.messageId}
@@ -43,7 +43,7 @@ export function MessageList({
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-2">
               <span className="truncate text-xs font-semibold text-slate-800">{m.fromName || m.fromEmail}</span>
-              <span className="shrink-0 text-[11px] text-slate-500">{formatDistanceToNow(new Date(m.receivedAtUtc), { addSuffix: true })}</span>
+              <span className="shrink-0 text-[11px] text-slate-600">{formatDistanceToNow(new Date(m.receivedAtUtc), { addSuffix: true })}</span>
             </div>
             <button
               type="button"

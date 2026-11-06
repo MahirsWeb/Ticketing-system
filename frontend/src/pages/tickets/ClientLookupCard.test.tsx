@@ -54,6 +54,12 @@ const showAgain = (view: ReturnType<typeof renderCard>, card: ReactElement) => v
 const settle = () => new Promise((resolve) => setTimeout(resolve, 40));
 
 describe('finding the client', () => {
+  it('names the field for the e-mail address (a placeholder is not a name)', () => {
+    renderCard();
+
+    expect(screen.getByRole('textbox', { name: 'Client email' })).toHaveAttribute('type', 'email');
+  });
+
   describe('when the page knows who wrote', () => {
     it('asks for the sender once and tells who was found', async () => {
       renderCard({ initialEmail: 'sender@x.test', autoLookupEmail: 'sender@x.test' });

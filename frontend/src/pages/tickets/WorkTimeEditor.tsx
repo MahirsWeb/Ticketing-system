@@ -18,8 +18,8 @@ export function WorkTimeEditor({ ticket, onChanged }: { ticket: TicketDetailDto;
   return (
     <div className="rounded-lg border border-slate-100 bg-slate-50/60 p-3">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Work time</div>
-        {ticket.workSessions.length > 0 && <div className="text-xs font-medium text-slate-500">Total: {formatDuration(total)}</div>}
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">Work time</div>
+        {ticket.workSessions.length > 0 && <div className="text-xs font-medium text-slate-600">Total: {formatDuration(total)}</div>}
       </div>
 
       <WorkSessionList sessions={ticket.workSessions} now={now} saving={form.saving} onEnd={form.endNow} onEdit={form.beginEdit} onDelete={form.setToDelete} />
@@ -27,7 +27,7 @@ export function WorkTimeEditor({ ticket, onChanged }: { ticket: TicketDetailDto;
       {ticket.assignedToUserId ? (
         <WorkSessionForm form={form} workerName={ticket.assignedToName ?? null} />
       ) : (
-        <p className="text-xs text-slate-500">Assign the ticket to somebody to log work time on it.</p>
+        <p className="text-xs text-slate-600">Assign the ticket to somebody to log work time on it.</p>
       )}
 
       <ErrorText>{form.error}</ErrorText>

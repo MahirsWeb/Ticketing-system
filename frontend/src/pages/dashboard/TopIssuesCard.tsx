@@ -7,10 +7,10 @@ import type { TopIssueDto } from '../../types';
 export function TopIssuesCard({ issues, children }: { issues: TopIssueDto[]; children?: ReactNode }) {
   return (
     <Card className="p-5">
-      <h2 className="mb-1 text-sm font-bold uppercase tracking-wide text-slate-500">Top issues (by help topic)</h2>
-      <p className="mb-4 text-xs text-slate-500">What's causing the most tickets in this period.</p>
+      <h2 className="mb-1 text-sm font-bold uppercase tracking-wide text-slate-600">Top issues (by help topic)</h2>
+      <p className="mb-4 text-xs text-slate-600">What's causing the most tickets in this period.</p>
       {issues.length === 0 ? (
-        <p className="text-sm text-slate-500">No routed tickets in this period yet.</p>
+        <p className="text-sm text-slate-600">No routed tickets in this period yet.</p>
       ) : (
         <ResponsiveContainer width="100%" height={Math.max(120, issues.length * 34)}>
           <BarChart data={issues} layout="vertical" margin={{ left: 24 }}>

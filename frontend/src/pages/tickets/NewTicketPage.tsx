@@ -86,7 +86,7 @@ export default function NewTicketPage() {
                 {files.map((f, i) => (
                   <li key={`${f.name}-${i}`} className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">
                     <span aria-hidden>📎</span> {f.name}
-                    <button type="button" onClick={() => removeFile(i)} className="ml-1 font-bold text-slate-500 hover:text-red-600">
+                    <button type="button" onClick={() => removeFile(i)} className="ml-1 font-bold text-slate-600 hover:text-red-600">
                       ×
                     </button>
                   </li>

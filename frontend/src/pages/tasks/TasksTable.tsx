@@ -58,7 +58,7 @@ export function TasksTable({
   return (
     <Card className="overflow-hidden">
       <table className="w-full text-sm">
-        <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
+        <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-600">
           <tr>
             {SORTABLE_BEFORE_STATUS.map((col) => (
               <SortableHeader key={col.key} colKey={col.key} label={col.label} {...sorting} />
@@ -103,7 +103,7 @@ export function TasksTable({
           ))}
           {tasks.length === 0 && message && (
             <tr>
-              <td colSpan={colSpan} className="px-4 py-8 text-center text-slate-500">
+              <td colSpan={colSpan} className="px-4 py-8 text-center text-slate-600">
                 {message}
               </td>
             </tr>

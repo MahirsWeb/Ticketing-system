@@ -177,6 +177,72 @@ public class OperationsHardeningTests : IDisposable
     }
 
     [Fact]
+    public void The_command_makes_the_certificate_and_says_where_it_is_and_what_to_do_with_it()
+    {
+        var path = Path.Combine(_folder, "made.pfx");
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exit = KeyRingProtection.RunCreateCommand(["--create-key-certificate", path, "pw-123456"], output, error);
+
+        Assert.Equal(0, exit);
+        Assert.Equal("", error.ToString());
+        Assert.Contains(path, output.ToString());
+        Assert.Contains("DataProtection:CertificatePath", output.ToString());
+        Assert.True(KeyRingProtection.Load(Config(("DataProtection:CertificatePath", path), ("DataProtection:CertificatePassword", "pw-123456")), _folder)!.HasPrivateKey);
+    }
+
+    [Fact]
+    public void The_command_answers_a_file_that_is_already_there_with_a_message_not_a_crash_and_leaves_the_file_alone()
+    {
+        var path = NewCertificate();
+        var before = File.ReadAllBytes(path);
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exit = KeyRingProtection.RunCreateCommand(["--create-key-certificate", path, "other-pw"], output, error);
+
+        Assert.Equal(1, exit);
+        Assert.Contains("already exists", error.ToString());
+        Assert.DoesNotContain("   at ", error.ToString());
+        Assert.Equal("", output.ToString());
+        Assert.Equal(before, File.ReadAllBytes(path));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(4)]
+    public void The_command_with_the_wrong_number_of_arguments_says_how_it_is_used(int count)
+    {
+        var path = Path.Combine(_folder, "never.pfx");
+        var args = new[] { "--create-key-certificate", path, "pw", "extra" }.Take(count).ToArray();
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exit = KeyRingProtection.RunCreateCommand(args, output, error);
+
+        Assert.Equal(2, exit);
+        Assert.Contains("Usage: --create-key-certificate <file.pfx> <password>", error.ToString());
+        Assert.False(File.Exists(path));
+    }
+
+    [Fact]
+    public void The_command_answers_an_empty_password_with_a_message_too()
+    {
+        var path = Path.Combine(_folder, "nopw.pfx");
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exit = KeyRingProtection.RunCreateCommand(["--create-key-certificate", path, ""], output, error);
+
+        Assert.Equal(1, exit);
+        Assert.Contains("password", error.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.False(File.Exists(path));
+    }
+
+    [Fact]
     public void Nothing_configured_means_no_certificate_and_a_relative_path_is_taken_from_the_application_folder()
     {
         Assert.Null(KeyRingProtection.Load(Config(), _folder));

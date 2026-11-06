@@ -15,7 +15,7 @@ export function MessageDetail({ selected }: { selected: InboxMessageSummaryDto |
   return (
     <Card className="flex-1 p-5">
       {!selected ? (
-        <p className="py-16 text-center text-sm text-slate-500">Select an email to read it.</p>
+        <p className="py-16 text-center text-sm text-slate-600">Select an email to read it.</p>
       ) : detail.isError ? (
         <ErrorText>Could not load this email.</ErrorText>
       ) : !detail.data ? (
@@ -27,7 +27,7 @@ export function MessageDetail({ selected }: { selected: InboxMessageSummaryDto |
           <div className="mb-3 flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
             <div>
               <h2 className="text-base font-bold text-slate-900">{detail.data.subject}</h2>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-slate-600">
                 From {selected.fromName ? `${selected.fromName} <${detail.data.clientEmail}>` : detail.data.clientEmail} ·{' '}
                 {format(new Date(detail.data.receivedAtUtc), 'dd.MM.yyyy HH:mm')}
               </p>

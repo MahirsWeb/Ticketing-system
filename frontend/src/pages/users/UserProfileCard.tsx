@@ -68,7 +68,7 @@ export function UserProfileCard({
               <div key={i} className="space-y-3">
                 {col.map((f) => (
                   <div key={f.label}>
-                    <div className="text-xs font-semibold uppercase text-slate-500">{f.label}</div>
+                    <div className="text-xs font-semibold uppercase text-slate-600">{f.label}</div>
                     <div className="text-slate-800">{f.value}</div>
                   </div>
                 ))}

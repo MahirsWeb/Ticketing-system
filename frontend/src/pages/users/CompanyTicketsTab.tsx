@@ -32,7 +32,7 @@ export function CompanyTicketsTab({ companyId, clients }: { companyId: string; c
             ))}
           </Select>
         </div>
-        {list.isSuccess && total > tickets.length && <p className="text-xs text-slate-500">Showing the first {tickets.length} of {total} tickets.</p>}
+        {list.isSuccess && total > tickets.length && <p className="text-xs text-slate-600">Showing the first {tickets.length} of {total} tickets.</p>}
       </div>
       {list.isPending && (
         <div role="status" aria-label="Loading the tickets" className="flex justify-center py-10">
@@ -46,7 +46,7 @@ export function CompanyTicketsTab({ companyId, clients }: { companyId: string; c
       )}
       {list.isSuccess && (
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
+          <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-600">
             <tr>
               <th scope="col" className="px-3 py-1.5">#</th>
               <th scope="col" className="px-3 py-1.5">Title</th>
@@ -74,12 +74,12 @@ export function CompanyTicketsTab({ companyId, clients }: { companyId: string; c
                 </td>
                 <td className="whitespace-nowrap px-3 py-1.5">{t.clientName}</td>
                 <td className="whitespace-nowrap px-3 py-1.5">{t.assignedToName ?? '—'}</td>
-                <td className="whitespace-nowrap px-3 py-1.5 text-slate-500">{format(new Date(t.createdAt), 'dd.MM.yyyy HH:mm')}</td>
+                <td className="whitespace-nowrap px-3 py-1.5 text-slate-600">{format(new Date(t.createdAt), 'dd.MM.yyyy HH:mm')}</td>
               </tr>
             ))}
             {tickets.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-slate-500">
+                <td colSpan={7} className="px-3 py-8 text-center text-slate-600">
                   No tickets found.
                 </td>
               </tr>

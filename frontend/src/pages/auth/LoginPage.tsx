@@ -73,7 +73,7 @@ export default function LoginPage() {
           <span className="text-lg font-bold text-[#1a2b4c]">{t('appName')}</span>
         </div>
         <h1 className="mb-1 text-2xl font-bold text-slate-900">{t('login_welcomeBack')}</h1>
-        <p className="mb-8 text-sm text-slate-500">{t('login_subtitle')}</p>
+        <p className="mb-8 text-sm text-slate-600">{t('login_subtitle')}</p>
 
         {sessionExpired && (
           <p role="status" className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">

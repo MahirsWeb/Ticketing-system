@@ -48,16 +48,16 @@ export function ClientInfoPopover({
               </span>
               <div className="min-w-0">
                 <div className="truncate text-sm font-semibold text-slate-800">{name}</div>
-                <div className="truncate text-xs text-slate-500">{companyName}</div>
+                <div className="truncate text-xs text-slate-600">{companyName}</div>
               </div>
             </div>
             <dl className="mt-3 space-y-1.5 text-xs">
               <div className="flex justify-between gap-2">
-                <dt className="text-slate-500">Email</dt>
+                <dt className="text-slate-600">Email</dt>
                 <dd className="truncate text-slate-700">{email ?? '—'}</dd>
               </div>
               <div className="flex justify-between gap-2">
-                <dt className="text-slate-500">Phone</dt>
+                <dt className="text-slate-600">Phone</dt>
                 <dd className="truncate text-slate-700">{phoneNumber ?? '—'}</dd>
               </div>
             </dl>

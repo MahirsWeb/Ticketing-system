@@ -26,7 +26,7 @@ export function KnowledgeBaseMaintenancePanel() {
   return (
     <Panel className="max-w-lg">
       <h2 className="text-sm font-bold text-slate-800">Knowledge base</h2>
-      <p className="mt-0.5 mb-4 text-xs text-slate-500">
+      <p className="mt-0.5 mb-4 text-xs text-slate-600">
         AI search only picks up a ticket once it's been indexed — normally that happens automatically the moment a
         ticket is closed through the app. Tickets inserted directly (e.g. bulk-imported demo data) skip that step, so
         they won't show up in AI search or chat until you reindex. This embeds the tickets that still lack an entry —

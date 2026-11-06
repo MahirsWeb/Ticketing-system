@@ -54,7 +54,7 @@ export function IconInput({
   const fieldId = useContext(FieldIdContext);
   return (
     <div className="relative">
-      <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500">{icon}</span>
+      <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-600">{icon}</span>
       <input
         id={fieldId}
         className={clsx(
@@ -99,7 +99,7 @@ export function Textarea({ className, ...props }: React.TextareaHTMLAttributes<H
 export function Label({ children }: { children: React.ReactNode }) {
   const fieldId = useContext(FieldIdContext);
   return (
-    <label htmlFor={fieldId} className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+    <label htmlFor={fieldId} className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">
       {children}
     </label>
   );
@@ -155,7 +155,7 @@ const PRIORITY_STYLES: Record<string, string> = {
 };
 
 export function PriorityBadge({ priority }: { priority: string | null }) {
-  if (!priority) return <span aria-label="No priority" className="text-xs text-slate-500">—</span>;
+  if (!priority) return <span aria-label="No priority" className="text-xs text-slate-600">—</span>;
   return (
     <span className={clsx('rounded-full px-2.5 py-0.5 text-xs font-semibold', PRIORITY_STYLES[priority] ?? 'bg-slate-100 text-slate-600')}>
       {priority}
@@ -168,7 +168,7 @@ export function StatusPill({ active, activeLabel = 'Active', inactiveLabel = 'In
     <span
       className={clsx(
         'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold',
-        active ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-500'
+        active ? 'bg-green-100 text-green-800' : 'bg-slate-200 text-slate-600'
       )}
     >
       <span className={clsx('h-1.5 w-1.5 rounded-full', active ? 'bg-green-500' : 'bg-slate-400')} />

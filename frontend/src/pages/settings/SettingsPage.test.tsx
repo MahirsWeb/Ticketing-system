@@ -776,6 +776,27 @@ describe('the settings page', () => {
     });
   });
   // What the page used to do in silence when the server refused or could not be reached.
+  // A field with only a placeholder is announced as "edit text" and nothing more: a placeholder is not a name.
+  describe('the names of its fields', () => {
+    it('names the search of every list', async () => {
+      renderPage();
+      expect(await screen.findByRole('textbox', { name: 'Search branches' })).toBeInTheDocument();
+
+      await openTab(/Help Topics/);
+      expect(await screen.findByRole('textbox', { name: 'Search help topics' })).toBeInTheDocument();
+      await openTab(/Categories & SLA/);
+      expect(await screen.findByRole('textbox', { name: 'Search categories' })).toBeInTheDocument();
+      expect(await screen.findByRole('textbox', { name: 'Search SLA plans' })).toBeInTheDocument();
+    });
+
+    it('names the number of days of the overdue notice by its question', async () => {
+      renderPage();
+      await openTab(/Notifications/);
+
+      expect(await screen.findByRole('spinbutton', { name: 'Also notify after this many days open (optional)' })).toBeInTheDocument();
+    });
+  });
+
   describe('when the server refuses or cannot be reached', () => {
     it('says why renaming a help topic or a category was refused, and stays in the edit', async () => {
       const user = userEvent.setup();

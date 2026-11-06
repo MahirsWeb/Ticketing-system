@@ -11,7 +11,7 @@ export function ListRow({ children }: { children: React.ReactNode }) {
 
 /** In the place of a list that is on its way or could not be had; nothing when the list is there. */
 export function ListStatus({ loading, failed, plural }: { loading: boolean; failed: boolean; plural: string }) {
-  if (loading) return <p className="py-8 text-center text-sm text-slate-500">Loading {plural}…</p>;
+  if (loading) return <p className="py-8 text-center text-sm text-slate-600">Loading {plural}…</p>;
   if (failed) return <ErrorText>The {plural} could not be loaded. Try again in a moment.</ErrorText>;
   return null;
 }

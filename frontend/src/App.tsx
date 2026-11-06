@@ -40,7 +40,7 @@ function HomeRoute() {
 function PageFallback() {
   const { t } = useLanguage();
   return (
-    <div role="status" className="py-16 text-center text-sm text-slate-500">
+    <div role="status" className="py-16 text-center text-sm text-slate-600">
       {t('common_loading')}
     </div>
   );

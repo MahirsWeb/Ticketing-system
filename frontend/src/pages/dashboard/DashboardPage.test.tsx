@@ -753,4 +753,43 @@ describe('the dashboard', () => {
       expect(await screen.findByTestId('gantt')).toHaveTextContent('Dino ticket');
     });
   });
+
+  // A control that shows only its chosen option tells a screen reader nothing about what it is for.
+  describe('the names of its controls', () => {
+    it('names every list and field of the filter bar, the timeline and the comparison', async () => {
+      renderPage();
+      await settled();
+
+      expect(screen.getByRole('combobox', { name: 'Branch' })).toHaveDisplayValue('All branches');
+      expect(screen.getByRole('combobox', { name: 'Employee' })).toHaveDisplayValue('All employees');
+      expect(screen.getByRole('combobox', { name: 'Person' })).toHaveDisplayValue('Select a person…');
+      expect(screen.getByLabelText('Day')).toHaveAttribute('type', 'date');
+      expect(screen.getByRole('combobox', { name: 'Compare by' })).toHaveDisplayValue('By month');
+    });
+
+    it('names the branch list of the timeline too, when the whole branch is shown', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await settled();
+
+      await user.click(screen.getByRole('button', { name: 'Whole branch' }));
+
+      const lists = screen.getAllByRole('combobox', { name: 'Branch' });
+      expect(lists).toHaveLength(2);
+      expect(lists[1]).toHaveDisplayValue('Select a branch…');
+      expect(screen.queryByRole('combobox', { name: 'Person' })).not.toBeInTheDocument();
+    });
+
+    it('leaves no list or field of the page without a name', async () => {
+      renderPage();
+      await settled();
+
+      const unnamed = screen
+        .getAllByRole('combobox')
+        .filter((c) => !c.getAttribute('aria-label'))
+        .concat(Array.from(document.querySelectorAll<HTMLElement>('input[type="date"]')).filter((c) => !c.getAttribute('aria-label')));
+
+      expect(unnamed).toEqual([]);
+    });
+  });
 });

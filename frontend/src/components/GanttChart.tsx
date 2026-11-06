@@ -123,7 +123,7 @@ export function GanttChart({ entries, date }: { entries: GanttEntryDto[]; date: 
         ))}
         {nowPct !== null && <div className="absolute top-0 z-10 h-full w-0.5 bg-red-500" style={{ left: `${nowPct}%` }} />}
         {items.length === 0 && (
-          <div className="flex h-full items-center px-3 text-xs text-slate-500">{emptyLabel}</div>
+          <div className="flex h-full items-center px-3 text-xs text-slate-600">{emptyLabel}</div>
         )}
         {placed.map(({ entry: e, start, end, row }) => {
           const left = pct(start);
@@ -163,7 +163,7 @@ export function GanttChart({ entries, date }: { entries: GanttEntryDto[]; date: 
     <div>
       <div className="flex items-center gap-3">
         <div className="w-20 shrink-0" />
-        <div className="relative h-5 flex-1 border-b border-slate-200 text-[10px] text-slate-500">
+        <div className="relative h-5 flex-1 border-b border-slate-200 text-[10px] text-slate-600">
           {hourMarks.map((h) => (
             <span key={h.toISOString()} className="absolute -translate-x-1/2" style={{ left: `${pct(h)}%` }}>
               {String(h.getHours()).padStart(2, '0')}:00
@@ -173,13 +173,13 @@ export function GanttChart({ entries, date }: { entries: GanttEntryDto[]; date: 
       </div>
 
       <div className="mt-2 flex items-center gap-3">
-        <div className="w-20 shrink-0 text-xs font-semibold text-slate-500"><span aria-hidden>🎫</span> Tickets</div>
+        <div className="w-20 shrink-0 text-xs font-semibold text-slate-600"><span aria-hidden>🎫</span> Tickets</div>
         <div className="flex-1">
           <Lane label="Ticket work" items={tickets} colors={TICKET_COLORS} emptyLabel="No ticket work logged this day" />
         </div>
       </div>
       <div className="mt-2 flex items-center gap-3">
-        <div className="w-20 shrink-0 text-xs font-semibold text-slate-500"><span aria-hidden>📋</span> Tasks</div>
+        <div className="w-20 shrink-0 text-xs font-semibold text-slate-600"><span aria-hidden>📋</span> Tasks</div>
         <div className="flex-1">
           <Lane label="Task work" items={tasks} colors={TASK_COLORS} emptyLabel="No tasks logged this day" />
         </div>
@@ -213,7 +213,7 @@ export function GanttChart({ entries, date }: { entries: GanttEntryDto[]; date: 
             {hovered.isLogged === false && ' · open time, no work logged'}
           </div>
         ) : (
-          <p className="px-3 text-xs text-slate-500">Hover or focus a block for details.</p>
+          <p className="px-3 text-xs text-slate-600">Hover or focus a block for details.</p>
         )}
       </div>
     </div>

@@ -54,13 +54,13 @@ export function DashboardFilters({
     <div className="sticky top-0 z-20 -mx-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-300 bg-slate-200 px-4 py-3">
       <div>
         <h1 className="text-xl font-bold text-slate-900">Dashboard</h1>
-        {!isAdmin && ownBranchName && <p className="text-xs text-slate-500">Showing data for your branch: {ownBranchName}</p>}
-        {isAdmin && <p className="text-xs text-slate-500">Global statistics across all branches</p>}
+        {!isAdmin && ownBranchName && <p className="text-xs text-slate-600">Showing data for your branch: {ownBranchName}</p>}
+        {isAdmin && <p className="text-xs text-slate-600">Global statistics across all branches</p>}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {isAdmin && (
           <div className="w-48">
-            <Select value={departmentId} onChange={(e) => onBranchChange(e.target.value)}>
+            <Select aria-label="Branch" value={departmentId} onChange={(e) => onBranchChange(e.target.value)}>
               <option value="">All branches</option>
               {departments.map((d) => (
                 <option key={d.id} value={d.id}>
@@ -72,7 +72,7 @@ export function DashboardFilters({
         )}
         {isAdmin && (
           <div className="w-56">
-            <Select value={agentId} onChange={(e) => onAgentChange(e.target.value)}>
+            <Select aria-label="Employee" value={agentId} onChange={(e) => onAgentChange(e.target.value)}>
               <option value="">All employees</option>
               <PersonOptions groups={people} />
             </Select>

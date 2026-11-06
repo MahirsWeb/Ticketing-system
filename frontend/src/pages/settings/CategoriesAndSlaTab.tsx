@@ -10,7 +10,7 @@ export function CategoriesAndSlaTab() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">Categories</h2>
+        <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">Categories</h2>
         <SimpleLookupTab
           itemNoun="category"
           pluralNoun="categories"
@@ -25,7 +25,7 @@ export function CategoriesAndSlaTab() {
       </div>
 
       <div className="border-t border-slate-200 pt-6">
-        <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">SLA Plans</h2>
+        <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">SLA Plans</h2>
         <SlaPlansTab />
       </div>
     </div>

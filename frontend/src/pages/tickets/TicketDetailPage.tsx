@@ -23,7 +23,7 @@ import { ClientAiHelpPanel } from './ClientAiHelpPanel';
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</div>
+      <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">{label}</div>
       <div className="text-sm text-slate-800">{value ?? '—'}</div>
     </div>
   );
@@ -84,7 +84,7 @@ export default function TicketDetailPage() {
           <StatusBadge status={ticket.status} />
           {isStaff && <PriorityBadge priority={ticket.priority} />}
         </div>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm text-slate-600">
           Submitted by{' '}
           <ClientInfoPopover
             name={ticket.clientName}
@@ -129,7 +129,7 @@ export default function TicketDetailPage() {
       )}
 
       <Card className="p-5">
-        <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">Original request</h2>
+        <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">Original request</h2>
         <SafeHtml className="prose prose-sm max-w-none" html={ticket.description} />
         {ticket.attachments.length > 0 && (
           <ul className="mt-3 space-y-1 text-xs">
@@ -146,14 +146,14 @@ export default function TicketDetailPage() {
 
       {ticket.status === 'Closed' && (
         <Card className="p-5">
-          <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">Resolution</h2>
+          <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">Resolution</h2>
           <p className="whitespace-pre-wrap text-sm text-slate-800">{ticket.resolutionSummary}</p>
           {canReopen && (
             <button
               type="button"
               disabled={reopening}
               onClick={() => setConfirmReopen(true)}
-              className="mt-3 text-xs text-slate-500 hover:text-slate-600 hover:underline disabled:opacity-50"
+              className="mt-3 text-xs text-slate-600 hover:text-slate-800 hover:underline disabled:opacity-50"
             >
               {reopening ? 'Reopening…' : 'Reopen ticket…'}
             </button>
@@ -167,7 +167,7 @@ export default function TicketDetailPage() {
       {canOpen && <OpenTicketForm key={`open-${ticket.id}`} ticket={ticket} onOpened={setTicket} />}
 
       <Card className="p-5">
-        <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-500">Activity</h2>
+        <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-600">Activity</h2>
         <TicketActivityFeed key={`activity-${ticket.id}`}
           ticket={ticket}
           messages={ticket.messages}

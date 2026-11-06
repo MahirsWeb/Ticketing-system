@@ -23,7 +23,7 @@ export function Tabs<K extends string>({
           role="tab"
           aria-selected={active === t.key}
           onClick={() => onSelect(t.key)}
-          className={clsx('whitespace-nowrap px-3 py-2 text-sm font-medium', active === t.key ? 'border-b-2 border-blue-700 text-blue-700' : 'text-slate-500')}
+          className={clsx('whitespace-nowrap px-3 py-2 text-sm font-medium', active === t.key ? 'border-b-2 border-blue-700 text-blue-700' : 'text-slate-600')}
         >
           {t.label}
         </button>

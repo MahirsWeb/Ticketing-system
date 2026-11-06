@@ -77,7 +77,7 @@ export function KnowledgeBaseDocumentsPanel() {
   return (
     <Panel className="max-w-lg">
       <h2 className="text-sm font-bold text-slate-800">Knowledge base documentation</h2>
-      <p className="mt-0.5 mb-4 text-xs text-slate-500">
+      <p className="mt-0.5 mb-4 text-xs text-slate-600">
         Upload manuals or instructions (Word .docx, Excel .xls/.xlsx, PDF) so the AI assistant can answer
         questions using official documentation, not just past tickets. Legacy binary .doc isn't supported —
         re-save as .docx first.
@@ -94,7 +94,7 @@ export function KnowledgeBaseDocumentsPanel() {
           className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-blue-700 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-blue-800"
         />
       </label>
-      {uploading && <p className="mt-2 text-xs text-slate-500">Uploading and indexing — this can take a moment per file…</p>}
+      {uploading && <p className="mt-2 text-xs text-slate-600">Uploading and indexing — this can take a moment per file…</p>}
 
       {list.isError && <ErrorText>The documentation could not be loaded. Try again in a moment.</ErrorText>}
       {list.isSuccess && documents.length > 0 && (
@@ -103,7 +103,7 @@ export function KnowledgeBaseDocumentsPanel() {
             <ListRow key={d.id}>
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium text-slate-800">{d.title}</div>
-                <div className="text-xs text-slate-500">
+                <div className="text-xs text-slate-600">
                   {d.sourceFileName} · {formatBytesAsChunks(d.chunkCount)}
                 </div>
               </div>
@@ -124,7 +124,7 @@ export function KnowledgeBaseDocumentsPanel() {
           ))}
         </ul>
       )}
-      {list.isSuccess && documents.length === 0 && <p className="mt-4 text-sm text-slate-500">No documentation uploaded yet.</p>}
+      {list.isSuccess && documents.length === 0 && <p className="mt-4 text-sm text-slate-600">No documentation uploaded yet.</p>}
       {watching && <ReindexStatusError run={run} />}
       {watching && reindex && reindex.state !== 'Idle' && (
         <p className={`mt-3 text-xs ${reindex.state === 'Failed' ? 'text-red-700' : reindex.state === 'Completed' ? 'text-green-700' : 'text-slate-600'}`}>

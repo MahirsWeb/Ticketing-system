@@ -37,7 +37,7 @@ export function AddCompanyForm() {
 
   return (
     <Card className="p-5">
-      <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-500">Add a company</h2>
+      <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-600">Add a company</h2>
       <form onSubmit={handleCreate} className="grid grid-cols-3 gap-4">
         <Field>
           <Label>Name</Label>

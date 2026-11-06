@@ -6,7 +6,7 @@ export function LanguageSwitcher({ dark = false }: { dark?: boolean }) {
 
   const base = 'rounded px-1.5 py-0.5 text-xs font-semibold transition';
   const activeClass = dark ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-900';
-  const inactiveClass = dark ? 'text-slate-300 hover:text-white' : 'text-slate-500 hover:text-slate-700';
+  const inactiveClass = dark ? 'text-slate-300 hover:text-white' : 'text-slate-600 hover:text-slate-900';
 
   return (
     <div className="flex items-center gap-0.5" role="group" aria-label="Language">
@@ -17,7 +17,7 @@ export function LanguageSwitcher({ dark = false }: { dark?: boolean }) {
       >
         EN
       </button>
-      <span className={dark ? 'text-slate-500' : 'text-slate-300'}>|</span>
+      <span aria-hidden className={dark ? 'text-slate-400' : 'text-slate-300'}>|</span>
       <button
         type="button"
         onClick={() => setLanguage('bs')}

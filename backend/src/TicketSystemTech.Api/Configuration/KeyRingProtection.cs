@@ -78,4 +78,31 @@ public static class KeyRingProtection
         using var certificate = request.CreateSelfSigned(TimeProvider.System.GetUtcNow().AddMinutes(-5), TimeProvider.System.GetUtcNow().AddYears(10));
         File.WriteAllBytes(path, certificate.Export(X509ContentType.Pfx, password));
     }
+
+    /// <summary>
+    /// The command <c>--create-key-certificate &lt;file.pfx&gt; &lt;password&gt;</c>; returns the exit code (0 made, 1 refused, 2 wrong use).
+    /// A mistake of the person at the keyboard (a file that is already there, a path that cannot be written) is an answer on the error
+    /// stream, not an unhandled exception with a stack trace and a crash code: the method above keeps throwing, so that no other code can miss it.
+    /// </summary>
+    public static int RunCreateCommand(string[] args, TextWriter output, TextWriter error)
+    {
+        if (args.Length != 3)
+        {
+            error.WriteLine("Usage: --create-key-certificate <file.pfx> <password>");
+            return 2;
+        }
+
+        try
+        {
+            CreateSelfSigned(args[1], args[2]);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            error.WriteLine(ex.Message);
+            return 1;
+        }
+
+        output.WriteLine($"Created {args[1]}. Set DataProtection:CertificatePath and DataProtection:CertificatePassword, and keep the file and the password OUT of the database backups.");
+        return 0;
+    }
 }

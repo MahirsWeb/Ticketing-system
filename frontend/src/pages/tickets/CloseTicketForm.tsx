@@ -28,7 +28,7 @@ export function CloseTicketForm({ ticket, onClosed }: { ticket: TicketDetailDto;
 
   return (
     <Card className="p-5">
-      <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-500">Close ticket</h2>
+      <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-600">Close ticket</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <Field>
           <Label>Resolution summary *</Label>

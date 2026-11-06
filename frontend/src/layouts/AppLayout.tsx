@@ -131,7 +131,7 @@ function TicketsNavItem({ to, label }: { to: string; label: string }) {
               className="flex items-center justify-between px-4 py-2 text-sm font-normal text-slate-700 hover:bg-slate-50 focus-visible:bg-slate-50"
             >
               <span>{r.label}</span>
-              <span className="font-semibold text-slate-500">{r.value ?? '—'}</span>
+              <span className="font-semibold text-slate-600">{r.value ?? '—'}</span>
             </Link>
           ))}
         </div>
@@ -195,7 +195,7 @@ export default function AppLayout() {
       <main className="mx-auto max-w-5xl px-4 py-6">
         {/* Only the page area waits for a screen's code; the header and navigation stay put. */}
         <ErrorBoundary inline resetKey={location.pathname}>
-          <Suspense fallback={<div role="status" className="py-16 text-center text-sm text-slate-500">{t('common_loading')}</div>}>
+          <Suspense fallback={<div role="status" className="py-16 text-center text-sm text-slate-600">{t('common_loading')}</div>}>
             <Outlet />
           </Suspense>
         </ErrorBoundary>

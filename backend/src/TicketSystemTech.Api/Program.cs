@@ -33,14 +33,7 @@ if (args.Contains("--healthcheck"))
 }
 if (args.Length >= 1 && args[0] == "--create-key-certificate")
 {
-    if (args.Length != 3)
-    {
-        await Console.Error.WriteLineAsync("Usage: --create-key-certificate <file.pfx> <password>");
-        Environment.ExitCode = 2;
-        return;
-    }
-    TicketSystemTech.Api.Configuration.KeyRingProtection.CreateSelfSigned(args[1], args[2]);
-    Console.WriteLine($"Created {args[1]}. Set DataProtection:CertificatePath and DataProtection:CertificatePassword, and keep the file and the password OUT of the database backups.");
+    Environment.ExitCode = TicketSystemTech.Api.Configuration.KeyRingProtection.RunCreateCommand(args, Console.Out, Console.Error);
     return;
 }
 

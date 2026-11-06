@@ -66,7 +66,7 @@ export function NewTaskForm({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <Card className="p-5">
-      <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-500">New task</h2>
+      <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-600">New task</h2>
       <form onSubmit={handleCreate} className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Field>
           <Label>Title</Label>
@@ -87,7 +87,7 @@ export function NewTaskForm({ isAdmin }: { isAdmin: boolean }) {
               </optgroup>
             ))}
           </Select>
-          {inNoBranch && <p className="mt-1 text-xs text-slate-500">You are not in a branch, so there are no colleagues to choose from.</p>}
+          {inNoBranch && <p className="mt-1 text-xs text-slate-600">You are not in a branch, so there are no colleagues to choose from.</p>}
           {colleagues.isError && <ErrorText>The list of colleagues could not be loaded.</ErrorText>}
         </Field>
         <Field className="md:col-span-2">

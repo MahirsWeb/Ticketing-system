@@ -10,7 +10,7 @@ export default function CompaniesPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-bold text-slate-900">Client companies</h1>
-        <p className="mt-1 text-sm text-slate-500">Click a company to see its users and tickets.</p>
+        <p className="mt-1 text-sm text-slate-600">Click a company to see its users and tickets.</p>
       </div>
 
       <AddCompanyForm />
@@ -26,17 +26,17 @@ export default function CompaniesPage() {
             <div>
               <div className="font-medium text-slate-800">{c.name}</div>
               {(c.address || c.contactInfo) && (
-                <div className="mt-0.5 text-xs text-slate-500">{[c.address, c.contactInfo].filter(Boolean).join(' · ')}</div>
+                <div className="mt-0.5 text-xs text-slate-600">{[c.address, c.contactInfo].filter(Boolean).join(' · ')}</div>
               )}
             </div>
             <div className="flex items-center gap-3">
               <StatusPill active={c.isActive} />
-              <span className="text-slate-300">→</span>
+              <span aria-hidden className="text-slate-300">→</span>
             </div>
           </Link>
         ))}
-        {companies.isPending && <div className="px-4 py-6 text-center text-sm text-slate-500">Loading companies…</div>}
-        {companies.isSuccess && companies.data.length === 0 && <div className="px-4 py-6 text-center text-sm text-slate-500">No companies yet.</div>}
+        {companies.isPending && <div className="px-4 py-6 text-center text-sm text-slate-600">Loading companies…</div>}
+        {companies.isSuccess && companies.data.length === 0 && <div className="px-4 py-6 text-center text-sm text-slate-600">No companies yet.</div>}
       </Card>
     </div>
   );

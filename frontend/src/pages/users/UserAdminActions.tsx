@@ -73,13 +73,13 @@ export function UserAdminActions({ user, isSelf, onChanged }: { user: UserListIt
   return (
     <>
       <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 border-t border-slate-100 pt-4 text-xs">
-        <button className="font-medium text-slate-500 hover:underline" onClick={handleToggleActive}>
+        <button className="font-medium text-slate-600 hover:underline" onClick={handleToggleActive}>
           {user.isActive ? 'Deactivate account' : 'Reactivate account'}
         </button>
         <button className="font-medium text-blue-700 hover:underline" onClick={() => setConfirmRegenerate(true)}>
           Regenerate temp password
         </button>
-        <button className="font-medium text-slate-500 hover:underline" onClick={handleExport}>
+        <button className="font-medium text-slate-600 hover:underline" onClick={handleExport}>
           Export personal data
         </button>
         {!isSelf && !user.email.endsWith('@anonymized.invalid') && (

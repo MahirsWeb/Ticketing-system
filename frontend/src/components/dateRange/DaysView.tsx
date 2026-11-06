@@ -30,7 +30,7 @@ export function DaysView({
           {format(month, 'MMMM yyyy')}
         </button>
       </PickerHeader>
-      <div className="grid grid-cols-7 gap-0.5 text-center text-[11px] font-semibold text-slate-500">
+      <div className="grid grid-cols-7 gap-0.5 text-center text-[11px] font-semibold text-slate-600">
         {WEEKDAY_LABELS.map((d) => (
           <div key={d} className="py-1">
             {d}
@@ -57,7 +57,7 @@ export function DaysView({
               onClick={() => onPick(day)}
               className={[
                 'h-7 w-7 rounded-md text-xs',
-                !inMonth && 'text-slate-500',
+                !inMonth && 'text-slate-600',
                 inMonth && !isStart && !isEnd && !inRange && 'text-slate-700 hover:bg-slate-100',
                 inRange && !isStart && !isEnd && 'bg-blue-50 text-blue-700',
                 (isStart || isEnd) && 'bg-blue-700 font-semibold text-white hover:bg-blue-800',

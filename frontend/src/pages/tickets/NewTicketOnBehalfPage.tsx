@@ -41,14 +41,14 @@ export default function NewTicketOnBehalfPage() {
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
         <h1 className="text-xl font-bold text-slate-900">New ticket on behalf of a client</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm text-slate-600">
           Use this when a client reports an issue by phone (or in person) instead of through the client portal.
           The ticket will show up exactly as if the client had submitted it themselves.
         </p>
       </div>
 
       {fromEmailMessageId && prefill.isPending ? (
-        <p className="text-sm text-slate-500">Loading the e-mail…</p>
+        <p className="text-sm text-slate-600">Loading the e-mail…</p>
       ) : (
         <>
           {prefill.isError && <ErrorText>The e-mail could not be loaded. Search for the client below and describe the issue by hand.</ErrorText>}

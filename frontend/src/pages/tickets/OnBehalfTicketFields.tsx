@@ -10,7 +10,7 @@ export function OnBehalfTicketFields({ model }: { model: OnBehalfTicket }) {
 
   return (
     <Card className="p-5">
-      <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-500">2. Describe the issue &amp; open the ticket</h2>
+      <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-600">2. Describe the issue &amp; open the ticket</h2>
       <form onSubmit={model.submit} className="space-y-4">
         {lists.failed && <ErrorText>Some of the lists could not be loaded. Reload the page to try again.</ErrorText>}
         <Field>
@@ -31,7 +31,7 @@ export function OnBehalfTicketFields({ model }: { model: OnBehalfTicket }) {
               {values.files.map((f, i) => (
                 <li key={`${f.name}-${i}`} className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">
                   <span aria-hidden>📎</span> {f.name}
-                  <button type="button" onClick={() => model.removeFile(i)} className="ml-1 font-bold text-slate-500 hover:text-red-600">
+                  <button type="button" onClick={() => model.removeFile(i)} className="ml-1 font-bold text-slate-600 hover:text-red-600">
                     ×
                   </button>
                 </li>

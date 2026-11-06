@@ -66,14 +66,14 @@ export function TaskDetailPanel({
   return (
     <div role="presentation" className="space-y-4 border-t border-slate-100 bg-slate-50 px-4 py-4" onClick={(e) => e.stopPropagation()}>
       <div>
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Description</div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">Description</div>
         <p className="mt-1 whitespace-pre-wrap text-sm text-slate-800">{task.description}</p>
       </div>
 
       {canManage && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Reassign to</div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">Reassign to</div>
             <div className="mt-1 flex items-center gap-2">
               <div className="w-56">
                 <Select value={reassignTo} onChange={(e) => setReassignTo(e.target.value)} className="text-xs">
@@ -100,7 +100,7 @@ export function TaskDetailPanel({
 
           {isAssignee && (
             <div>
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Live timer</div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">Live timer</div>
               <div className="mt-1">
                 {timerRunning ? (
                   <Button type="button" variant="danger" className="text-xs" disabled={busy} onClick={() => run(() => workTasksApi.stop(task.id))}>
@@ -116,7 +116,7 @@ export function TaskDetailPanel({
           )}
 
           <div className="md:col-span-2">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Start / end of the latest work session</div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">Start / end of the latest work session</div>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <input
                 type="datetime-local"
@@ -124,7 +124,7 @@ export function TaskDetailPanel({
                 onChange={(e) => setStarted(e.target.value)}
                 className="rounded-md border border-slate-300 px-2 py-1 text-xs"
               />
-              <span className="text-slate-500">→</span>
+              <span className="text-slate-600">→</span>
               <input
                 type="datetime-local"
                 value={ended}
@@ -154,9 +154,9 @@ export function TaskDetailPanel({
       )}
 
       <div>
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Work sessions</div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">Work sessions</div>
         {task.sessions.length === 0 ? (
-          <p className="mt-1 text-xs text-slate-500">No work has been logged on this task yet.</p>
+          <p className="mt-1 text-xs text-slate-600">No work has been logged on this task yet.</p>
         ) : (
           <ul className="mt-1 space-y-1 text-xs text-slate-600">
             {task.sessions.map((s) => (
@@ -170,7 +170,7 @@ export function TaskDetailPanel({
       </div>
 
       <div>
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Assignment history</div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">Assignment history</div>
         <ul className="mt-1 space-y-1 text-xs text-slate-600">
           {task.history.map((h, i) => (
             <li key={i}>

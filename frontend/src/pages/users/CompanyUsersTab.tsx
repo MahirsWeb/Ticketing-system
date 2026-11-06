@@ -35,7 +35,7 @@ export function CompanyUsersTab({ companyId, clients }: { companyId: string; cli
         </div>
       )}
       <table className="w-full text-sm">
-        <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
+        <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-600">
           <tr>
             <th scope="col" className="px-4 py-2">Name</th>
             <th scope="col" className="px-4 py-2">Email</th>
@@ -52,7 +52,7 @@ export function CompanyUsersTab({ companyId, clients }: { companyId: string; cli
               </td>
               <td className="px-4 py-2">{c.email}</td>
               <td className="px-4 py-2">{c.phoneNumber ?? '—'}</td>
-              <td className="px-4 py-2 whitespace-nowrap text-slate-500">{format(new Date(c.createdAtUtc), 'dd.MM.yyyy')}</td>
+              <td className="px-4 py-2 whitespace-nowrap text-slate-600">{format(new Date(c.createdAtUtc), 'dd.MM.yyyy')}</td>
               <td className="px-4 py-2">
                 <StatusPill active={c.isActive} />
               </td>
@@ -60,7 +60,7 @@ export function CompanyUsersTab({ companyId, clients }: { companyId: string; cli
           ))}
           {shown.length === 0 && message && (
             <tr>
-              <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
+              <td colSpan={5} className="px-4 py-8 text-center text-slate-600">
                 {message}
               </td>
             </tr>

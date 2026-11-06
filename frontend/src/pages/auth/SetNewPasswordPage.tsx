@@ -41,7 +41,7 @@ export default function SetNewPasswordPage() {
     <AuthSplitLayout>
       <Card className="w-full max-w-sm p-8">
         <h1 className="mb-1 text-xl font-bold text-slate-900">Set your password</h1>
-        <p className="mb-6 text-sm text-slate-500">
+        <p className="mb-6 text-sm text-slate-600">
           This is your first sign-in. Please choose a permanent password to replace the temporary one.
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">

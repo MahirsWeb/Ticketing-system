@@ -53,7 +53,7 @@ export function InboxView({ connectedEmail }: { connectedEmail: string | null })
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-900">Emails</h1>
-          <p className="text-xs text-slate-500">Connected: {connectedEmail}</p>
+          <p className="text-xs text-slate-600">Connected: {connectedEmail}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="secondary" disabled={inbox.isFetching} onClick={() => void inbox.refetch()}>
@@ -77,7 +77,7 @@ export function InboxView({ connectedEmail }: { connectedEmail: string | null })
         active={tab}
         onSelect={setTab}
       />
-      {messages.length >= INBOX_SIZE && <p className="text-xs text-slate-500">Showing the latest {INBOX_SIZE} emails.</p>}
+      {messages.length >= INBOX_SIZE && <p className="text-xs text-slate-600">Showing the latest {INBOX_SIZE} emails.</p>}
 
       <div className="flex gap-4">
         <MessageList messages={visible} message={emptyMessage} selectedId={selectedId} onSelect={setSelectedId} onToggleMark={handleToggleMark} />
