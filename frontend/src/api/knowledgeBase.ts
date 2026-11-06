@@ -37,9 +37,9 @@ export const knowledgeBaseApi = {
   askClient: (question: string, signal?: AbortSignal) =>
     apiClient.post<KnowledgeBaseAskResponse>('/api/knowledge-base/ask-client', { question }, { signal }).then((r) => r.data),
 
-  similarTickets: (query: string) =>
+  similarTickets: (query: string, signal?: AbortSignal) =>
     apiClient
-      .get<SimilarTicketsResponseDto>('/api/knowledge-base/similar-tickets', { params: { query } })
+      .get<SimilarTicketsResponseDto>('/api/knowledge-base/similar-tickets', { params: { query }, signal })
       .then((r) => r.data),
 
   /** Starts the background reindex. Resolves with the status; rejects with 409 if one is already running. */

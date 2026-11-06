@@ -4,7 +4,7 @@ Ovaj dokument kaže **šta znači „prošlo“**, šta je u drugom krugu testir
 i čime, šta nije moguće dokazati na ovom računaru i šta je svjesno ostalo otvoreno. Cilj je da se pri sljedećem krugu ponovo
 provjerava **samo razlika**, a ne cijeli skup.
 
-Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 718 backend i 809 frontend testova.
+Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 718 backend i 834 frontend testova.
 
 ## 1. Statusi
 
@@ -199,3 +199,5 @@ Povratak s Microsofta (`EmailCallbackPage`): 16 testova koja ranije nisu postoja
 T-17 (jedanaesti dio): kandidati za zaduženje (panel zaduženih na tiketu i obrazac za otvaranje tiketa) idu kroz zajednički upit osoblja po poslovnici i podposlovnici; 22 testa koja ranije nisu postojala, uključujući spisak koji se ne učita i zakasnjeli odgovor za prethodnu poslovnicu.
 
 T-17 (dvanaesti dio): zvonce obavijesti je na zajedničkom sloju upita; 19 testova više (24), uključujući grešku pri učitavanju koja se ranije gutala, odgovore van reda i zatvaranje tastaturom.
+
+T-17 (trinaesti dio): izvještaj o sličnim problemima je na zajedničkom sloju upita; 25 testova koji ranije nisu postojali, uključujući odbijen zahtjev koji je ostavljao vječno čekanje, odgovore van reda, tekst bez sadržaja i otvaranje tiketa tastaturom.

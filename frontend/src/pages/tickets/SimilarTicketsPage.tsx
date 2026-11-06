@@ -1,32 +1,26 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { knowledgeBaseApi } from '../../api/knowledgeBase';
-import type { SimilarTicketsResponseDto } from '../../types';
-import { Card, Spinner, StatusBadge } from '../../components/ui';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useSimilarTickets } from '../../api/knowledgeBaseQueries';
+import { messageOf } from '../../lib/messageOf';
+import { Button, Card, ErrorText, Spinner, StatusBadge } from '../../components/ui';
+
+/** Where "Back" goes when the page was opened directly (a bookmark, a link) and there is nothing in this tab to go back to. */
+const FALLBACK = '/ai-assistant';
 
 export default function SimilarTicketsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const query = searchParams.get('query') ?? '';
-  const [data, setData] = useState<SimilarTicketsResponseDto | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!query) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    knowledgeBaseApi.similarTickets(query).then((res) => {
-      setData(res);
-      setLoading(false);
-    });
-  }, [query]);
+  const noText = query.trim() === '';
+  const report = useSimilarTickets(query);
+  const data = report.data;
+  // The first entry of a tab has the key "default": nothing before it belongs to this application.
+  const goBack = () => (location.key === 'default' ? navigate(FALLBACK) : navigate(-1));
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div>
-        <button onClick={() => navigate(-1)} className="mb-2 text-sm text-blue-700 hover:underline">
+        <button onClick={goBack} className="mb-2 text-sm text-blue-700 hover:underline">
           ← Back
         </button>
         <h1 className="text-xl font-bold text-slate-900">Similar problems report</h1>
@@ -35,13 +29,24 @@ export default function SimilarTicketsPage() {
         </p>
       </div>
 
-      {loading && (
-        <div className="flex items-center gap-2 py-8 text-sm text-slate-500">
+      {noText && <p className="text-sm text-slate-500">There is nothing to look for: no problem was described.</p>}
+
+      {report.isLoading && (
+        <div role="status" className="flex items-center gap-2 py-8 text-sm text-slate-500">
           <Spinner className="h-4 w-4" /> Analyzing the knowledge base…
         </div>
       )}
 
-      {!loading && data && (
+      {report.isError && (
+        <div>
+          <ErrorText>{messageOf(report.error, 'The report could not be made.')}</ErrorText>
+          <Button variant="secondary" className="mt-3" onClick={() => void report.refetch()}>
+            Try again
+          </Button>
+        </div>
+      )}
+
+      {data && (
         <>
           <div className="grid grid-cols-3 gap-4">
             <Card className="p-5 text-center">
@@ -80,9 +85,20 @@ export default function SimilarTicketsPage() {
                     <tr
                       key={t.ticketId}
                       className="cursor-pointer border-b border-slate-100 hover:bg-slate-50"
-                      onClick={() => window.open(`/tickets/${t.ticketId}`, '_blank')}
+                      onClick={() => window.open(`/tickets/${t.ticketId}`, '_blank', 'noopener,noreferrer')}
                     >
-                      <td className="px-4 py-2 font-medium text-blue-700">#{t.ticketNumber}</td>
+                      <td className="px-4 py-2 font-medium">
+                        {/* The row can be clicked, but only a link can be reached and followed with the keyboard. */}
+                        <a
+                          href={`/tickets/${t.ticketId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-blue-700 hover:underline"
+                        >
+                          #{t.ticketNumber}
+                        </a>
+                      </td>
                       <td className="px-4 py-2">{t.title}</td>
                       <td className="px-4 py-2">{t.status && <StatusBadge status={t.status} />}</td>
                       <td className="px-4 py-2 text-slate-500">
