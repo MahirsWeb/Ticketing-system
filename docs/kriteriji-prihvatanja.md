@@ -4,7 +4,7 @@ Ovaj dokument kaže **šta znači „prošlo“**, šta je u drugom krugu testir
 i čime, šta nije moguće dokazati na ovom računaru i šta je svjesno ostalo otvoreno. Cilj je da se pri sljedećem krugu ponovo
 provjerava **samo razlika**, a ne cijeli skup.
 
-Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 733 backend i 969 frontend testova.
+Stanje opisano ovdje: poslije šestog kruga (2026-11-05), još neobjavljeno u trenutku pisanja. Najnoviji brojevi: 747 backend i 969 frontend testova.
 
 ## 1. Statusi
 
@@ -211,3 +211,5 @@ T-42 (jedanaesti dio): uređivač radnog vremena je razbijen na model, kuku i pr
 T-37 (drugi dio): izvoz čita samo kolone koje ulaze u red, a list "Timeline" traži rad svih zaposlenih odjednom (3 upita umjesto 159 za 53 zaposlena); sažetak i razlaganje po poslovnicama broje u bazi; 12 novih testova, uključujući brojanje upita i sadržaj ćelija izvoza. T-37 je time riješen.
 
 T-58 (drugi dio): pravila analizatora CA2016, CA1305, CA1068, CA1001 i jedanaest novih su greške koje prekidaju build (ranije su bila samo upozorenja, iako je dokumentacija tvrdila suprotno); ispravljeni nalazi o nezatvorenim dokumentima i porukama, blokirajućem čitanju JSON-a i ponovljenim nizovima; imena ograničavača zahtjeva su konstante, a `RateLimitPolicyTests` (3 testa) drži svaki endpoint uz postojeću politiku.
+
+T-47 (drugi dio): e-mailovi o nalozima, sigurnosti i novoj poslovnici biraju naslov i šablon na jednom mjestu (`AccountMessages`); imena deset push događaja su konstante (`PushEvents`), a test provjerava da preglednik sluša tačno ta imena; dva push događaja koje šalju servisi sada vidi test (`RecordingPublisher`); 14 novih testova.

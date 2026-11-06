@@ -1,4 +1,5 @@
 using TicketSystemTech.Api.Emails;
+using TicketSystemTech.Application.Common;
 using TicketSystemTech.Application.Common.Interfaces;
 using TicketSystemTech.Domain.Entities;
 using TicketSystemTech.Domain.Enums;
@@ -77,7 +78,7 @@ public sealed class Notifier : INotifier
                         $"New ticket #{e.Ticket.TicketNumber}: {e.Ticket.Title}",
                         $"New ticket #{e.Ticket.TicketNumber} submitted — {e.CompanyName}",
                         EmailTemplates.NewTicketSubmitted(member.FirstName, e.Ticket.TicketNumber, e.Ticket.Title, FullName(e.Client), e.CompanyName),
-                        "newTicket", new { e.Ticket.Id, e.Ticket.TicketNumber, e.Ticket.Title });
+                        PushEvents.NewTicket, new { e.Ticket.Id, e.Ticket.TicketNumber, e.Ticket.Title });
                 break;
 
             case TicketOpenedEvent e:
@@ -86,7 +87,7 @@ public sealed class Notifier : INotifier
                     $"Your ticket #{e.Ticket.TicketNumber} has been opened",
                     $"Your ticket #{e.Ticket.TicketNumber} has been opened",
                     EmailTemplates.TicketOpened(e.Client.FirstName, e.Ticket.TicketNumber),
-                    "ticketOpened", new { e.Ticket.Id, e.Ticket.TicketNumber, e.Ticket.Title });
+                    PushEvents.TicketOpened, new { e.Ticket.Id, e.Ticket.TicketNumber, e.Ticket.Title });
                 break;
 
             case TicketAssignedEvent e:
@@ -99,7 +100,7 @@ public sealed class Notifier : INotifier
                         $"Ticket #{e.Ticket.TicketNumber} transferred to {e.ToBranch}",
                         $"Ticket #{e.Ticket.TicketNumber} transferred to your branch",
                         EmailTemplates.TicketTransferred(member.FirstName, e.Ticket.TicketNumber, e.Ticket.Title, e.FromBranch, e.ToBranch, FullName(e.By)),
-                        "ticketTransferred", new { e.Ticket.Id, e.Ticket.TicketNumber, e.Ticket.Title, Branch = e.ToBranch });
+                        PushEvents.TicketTransferred, new { e.Ticket.Id, e.Ticket.TicketNumber, e.Ticket.Title, Branch = e.ToBranch });
                 break;
 
             case TicketClosedEvent e:
@@ -107,7 +108,7 @@ public sealed class Notifier : INotifier
                     $"Ticket #{e.Ticket.TicketNumber} has been resolved",
                     $"Your ticket #{e.Ticket.TicketNumber} has been resolved",
                     EmailTemplates.TicketClosed(e.Client.FirstName, e.Ticket.TicketNumber, FullName(e.By)),
-                    "ticketClosed", new { e.Ticket.Id, e.Ticket.TicketNumber });
+                    PushEvents.TicketClosed, new { e.Ticket.Id, e.Ticket.TicketNumber });
                 break;
 
             case NewResponseEvent e:
@@ -116,7 +117,7 @@ public sealed class Notifier : INotifier
                         $"New reply on ticket #{e.Ticket.TicketNumber}",
                         $"New reply on ticket #{e.Ticket.TicketNumber}",
                         EmailTemplates.NewResponse(recipient.FirstName, e.Ticket.TicketNumber),
-                        "newResponse", new { e.Ticket.Id, e.Ticket.TicketNumber });
+                        PushEvents.NewResponse, new { e.Ticket.Id, e.Ticket.TicketNumber });
                 break;
 
             case TaskAssignedEvent e:
@@ -124,7 +125,7 @@ public sealed class Notifier : INotifier
                     $"{FullName(e.By)} assigned you a task: \"{e.Task.Title}\"",
                     "A task has been assigned to you",
                     EmailTemplates.WorkTaskAssigned(e.Assignee.FirstName, e.Task.Title, FullName(e.By)),
-                    "taskAssigned", new { e.Task.Id, e.Task.Title });
+                    PushEvents.TaskAssigned, new { e.Task.Id, e.Task.Title });
                 break;
 
             case TicketOverdueEvent e:
@@ -133,7 +134,7 @@ public sealed class Notifier : INotifier
                         $"Ticket #{e.TicketNumber} is overdue",
                         $"Ticket #{e.TicketNumber} is overdue",
                         EmailTemplates.TicketOverdue(assignee.FirstName, e.TicketNumber, e.Title, e.Reason),
-                        "ticketOverdue", new { Id = e.TicketId, e.TicketNumber, e.Title });
+                        PushEvents.TicketOverdue, new { Id = e.TicketId, e.TicketNumber, e.Title });
                 break;
 
             default:
@@ -147,7 +148,7 @@ public sealed class Notifier : INotifier
             $"Ticket #{ticket.TicketNumber} assigned to you",
             $"Ticket #{ticket.TicketNumber} assigned to you",
             EmailTemplates.TicketAssigned(assignee.FirstName, ticket.TicketNumber, ticket.Title),
-            "ticketAssigned", new { ticket.Id, ticket.TicketNumber, ticket.Title });
+            PushEvents.TicketAssigned, new { ticket.Id, ticket.TicketNumber, ticket.Title });
 
     public IReadOnlyList<Notification> InApp(NotificationEvent @event) =>
         Deliveries(@event)

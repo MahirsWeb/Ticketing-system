@@ -3,8 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using TicketSystemTech.Api.Contracts;
-using TicketSystemTech.Api.Emails;
 using TicketSystemTech.Api.Middleware;
+using TicketSystemTech.Api.Notifications;
 using TicketSystemTech.Api.Security;
 using TicketSystemTech.Api.Services;
 using TicketSystemTech.Application.Common;
@@ -105,7 +105,10 @@ public sealed class AuthService : IAuthService
             // The account's owner learns about it by email (to the address on file), not from the sign-in screen.
             // At most one such e-mail a day per person: otherwise anybody can lock the account again and again and fill its owner's mailbox.
             if (await _userManager.IsLockedOutAsync(user) && _lockoutNotices.TryAcquire(user.Id, UtcNow, TimeSpan.FromHours(24)))
-                _emailQueue.Enqueue(user.Email!, "Your account was temporarily locked", EmailTemplates.AccountLocked(user.FirstName));
+            {
+                var mail = AccountMessages.AccountLocked(user.FirstName);
+                _emailQueue.Enqueue(user.Email!, mail.Subject, mail.Html);
+            }
 
             return Outcome<LoginResponse>.Status(StatusCodes.Status401Unauthorized, new { message = InvalidCredentials });
         }
@@ -189,8 +192,8 @@ public sealed class AuthService : IAuthService
         {
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(account);
             var link = $"{_frontendOptions.BaseUrl}/verify-email?userId={account.Id}&token={Uri.EscapeDataString(token)}";
-            await _emailSender.SendAsync(account.Email!, "Please verify your email address",
-                EmailTemplates.VerifyEmail(account.FirstName, link));
+            var mail = AccountMessages.VerifyEmail(account.FirstName, link);
+            await _emailSender.SendAsync(account.Email!, mail.Subject, mail.Html);
 
             return Outcome<object>.Ok(new { message = "Password set. Please check your email to verify your account before logging in." });
         }
@@ -220,7 +223,8 @@ public sealed class AuthService : IAuthService
             var link = $"{_frontendOptions.BaseUrl}/reset-password?userId={user.Id}&token={Uri.EscapeDataString(token)}";
             // Queued rather than awaited: only existing accounts get an email, so waiting for the send made the response time
             // reveal whether the address is registered.
-            _emailQueue.Enqueue(user.Email!, "Reset your password", EmailTemplates.ForgotPassword(user.FirstName, link));
+            var mail = AccountMessages.PasswordReset(user.FirstName, link);
+            _emailQueue.Enqueue(user.Email!, mail.Subject, mail.Html);
         }
 
         // Always return 200 so we don't leak which emails are registered.
@@ -291,6 +295,6 @@ public sealed class AuthService : IAuthService
             });
         }
         await _db.SaveChangesAsync();
-        await _notificationPublisher.PushToRoleAsync(UserRole.Admin, "userActivatedViaInvite", new { activatedUser.Id, activatedUser.FirstName, activatedUser.LastName, Role = activatedUser.Role.ToString() });
+        await _notificationPublisher.PushToRoleAsync(UserRole.Admin, PushEvents.UserActivatedViaInvite, new { activatedUser.Id, activatedUser.FirstName, activatedUser.LastName, Role = activatedUser.Role.ToString() });
     }
 }

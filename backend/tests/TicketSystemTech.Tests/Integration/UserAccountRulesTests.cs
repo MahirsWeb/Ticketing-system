@@ -77,6 +77,56 @@ public class UserAccountRulesTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task A_new_temporary_password_is_mailed_under_its_own_subject_with_the_password_in_it()
+    {
+        var client = await PersonAsync("uamail", UserRole.Client);
+        await GiveTicketAsync(client);
+        try
+        {
+            var made = await _world.Post(_world.Admin, $"/api/users/{client.Id}/regenerate-temp-password");
+
+            Assert.Equal(200, made.Code);
+            var mail = Assert.Single(await MailsTo(client.Email));
+            Assert.Equal("Your new temporary password — Ticket System Tech", mail.Subject);
+            Assert.Contains(made.Json.GetProperty("temporaryPassword").GetString()!, mail.HtmlBody);
+        }
+        finally
+        {
+            await ForgetMailsTo(client.Email);
+        }
+    }
+
+    [SqlFact]
+    public async Task A_new_account_is_mailed_the_invitation_with_its_temporary_password()
+    {
+        var email = $"invited-{Guid.NewGuid():N}@authz.test";
+        var created = await _world.Post(_world.Admin, "/api/users/clients", new { firstName = "Invited", lastName = "Person", email, companyId = _world.CompanyId });
+        Assert.Equal(200, created.Code);
+        var id = created.Json.GetProperty("userId").GetGuid();
+        _people.Add(new Actor("invited", id, email, UserRole.Client, null, ""));
+        try
+        {
+            var mail = Assert.Single(await MailsTo(email));
+            Assert.Equal("You've been invited to Ticket System Tech", mail.Subject);
+            Assert.Contains(created.Json.GetProperty("temporaryPassword").GetString()!, mail.HtmlBody);
+        }
+        finally
+        {
+            await ForgetMailsTo(email);
+        }
+    }
+
+    // The address is stored encrypted, so it cannot be compared in the query: the latest messages are read and picked from here.
+    private async Task<List<EmailOutboxItem>> MailsTo(string email) =>
+        (await _world.Db(db => db.EmailOutbox.AsNoTracking().OrderByDescending(m => m.CreatedAt).Take(500).ToListAsync())).Where(m => m.ToEmail == email).ToList();
+
+    private async Task ForgetMailsTo(string email)
+    {
+        var ids = (await MailsTo(email)).Select(m => m.Id).ToList();
+        await _world.Db(db => db.EmailOutbox.Where(m => ids.Contains(m.Id)).ExecuteDeleteAsync());
+    }
+
+    [SqlFact]
     public async Task A_colleague_can_reset_the_password_of_a_client_of_the_branch_but_not_of_staff_or_of_a_client_who_never_wrote_to_it()
     {
         var colleague = await PersonAsync("uastaff", UserRole.Employee, _world.BranchA);

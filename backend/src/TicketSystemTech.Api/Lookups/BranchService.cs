@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TicketSystemTech.Api.Contracts;
-using TicketSystemTech.Api.Emails;
+using TicketSystemTech.Api.Notifications;
 using TicketSystemTech.Api.Services;
 using TicketSystemTech.Application.Common.Interfaces;
 using TicketSystemTech.Domain.Entities;
@@ -56,8 +56,8 @@ public sealed class BranchService : IBranchService
         await _db.SaveChangesAsync();
 
         var creatorEmail = await _db.Users.Where(u => u.Id == _currentUser.UserId).Select(u => u.Email).FirstOrDefaultAsync();
-        await _emailSender.SendAsync(entity.Email, "Welcome to Ticket System Tech",
-            EmailTemplates.BranchWelcome(entity.Name, creatorEmail ?? "your administrator"));
+        var welcome = AccountMessages.BranchWelcome(entity.Name, creatorEmail ?? "your administrator");
+        await _emailSender.SendAsync(entity.Email, welcome.Subject, welcome.Html);
 
         return Outcome<DepartmentItemFull>.Ok(new DepartmentItemFull(entity.Id, entity.Name, entity.Email, entity.IsActive));
     }

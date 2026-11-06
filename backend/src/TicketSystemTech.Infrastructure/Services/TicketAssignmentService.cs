@@ -1,5 +1,6 @@
 using System.Net;
 using Microsoft.EntityFrameworkCore;
+using TicketSystemTech.Application.Common;
 using TicketSystemTech.Application.Common.Interfaces;
 using TicketSystemTech.Domain.Entities;
 using TicketSystemTech.Domain.Enums;
@@ -98,7 +99,7 @@ public class TicketAssignmentService : ITicketAssignmentService
 
         foreach (var ticket in orphaned.Where(t => t.DepartmentId.HasValue))
             foreach (var staffId in notifyByBranch[ticket.DepartmentId!.Value])
-                await _publisher.PushToUserAsync(staffId, "ticketUnassigned", new { ticket.Id, ticket.TicketNumber, ticket.Title }, ct);
+                await _publisher.PushToUserAsync(staffId, PushEvents.TicketUnassigned, new { ticket.Id, ticket.TicketNumber, ticket.Title }, ct);
 
         return tickets.Count;
     }

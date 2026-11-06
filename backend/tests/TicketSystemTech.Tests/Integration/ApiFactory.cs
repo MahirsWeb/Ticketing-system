@@ -24,6 +24,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     public FakeEmailTransport Transport { get; } = new();
     /// <summary>What the application asked the database, for tests that say how many queries something costs.</summary>
     public CommandLog Commands { get; } = new();
+    /// <summary>The real-time events that were pushed (nobody is connected in a test, so the real publisher reaches no one).</summary>
+    public RecordingPublisher Pushes { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -36,6 +38,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             services.AddSingleton<IChatCompletionService>(Chat);
             services.RemoveAll<IEmailTransport>();
             services.AddSingleton<IEmailTransport>(Transport);
+            services.RemoveAll<INotificationPublisher>();
+            services.AddSingleton<INotificationPublisher>(Pushes);
             services.ConfigureDbContext<AppDbContext>(options => options.AddInterceptors(Commands));
         });
     }

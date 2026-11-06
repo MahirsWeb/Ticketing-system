@@ -4,8 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using TicketSystemTech.Api.Contracts;
-using TicketSystemTech.Api.Emails;
 using TicketSystemTech.Api.Middleware;
+using TicketSystemTech.Api.Notifications;
 using TicketSystemTech.Api.Security;
 using TicketSystemTech.Api.Services;
 using TicketSystemTech.Application.Common.Interfaces;
@@ -147,8 +147,8 @@ public sealed class UserAccountService : IUserAccountService
         });
         await _db.SaveChangesAsync();
 
-        await _emailSender.SendAsync(user.Email!, "Your new temporary password — Ticket System Tech",
-            EmailTemplates.Invite(user.FirstName, user.Email!, tempPassword, _tempPasswordOptions.ValidityMinutes, $"{_frontendOptions.BaseUrl}/login"));
+        var mail = AccountMessages.NewTemporaryPassword(user.FirstName, user.Email!, tempPassword, _tempPasswordOptions.ValidityMinutes, $"{_frontendOptions.BaseUrl}/login");
+        await _emailSender.SendAsync(user.Email!, mail.Subject, mail.Html);
 
         // Only an Admin gets to see the plaintext. A non-admin employee resetting a client's password must not
         // learn it: it travels by email to the account owner, so the employee cannot sign in as the client.
@@ -270,8 +270,8 @@ public sealed class UserAccountService : IUserAccountService
         _db.Audit(_currentUser.UserId, "UserCreated", nameof(ApplicationUser), user.Id, $"Role: {role}");
         await _db.SaveChangesAsync();
 
-        await _emailSender.SendAsync(email, "You've been invited to Ticket System Tech",
-            EmailTemplates.Invite(firstName, email, tempPassword, _tempPasswordOptions.ValidityMinutes, $"{_frontendOptions.BaseUrl}/login"));
+        var invitation = AccountMessages.Invite(firstName, email, tempPassword, _tempPasswordOptions.ValidityMinutes, $"{_frontendOptions.BaseUrl}/login");
+        await _emailSender.SendAsync(email, invitation.Subject, invitation.Html);
 
         return Outcome<CreatedUserResponse>.Ok(new CreatedUserResponse(user.Id, email, tempPassword, expiresAt));
     }
