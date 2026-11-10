@@ -14,6 +14,7 @@ using TicketSystemTech.Domain.Entities;
 using TicketSystemTech.Domain.Enums;
 using TicketSystemTech.Infrastructure.Identity;
 using TicketSystemTech.Infrastructure.Persistence;
+using TicketSystemTech.Infrastructure.Services;
 
 namespace TicketSystemTech.Api.Users;
 
@@ -209,7 +210,10 @@ public sealed class UserAccountService : IUserAccountService
         // person included, so either both happen or neither does: if a ticket in use by someone else makes the save fail (a 409), nothing
         // has changed and the Admin simply tries again. Saving the person first used to leave them moved while their tickets stayed theirs.
         if (movedAway)
+        {
             await _assignments.ReleaseLiveTicketsAsync(user.Id, "moved to a different role or branch", _currentUser.UserId);
+            await _db.EndRunningTaskSessionsAsync(null, user.Id, UtcNow); // their task timers stop too, not just ticket work
+        }
         var saved = await _userManager.UpdateAsync(user);
         if (!saved.Succeeded) return Outcome<Done>.Invalid(string.Join(" ", saved.Errors.Select(e => e.Description)));
         _cache.Remove(UserStatusCache.Key(user.Id));
@@ -229,7 +233,10 @@ public sealed class UserAccountService : IUserAccountService
         // Someone who can no longer work must not keep owning live tickets. Released first and saved together with the person (see
         // UpdateUser): a failure leaves the account as it was instead of inactive with its tickets still on it.
         if (!isActive && user.Role == UserRole.Employee)
+        {
             await _assignments.ReleaseLiveTicketsAsync(user.Id, "account deactivated", _currentUser.UserId);
+            await _db.EndRunningTaskSessionsAsync(null, user.Id, UtcNow); // a deactivated person's running task timer must stop
+        }
         var saved = await _userManager.UpdateAsync(user);
         if (!saved.Succeeded) return Outcome<Done>.Invalid(string.Join(" ", saved.Errors.Select(e => e.Description)));
         _cache.Remove(UserStatusCache.Key(user.Id));
@@ -273,6 +280,10 @@ public sealed class UserAccountService : IUserAccountService
         var invitation = AccountMessages.Invite(firstName, email, tempPassword, _tempPasswordOptions.ValidityMinutes, $"{_frontendOptions.BaseUrl}/login");
         await _emailSender.SendAsync(email, invitation.Subject, invitation.Html);
 
-        return Outcome<CreatedUserResponse>.Ok(new CreatedUserResponse(user.Id, email, tempPassword, expiresAt));
+        // The plaintext temporary password is shown to an Admin only. A non-admin employee (who may create Client accounts)
+        // does not get it back: it travels to the new account's own mailbox by e-mail, so the employee cannot sign in as the
+        // client before they set their own password. This matches how regenerating a temporary password already behaves.
+        var visiblePassword = _currentUser.Role == UserRole.Admin ? tempPassword : null;
+        return Outcome<CreatedUserResponse>.Ok(new CreatedUserResponse(user.Id, email, visiblePassword, expiresAt));
     }
 }

@@ -331,12 +331,17 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
         builder.Entity<EmailOutboxItem>(e =>
         {
             e.ToTable("EmailOutbox");
-            // The recipient is an e-mail address like any other, so it is encrypted at rest; the subject and body are not,
-            // because they say no more than the ticket message they were generated from.
+            // The recipient is an e-mail address like any other, so it is encrypted at rest. The body is encrypted too: it is
+            // not always as harmless as a ticket message — a password-reset mail carries a reset link with its token, and a new
+            // account or regenerated password mail carries a temporary password. A copy of the database alone must not hand
+            // someone another person's account, so the body (like the address) is readable only with the key ring. The subject
+            // carries no secret, so it is left as text (the worker logs it on failures).
             e.Property(m => m.ToEmail)
                 .HasConversion(new ValueConverter<string, string>(v => _piiProtector.Encrypt(v)!, v => _piiProtector.Decrypt(v)!))
                 .HasMaxLength(1000).IsRequired();
             e.Property(m => m.Subject).HasMaxLength(500).IsRequired();
+            e.Property(m => m.HtmlBody)
+                .HasConversion(new ValueConverter<string, string>(v => _piiProtector.Encrypt(v)!, v => _piiProtector.Decrypt(v)!));
             e.Property(m => m.Status).HasConversion<int>();
             e.Property(m => m.LastError).HasMaxLength(500);
             // The worker asks for "pending and due"; the clean-up asks for "finished before X".

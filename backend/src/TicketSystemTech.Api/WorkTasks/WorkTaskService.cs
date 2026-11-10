@@ -28,8 +28,9 @@ public interface IWorkTaskService
     Task<Outcome<WorkTaskDetailDto>> ReassignAsync(Guid id, ReassignWorkTaskRequest request);
 
     /// <summary>
-    /// Manually corrects the time of the task's latest stretch of work (anyone with access to the task, not just the assignee),
-    /// or enters one if the task has none yet. Earlier stretches are left alone. Clearing both times removes the latest stretch.
+    /// Manually corrects the time of the task's latest stretch of work, or enters one if the task has none yet. Earlier
+    /// stretches are left alone. Clearing both times removes the latest stretch. Changing or removing an existing stretch is
+    /// limited to the person who did the work, the current assignee, or an Admin; the change is recorded in the audit log.
     /// </summary>
     Task<Outcome<WorkTaskDetailDto>> SetTimeAsync(Guid id, SetWorkTaskTimeRequest request);
 
@@ -67,6 +68,7 @@ public sealed class WorkTaskService : IWorkTaskService
         var assignee = await _db.Users.FirstOrDefaultAsync(u => u.Id == request.AssignedToUserId
             && u.Role == UserRole.Employee);
         if (assignee is null) return Outcome<WorkTaskDetailDto>.Invalid("Assignee must be a support agent or consultant.");
+        if (!assignee.IsActive) return Outcome<WorkTaskDetailDto>.Invalid("That colleague's account is inactive, so a task cannot be assigned to them.");
         if (assignee.DepartmentId is null) return Outcome<WorkTaskDetailDto>.Invalid("Assignee is not linked to a branch.");
 
         if (_currentUser.Role != UserRole.Admin && assignee.DepartmentId != _currentUser.DepartmentId)
@@ -103,9 +105,17 @@ public sealed class WorkTaskService : IWorkTaskService
         var newAssignee = await _db.Users.FirstOrDefaultAsync(u => u.Id == request.AssignedToUserId
             && u.Role == UserRole.Employee);
         if (newAssignee is null) return Outcome<WorkTaskDetailDto>.Invalid("Assignee must be a support agent or consultant.");
+        if (!newAssignee.IsActive) return Outcome<WorkTaskDetailDto>.Invalid("That colleague's account is inactive, so a task cannot be assigned to them.");
         if (newAssignee.DepartmentId != task.DepartmentId) return Outcome<WorkTaskDetailDto>.Invalid("You can only reassign tasks to colleagues in the same branch.");
 
         var reassignedBy = await _db.Users.FirstAsync(u => u.Id == _currentUser.UserId);
+
+        // If the previous assignee had the timer running, stop it now. Their work stays recorded, but the task is not handed
+        // over with a live session that only its old owner could stop (they get a 403, the new owner gets "already running",
+        // and the session would otherwise run on for ever, counting to "now" in reports and blocking the old owner's other work).
+        var hadRunning = await _db.WorkTaskSessions.AnyAsync(s => s.WorkTaskId == task.Id && s.EndedAtUtc == null);
+        await _db.EndRunningTaskSessionsAsync(task.Id, null, UtcNow);
+        if (hadRunning) task.Status = WorkTaskStatus.Pending; // handed over: no live work until the new assignee starts
 
         task.AssignedByUserId = reassignedBy.Id;
         task.AssignedToUserId = newAssignee.Id;
@@ -126,12 +136,20 @@ public sealed class WorkTaskService : IWorkTaskService
         var latest = task.Sessions.OrderByDescending(s => s.StartedAtUtc).FirstOrDefault();
         var remaining = task.Sessions.ToList();
 
+        // A stretch of work belongs to the person who did it. Changing or removing an existing one is allowed only to that
+        // person, to whoever the task is assigned to now (who answers for it), or to an Admin — not to any colleague who merely
+        // shares the branch. (Entering a brand-new stretch, when the task has none yet, is attributed to the current assignee
+        // and open to anyone with access, as it is for tickets.)
+        if (latest is not null && !MayChangeSession(latest, task))
+            return Outcome<WorkTaskDetailDto>.Forbidden();
+
         if (request.StartedAtUtc is null && request.EndedAtUtc is null)
         {
             if (latest is not null)
             {
                 _db.WorkTaskSessions.Remove(latest);
                 remaining.Remove(latest);
+                AuditSession("WorkTaskSessionDeleted", task, latest);
             }
         }
         else if (request.StartedAtUtc is null)
@@ -143,19 +161,24 @@ public sealed class WorkTaskService : IWorkTaskService
             var started = BusinessTimeZone.AsUtc(request.StartedAtUtc.Value);
             DateTime? ended = request.EndedAtUtc is { } end ? BusinessTimeZone.AsUtc(end) : null;
 
+            // Validate the overlap against the owner of THIS stretch (an existing one keeps its owner; a new one is the
+            // current assignee's), not blindly against the current assignee — otherwise a previous assignee's stretch was
+            // checked against the wrong person's other work.
+            var owner = latest?.UserId ?? task.AssignedToUserId;
             var others = task.Sessions.Where(s => s != latest).Select(s => new WorkSessionRules.Span(s.Id, s.StartedAtUtc, s.EndedAtUtc));
             var problem = WorkSessionRules.Validate(started, ended, UtcNow, others, LongestSession, subject: "task")
-                ?? WorkSessionRules.ValidateAgainstOtherWork(started, ended, await _db.OtherWorkOfAsync(task.AssignedToUserId, null, task.Id));
+                ?? WorkSessionRules.ValidateAgainstOtherWork(started, ended, await _db.OtherWorkOfAsync(owner, null, task.Id));
             if (problem is not null) return Outcome<WorkTaskDetailDto>.Invalid(problem);
 
             if (latest is null)
             {
-                latest = new WorkTaskSession { WorkTaskId = task.Id, UserId = task.AssignedToUserId };
+                latest = new WorkTaskSession { WorkTaskId = task.Id, UserId = owner };
                 _db.WorkTaskSessions.Add(latest);
                 remaining.Add(latest);
             }
             latest.StartedAtUtc = started;
             latest.EndedAtUtc = ended;
+            AuditSession("WorkTaskSessionChanged", task, latest);
         }
 
         task.Status = remaining.Any(s => s.EndedAtUtc is null) ? WorkTaskStatus.InProgress
@@ -201,6 +224,22 @@ public sealed class WorkTaskService : IWorkTaskService
 
         return Outcome<WorkTaskDetailDto>.Ok(await _queries.BuildDetailAsync(id));
     }
+
+    /// <summary>Who may change or remove a recorded stretch: the person who did it, the current assignee, or an Admin.</summary>
+    private bool MayChangeSession(WorkTaskSession session, WorkTask task) =>
+        _currentUser.Role == UserRole.Admin
+        || session.UserId == _currentUser.UserId
+        || task.AssignedToUserId == _currentUser.UserId;
+
+    private void AuditSession(string action, WorkTask task, WorkTaskSession session) =>
+        _db.AuditLogs.Add(new AuditLog
+        {
+            UserId = _currentUser.UserId,
+            Action = action,
+            EntityType = nameof(WorkTask),
+            EntityId = task.Id,
+            Details = $"session {session.Id} of user {session.UserId}: {session.StartedAtUtc:O} - {session.EndedAtUtc?.ToString("O") ?? "running"}"
+        });
 
     private async Task NotifyAssignee(WorkTask task, Infrastructure.Identity.ApplicationUser assignee, Infrastructure.Identity.ApplicationUser assignedBy)
     {

@@ -27,6 +27,7 @@ public class WorkTaskSessionTests : IAsyncLifetime
         if (!_world.Available) return;
         await _world.Db(async db =>
         {
+            await db.AuditLogs.Where(a => a.EntityId != null && _tasks.Contains(a.EntityId.Value)).ExecuteDeleteAsync();
             await db.WorkTasks.Where(t => _tasks.Contains(t.Id)).ExecuteDeleteAsync(); // its sessions go with it
             await db.TicketWorkSessions.Where(s => _tickets.Contains(s.TicketId)).ExecuteDeleteAsync();
             return await db.Tickets.Where(t => _tickets.Contains(t.Id)).ExecuteDeleteAsync();
@@ -103,6 +104,41 @@ public class WorkTaskSessionTests : IAsyncLifetime
         var task = await NewTaskAsync(_world.EmpA1);
 
         Assert.Equal(403, (await _world.Post(_world.EmpA2, $"/api/work-tasks/{task}/start")).Code);
+    }
+
+    [SqlFact]
+    public async Task Reassigning_a_task_stops_the_previous_owners_running_timer()
+    {
+        var task = await NewTaskAsync(_world.EmpA1);
+        Assert.Equal(200, (await _world.Post(_world.EmpA1, $"/api/work-tasks/{task}/start")).Code);
+
+        // hand it to a colleague while the timer is still running
+        Assert.Equal(200, (await _world.Post(_world.EmpA1, $"/api/work-tasks/{task}/reassign", new { assignedToUserId = _world.EmpA2.Id })).Code);
+
+        // the previous owner's session is closed, not left running for ever (it used to stay open: the old owner got a 403 on
+        // Stop, the new owner got "Timer is already running", and it blocked the old owner's other work)
+        Assert.All(await SessionsOfAsync(task), s => Assert.NotNull(s.EndedAtUtc));
+        // and the new owner can start their own stretch
+        Assert.Equal(200, (await _world.Post(_world.EmpA2, $"/api/work-tasks/{task}/start")).Code);
+    }
+
+    [SqlFact]
+    public async Task Only_the_worker_the_assignee_or_an_admin_may_change_a_recorded_stretch()
+    {
+        var task = await NewTaskAsync(_world.EmpA1); // assigned to, and worked by, EmpA1
+        var past = DateTime.UtcNow.AddHours(-5);
+        await AddSessionAsync(task, _world.EmpA1, past, past.AddHours(1));
+
+        // a colleague who merely shares the branch may NOT move someone else's recorded time (it used to be allowed)
+        var byColleague = await _world.Send(_world.EmpA2, HttpMethod.Patch, $"/api/work-tasks/{task}/time", Time(past, past.AddHours(2)));
+        Assert.Equal(403, byColleague.Code);
+
+        // the person who did the work (here also the current assignee) may
+        Assert.Equal(200, (await _world.Send(_world.EmpA1, HttpMethod.Patch, $"/api/work-tasks/{task}/time", Time(past, past.AddHours(2)))).Code);
+
+        // the change is written to the audit log (it was not recorded before)
+        var audited = await _world.Db(db => db.AuditLogs.AsNoTracking().AnyAsync(a => a.EntityId == task && a.Action == "WorkTaskSessionChanged"));
+        Assert.True(audited);
     }
 
     // ======================= entering a time by hand =======================

@@ -134,12 +134,19 @@ export function RichTextEditor({ value, onChange, placeholder, onFilesSelected, 
   });
 
   useEffect(() => {
-    // A destroyed editor has no schema any more and getHTML() throws on it: in development React runs every effect twice (StrictMode)
-    // and the editor of the first run has already been torn down when the second one looks at it.
-    if (editor && !editor.isDestroyed && value === '' && editor.getHTML() !== '<p></p>') {
-      editor.commands.clearContent();
+    // Keep the visible editor in step with `value` whenever the parent changes it on its own — after a send (value becomes '')
+    // and, critically, when the parent swaps in a different draft (e.g. switching Response <-> Internal note keeps a separate
+    // draft per mode). Without this the contenteditable kept showing the previous mode's text while the state held the new
+    // draft, so a reply could carry the internal note's words to the client. We only write when the incoming value really
+    // differs from what the editor already shows, so ordinary typing (which flows value <- editor) never disturbs the cursor.
+    // A destroyed editor has no schema any more and getHTML() throws on it: in development React runs every effect twice
+    // (StrictMode) and the editor of the first run has already been torn down when the second one looks at it.
+    if (!editor || editor.isDestroyed) return;
+    const incoming = value === '' ? '<p></p>' : value;
+    if (incoming !== editor.getHTML()) {
+      editor.commands.setContent(value, { emitUpdate: false }); // do not emit an update, so this does not loop back through onChange
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the parent empties value (after a send); the editor instance is stable and must not trigger a clear
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the editor instance is stable; this must run when `value` changes
   }, [value]);
 
   if (!editor) return null;

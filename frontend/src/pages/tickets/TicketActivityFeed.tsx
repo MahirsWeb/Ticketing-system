@@ -135,6 +135,7 @@ export function TicketActivityFeed({
             <div className="flex gap-2 text-xs">
               <button
                 type="button"
+                aria-pressed={replyType === 'Response'}
                 onClick={() => setReplyType('Response')}
                 className={`rounded-full px-3 py-1 font-semibold ${replyType === 'Response' ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-600'}`}
               >
@@ -142,6 +143,7 @@ export function TicketActivityFeed({
               </button>
               <button
                 type="button"
+                aria-pressed={replyType === 'InternalNote'}
                 onClick={() => setReplyType('InternalNote')}
                 className={`rounded-full px-3 py-1 font-semibold ${replyType === 'InternalNote' ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-600'}`}
               >
@@ -153,6 +155,7 @@ export function TicketActivityFeed({
             value={body}
             onChange={setBody}
             onFilesSelected={addFiles}
+            ariaLabel={effectiveType === 'Response' ? 'Reply to the client' : 'Internal note (not visible to the client)'}
             placeholder={effectiveType === 'Response' ? 'Write a reply…' : 'Write an internal note (not visible to the client)…'}
           />
           {files.length > 0 && (

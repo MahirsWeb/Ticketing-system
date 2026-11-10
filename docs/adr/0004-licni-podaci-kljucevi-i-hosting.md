@@ -30,7 +30,12 @@ lozinka admina završavala u logovima koje platforma čuva. Drugi krug je to pon
 
 ## Šta nije urađeno
 
-- **Postojeći ključ ostaje nešifrovan** dok ga ne zamijeni novi (rotacija svakih 90 dana); nova instalacija je šifrovana od početka.
+- **Ključevi napravljeni bez certifikata ostaju nešifrovani trajno.** Data Protection svakih 90 dana pravi *novi* ključ, ali
+  *stare ne briše* — potrebni su da se pročita ono što je njima šifrovano. Ako je instalacija prvi put pokrenuta bez certifikata,
+  ti stari ključevi i dalje stoje u bazi nešifrovani, pa dodavanje certifikata kasnije štiti samo ono što se šifruje *poslije*
+  njega, ne i ranije podatke. Nema još alata za ponovno šifrovanje (re-key) postojećih ključeva. **Zaključak:** da bi zaštita
+  ključeva zaista vrijedila, certifikat (`DataProtection:CertificatePath`/`Thumbprint`) mora biti podešen **prije prvog pokretanja**
+  na serveru; nova instalacija je tada šifrovana od početka.
 - **GDPR izvoz i anonimizacija** na zahtjev (T-10) nisu urađeni; traži pravnu stranu.
 - **JWT je u `localStorage`** (T-18.1); prelazak na kolačić je veća izmjena koja nije rađena.
 - **CSP za SPA nije u repozitoriju.** Zaglavlje je ranije postavljao Vercel (`vercel.json`, uklonjen) i bilo je samo

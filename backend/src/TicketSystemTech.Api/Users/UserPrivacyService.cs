@@ -14,6 +14,7 @@ using TicketSystemTech.Domain.Entities;
 using TicketSystemTech.Domain.Enums;
 using TicketSystemTech.Infrastructure.Identity;
 using TicketSystemTech.Infrastructure.Persistence;
+using TicketSystemTech.Infrastructure.Services;
 
 namespace TicketSystemTech.Api.Users;
 
@@ -108,6 +109,11 @@ public sealed class UserPrivacyService : IUserPrivacyService
                                  where w.UserId == id
                                  orderby w.StartedAtUtc
                                  select new { task = t.Title, w.StartedAtUtc, w.EndedAtUtc }).ToListAsync(ct),
+            attachmentsUploaded = await (from a in _db.TicketAttachments.AsNoTracking()
+                                         join t in _db.Tickets.AsNoTracking() on a.TicketId equals t.Id
+                                         where a.UploadedByUserId == id
+                                         orderby a.CreatedAt
+                                         select new { t.TicketNumber, a.FileName, a.ContentType, a.FileSizeBytes, a.CreatedAt }).ToListAsync(ct),
             notifications = await _db.Notifications.AsNoTracking().Where(n => n.UserId == id).OrderBy(n => n.CreatedAt)
                 .Select(n => new { type = n.Type.ToString(), n.Message, n.IsRead, n.CreatedAt }).ToListAsync(ct),
             actionsRecordedInTheAuditLog = await _db.AuditLogs.AsNoTracking().Where(a => a.UserId == id).OrderBy(a => a.CreatedAt)
@@ -158,7 +164,11 @@ public sealed class UserPrivacyService : IUserPrivacyService
         await _fileStorage.DeletePublicImageAsync(avatar);
 
         if (wasEmployee)
+        {
             await _assignments.ReleaseLiveTicketsAsync(user.Id, "account anonymized", _currentUser.UserId);
+            await _db.EndRunningTaskSessionsAsync(null, user.Id, UtcNow); // stop any running task timer, like deactivation does
+            await _db.SaveChangesAsync();
+        }
 
         return Outcome<Done>.Ok(Done.Value);
     }

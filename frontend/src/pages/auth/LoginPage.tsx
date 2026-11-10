@@ -85,6 +85,7 @@ export default function LoginPage() {
           <IconInput
             icon={<UserIcon />}
             type="email"
+            aria-label={t('login_emailLabel')}
             placeholder={t('login_emailPlaceholder')}
             required
             value={email}
@@ -94,6 +95,7 @@ export default function LoginPage() {
           <IconInput
             icon={<LockIcon />}
             type="password"
+            aria-label={t('login_passwordLabel')}
             placeholder={t('login_passwordPlaceholder')}
             required
             value={password}

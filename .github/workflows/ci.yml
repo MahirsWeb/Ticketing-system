@@ -171,10 +171,9 @@ jobs:
   docker-image:
     name: Docker image
     # Builds the backend image exactly as a deployment would (restore, publish, runtime image) and checks what the image is: .NET 10,
-    # pinned by digest, not root, with a health check, and a refusal to start on a bad configuration. It does not block a merge
-    # until the steps added with the pinned digests and the health check have been green once.
+    # pinned by digest, not root, with a health check, and a refusal to start on a bad configuration. This job blocks a merge: a
+    # broken Dockerfile or image must fail CI, not pass quietly (it used to be continue-on-error while the checks were being proven).
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 

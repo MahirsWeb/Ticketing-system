@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using TicketSystemTech.Api.Contracts;
 using TicketSystemTech.Api.Middleware;
@@ -42,14 +43,18 @@ public sealed class AuthService : IAuthService
     private readonly IMemoryCache _cache;
     private readonly IBackgroundEmailQueue _emailQueue;
     private readonly NoticeThrottle _lockoutNotices;
+    private readonly NoticeThrottle _resetNotices;
     private readonly LoginAttemptLimiter _loginLimiter;
     private readonly TimeProvider _time;
     private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
 
+    /// <summary>At most one password-reset e-mail per account in this window, so a repeated request cannot flood a mailbox.</summary>
+    private static readonly TimeSpan ResetEmailEvery = TimeSpan.FromMinutes(3);
+
     public AuthService(
         UserManager<ApplicationUser> userManager, ITokenService tokenService, IEmailSender emailSender, IOptions<FrontendOptions> frontendOptions,
         AppDbContext db, INotificationPublisher notificationPublisher, IMemoryCache cache, IBackgroundEmailQueue emailQueue,
-        NoticeThrottle lockoutNotices, LoginAttemptLimiter loginLimiter, TimeProvider time)
+        NoticeThrottle lockoutNotices, [FromKeyedServices("password-reset")] NoticeThrottle resetNotices, LoginAttemptLimiter loginLimiter, TimeProvider time)
     {
         _userManager = userManager;
         _tokenService = tokenService;
@@ -60,6 +65,7 @@ public sealed class AuthService : IAuthService
         _cache = cache;
         _emailQueue = emailQueue;
         _lockoutNotices = lockoutNotices;
+        _resetNotices = resetNotices;
         _loginLimiter = loginLimiter;
         _time = time;
     }
@@ -217,7 +223,10 @@ public sealed class AuthService : IAuthService
     public async Task<Outcome<object>> ForgotPasswordAsync(ForgotPasswordRequest request)
     {
         var user = await _userManager.FindByEmailAsync(request.Email);
-        if (user is not null && user.IsActive)
+        // At most one reset e-mail per account per few minutes: repeated requests (a nervous click, or someone targeting a known
+        // address) must not fill the owner's mailbox. The throttle gates only the e-mail; the response below is the same either way,
+        // so it still does not reveal whether the address is registered.
+        if (user is not null && user.IsActive && _resetNotices.TryAcquire(user.Id, UtcNow, ResetEmailEvery))
         {
             var token = await _userManager.GeneratePasswordResetTokenAsync(user);
             var link = $"{_frontendOptions.BaseUrl}/reset-password?userId={user.Id}&token={Uri.EscapeDataString(token)}";

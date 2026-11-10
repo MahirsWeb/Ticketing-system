@@ -361,9 +361,11 @@ aplikacija **odbija da krene** i nabroji sve što fali, dok ne podesiš:
    pa `DataProtection:CertificatePath` = `keyring.pfx`, `DataProtection:CertificatePassword` = ta lozinka (iz varijable
    okruženja ili tajni, ne iz fajla u git-u). Na Windowsu se umjesto fajla može koristiti certifikat iz Windows spremišta:
    `DataProtection:CertificateThumbprint`. **Sačuvaj certifikat i lozinku odvojeno od backupa baze i napravi njihovu kopiju:
-   bez njih šifrovani podaci ne mogu da se pročitaju.** Postojeći ključ ostaje u čistom tekstu dok se ne zamijeni novim
-   (ključevi se mijenjaju svakih 90 dana); nova instalacija je šifrovana od prvog dana. Ko svjesno ne želi certifikat:
-   `DataProtection:AllowUnprotectedKeys` = `true`.
+   bez njih šifrovani podaci ne mogu da se pročitaju.** **Podesi certifikat prije prvog pokretanja na serveru.** Ključevi
+   napravljeni bez certifikata ostaju u čistom tekstu *trajno* — svakih 90 dana se pravi novi ključ, ali se stari ne brišu (potrebni
+   su za čitanje ranije šifrovanih podataka), pa certifikat dodat kasnije štiti samo ono što se šifruje poslije njega. Alat za
+   ponovno šifrovanje postojećih ključeva (re-key) još ne postoji. Nova instalacija pokrenuta s certifikatom je šifrovana od prvog
+   dana. Ko svjesno ne želi certifikat: `DataProtection:AllowUnprotectedKeys` = `true`.
 
 Ostalo što vrijedi znati:
 

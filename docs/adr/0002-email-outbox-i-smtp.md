@@ -20,7 +20,10 @@
 ## Kako radi
 
 - **Zaključavanje:** radnik uzima poruke uslovnim `UPDATE`-om (lease, `Email:Outbox:LeaseSeconds`). Ako radnik pukne, poruka se po
-  isteku ponovo nudi. Više instanci ne šalje istu poruku dvaput.
+  isteku ponovo nudi. U normalnom radu dvije instance ne uzimaju istu poruku istovremeno (samo jedan `UPDATE` promijeni red).
+  **Isporuka je „barem jednom": ** ako proces padne nakon što je SMTP prihvatio poruku a prije nego je ishod zapisan, poruka će
+  po isteku lease-a biti poslana ponovo. To je cijena toga da se nijedna poruka ne izgubi; apsolutna garancija „nikad dvaput" ne
+  postoji (niti je moguća bez transakcija s provajderom). Primalac zato može u rijetkom slučaju dobiti istu poruku dvaput.
 - **Ishodi transporta:** `Sent`, `Skipped` (nema `Smtp:Host` ili `Smtp:FromAddress`, ili je primalac deaktiviran), `Retry`
   (SMTP `4xx`, mrežna greška, istek vremena, odbijena prijava), `Failed` (`5xx`, neispravna adresa).
 - **Ponovni pokušaji:** 1, 2, 4, 8, 16 pa 30 minuta, najviše 8 pokušaja (`EmailRetryPolicy`). Odbijena prijava se ponavlja jer je

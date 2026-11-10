@@ -229,6 +229,12 @@ public sealed class EmailOutboxDispatcher : BackgroundService
                 item.NextAttemptAtUtc = nowUtc + EmailRetryPolicy.DelayAfter(item.Attempts);
                 break;
         }
+
+        // Once the message will not be sent again (delivered, deliberately skipped, or given up on) the body is no longer
+        // needed. It may hold a password-reset link or a temporary password, so it is dropped the moment it becomes useless
+        // rather than kept in the table for days until the clean-up removes the row.
+        if (item.Status is EmailOutboxStatus.Sent or EmailOutboxStatus.Skipped or EmailOutboxStatus.Failed)
+            item.HtmlBody = string.Empty;
     }
 
     private static string? Truncate(string? text) =>

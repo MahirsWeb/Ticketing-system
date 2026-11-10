@@ -211,6 +211,9 @@ builder.Services.AddScoped<ITicketNumberGenerator, TicketNumberGenerator>();
 // One clock for the whole application, so anything that depends on the time can be tested with a fixed one.
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<TicketSystemTech.Application.Common.NoticeThrottle>();
+// A second, independent throttle for password-reset e-mails (keyed so it does not share state with the lockout-notice one):
+// without it, asking for a reset six times sends six e-mails to the account's mailbox.
+builder.Services.AddKeyedSingleton<TicketSystemTech.Application.Common.NoticeThrottle>("password-reset");
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
 builder.Services.AddSingleton<TicketSystemTech.Api.Security.LoginAttemptLimiter>();
 builder.Services.AddScoped<ITemporaryPasswordGenerator, TemporaryPasswordGenerator>();
@@ -423,18 +426,18 @@ app.Use(async (context, next) =>
     await next();
 });
 
-// Uploads are private and go through /api/files with a signed link. An older installation may still have files in wwwroot/uploads
-// (they were public before); the static file middleware would serve those to anybody who knew the name, so that folder is not served.
-app.Use(async (context, next) =>
+// Only the avatars folder is public. Uploads (ticket attachments and knowledge-base documents) are private and go through
+// /api/files with a signed link; wwwroot/uploads must never be served. Pointing the static-file middleware at the whole web
+// root and then trying to 404 "/uploads" with a path-prefix check was not enough — a request for "//uploads/<file>" (a leading
+// empty segment) slipped past the check and the middleware served the private file. So the static-file middleware is given the
+// avatars folder alone as its file provider: nothing else under wwwroot is reachable, whatever slash tricks the path contains.
+var avatarsRoot = Path.Combine(app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot"), "avatars");
+Directory.CreateDirectory(avatarsRoot);
+app.UseStaticFiles(new StaticFileOptions
 {
-    if (context.Request.Path.StartsWithSegments("/uploads"))
-    {
-        context.Response.StatusCode = StatusCodes.Status404NotFound;
-        return;
-    }
-    await next();
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(avatarsRoot),
+    RequestPath = "/avatars",
 });
-app.UseStaticFiles();
 app.UseCors("Frontend");
 app.UseMiddleware<TicketSystemTech.Api.Middleware.ApiExceptionMiddleware>();
 app.UseAuthentication();

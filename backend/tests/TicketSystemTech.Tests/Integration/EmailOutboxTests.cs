@@ -74,6 +74,26 @@ public class EmailOutboxTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task The_body_is_encrypted_at_rest_and_dropped_once_the_message_is_sent()
+    {
+        const string secret = "Temporary password: Hunter2 SECRET-TOKEN reset?token=abc123";
+        await Sender.SendAsync(Recipient, "Reset your password", $"<p>{secret}</p>");
+
+        // A copy of the database alone must not reveal the reset link or the temporary password: the stored column is ciphertext.
+        var rawBodies = await _world.Db(db => db.Database.SqlQueryRaw<string>("SELECT HtmlBody AS Value FROM EmailOutbox").ToListAsync());
+        Assert.DoesNotContain(rawBodies, b => b.Contains("SECRET-TOKEN"));
+
+        // Through the key ring it round-trips back to the real body, so the worker still sends the right thing.
+        Assert.Contains("SECRET-TOKEN", (await OnlyRowAsync()).HtmlBody);
+
+        await Worker.ProcessOnceAsync(DateTime.UtcNow);
+
+        var afterSend = await OnlyRowAsync();
+        Assert.Equal(EmailOutboxStatus.Sent, afterSend.Status);
+        Assert.Equal(string.Empty, afterSend.HtmlBody); // not kept in the table for days after it has gone out
+    }
+
+    [SqlFact]
     public void The_worker_that_delivers_the_outbox_is_part_of_the_running_application()
     {
         var hosted = _world.Factory.Services.GetServices<Microsoft.Extensions.Hosting.IHostedService>();

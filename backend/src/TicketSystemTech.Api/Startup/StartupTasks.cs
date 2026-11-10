@@ -40,7 +40,16 @@ public static class StartupTasks
                     $"Startup:Migrate is off but the database is missing {pending.Count} migration(s), starting with {pending[0]}. " +
                     "Run the application once with --migrate-only (using a login that may change the schema) before starting it.");
 
-            logger.LogInformation("Startup:Migrate is off: the database schema is current, no startup tasks were run.");
+            // The keys MUST be verified on every start, migrating or not. A wrong Pii:HashKey or a key ring that does not
+            // belong to this database would otherwise let the application start "healthy" while every sign-in silently fails
+            // with "Invalid email or password". After a --migrate-only step the data is already encrypted, so this only reads
+            // (it writes nothing here); it refuses to start when a key does not fit. This closes the gap where Startup:Migrate=false
+            // — the mode the README suggests for a server — skipped the check that a normal start performs.
+            var verifyProtector = scope.ServiceProvider.GetRequiredService<IPiiProtector>();
+            var verifyInProduction = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().IsProduction();
+            await Step("Encryption check", logger, () => PiiBackfillMigration.RunAsync(db, verifyProtector, logger, refuseToStartWithPlaintextLeft: verifyInProduction, ct: ct));
+
+            logger.LogInformation("Startup:Migrate is off: the database schema is current and the keys were verified; no other startup tasks were run.");
             return;
         }
 

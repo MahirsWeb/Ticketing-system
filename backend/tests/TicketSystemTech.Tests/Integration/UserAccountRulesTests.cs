@@ -116,6 +116,28 @@ public class UserAccountRulesTests : IAsyncLifetime
         }
     }
 
+    [SqlFact]
+    public async Task An_employee_who_creates_a_client_does_not_get_the_temporary_password_back_it_is_mailed_instead()
+    {
+        var email = $"empmade-{Guid.NewGuid():N}@authz.test";
+        var created = await _world.Post(_world.EmpA1, "/api/users/clients", new { firstName = "Phoned", lastName = "In", email, companyId = _world.CompanyId });
+        Assert.Equal(200, created.Code);
+        var id = created.Json.GetProperty("userId").GetGuid();
+        _people.Add(new Actor("empmade", id, email, UserRole.Client, null, ""));
+        try
+        {
+            // The employee must not learn the client's first password (they could otherwise sign in as the client before the
+            // client sets their own). It is hidden from them and travels to the client's mailbox, exactly as regenerating one does.
+            Assert.Equal(System.Text.Json.JsonValueKind.Null, created.Json.GetProperty("temporaryPassword").ValueKind);
+            var mail = Assert.Single(await MailsTo(email));
+            Assert.Equal("You've been invited to Ticket System Tech", mail.Subject);
+        }
+        finally
+        {
+            await ForgetMailsTo(email);
+        }
+    }
+
     // The address is stored encrypted, so it cannot be compared in the query: the latest messages are read and picked from here.
     private async Task<List<EmailOutboxItem>> MailsTo(string email) =>
         (await _world.Db(db => db.EmailOutbox.AsNoTracking().OrderByDescending(m => m.CreatedAt).Take(500).ToListAsync())).Where(m => m.ToEmail == email).ToList();

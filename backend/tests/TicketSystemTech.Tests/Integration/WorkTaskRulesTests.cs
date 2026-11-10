@@ -41,6 +41,44 @@ public class WorkTaskRulesTests : IAsyncLifetime
         return response;
     }
 
+    private async Task<Actor> BranchAEmployeeAsync()
+    {
+        var person = await _world.CreateActorAsync("tasktmp" + Guid.NewGuid().ToString("N")[..6], UserRole.Employee, _world.BranchA, null);
+        _people.Add(person);
+        return person;
+    }
+
+    [SqlFact]
+    public async Task A_task_cannot_be_assigned_to_or_handed_to_a_deactivated_colleague()
+    {
+        var worker = await BranchAEmployeeAsync();
+        Assert.Equal(200, (await _world.Send(_world.Admin, HttpMethod.Patch, $"/api/users/{worker.Id}/active", new { isActive = false })).Code);
+
+        var created = await CreateTaskAsync(_world.EmpA1, worker);
+        Assert.Equal(400, created.Code);
+        Assert.Contains("inactive", created.Text);
+
+        // and an existing task cannot be re-assigned onto a deactivated colleague either
+        var live = await CreateTaskAsync(_world.EmpA1, _world.EmpA2);
+        var reassigned = await _world.Post(_world.EmpA1, $"/api/work-tasks/{live.Json.GetProperty("id").GetGuid()}/reassign", new { assignedToUserId = worker.Id });
+        Assert.Equal(400, reassigned.Code);
+    }
+
+    [SqlFact]
+    public async Task Deactivating_an_employee_stops_their_running_task_timer()
+    {
+        var worker = await BranchAEmployeeAsync();
+        var created = await CreateTaskAsync(_world.EmpA1, worker);
+        var id = created.Json.GetProperty("id").GetGuid();
+        Assert.Equal(200, (await _world.Post(worker, $"/api/work-tasks/{id}/start")).Code);
+
+        Assert.Equal(200, (await _world.Send(_world.Admin, HttpMethod.Patch, $"/api/users/{worker.Id}/active", new { isActive = false })).Code);
+
+        // the running timer is closed, not left counting to "now" for ever
+        var stillRunning = await _world.Db(db => db.WorkTaskSessions.AsNoTracking().AnyAsync(s => s.WorkTaskId == id && s.EndedAtUtc == null));
+        Assert.False(stillRunning);
+    }
+
     [SqlFact]
     public async Task A_task_goes_to_a_colleague_of_the_same_branch_and_only_an_admin_may_cross_branches()
     {
