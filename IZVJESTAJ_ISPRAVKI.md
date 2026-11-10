@@ -630,3 +630,35 @@ Na zahtjev vlasnika („provjeriti još jednom detaljno", pred produkciju) urađ
 **Nađena i ispravljena greška (1, srednje/nisko — integritet podataka + neslaganje s frontendom):** **naziv firme nije bio jedinstven.** `CompanyService.CreateAsync`/`UpdateAsync` nisu provjeravali naziv, pa se moglo napraviti više firmi istog imena. Frontend (i njegovi testovi) već očekuju poruku **„A company with that name already exists."** (stranice `CompaniesPage`/`CompanyDetailPage`), a lažni API je to odbijao — pravi server nije, pa je ta putanja greške u UI-ju bila mrtva, a duplikati su prolazili u produkciju (zbuna pri otvaranju tiketa u ime klijenta, u filterima i izvještajima po firmi). Sada se naziv provjerava neosjetljivo na velika/mala slova i uključujući isključene firme, na kreiranju i preimenovanju (osim vlastitog imena), uz 400 i tačno tu poruku. **Bez migracije namjerno** — nema jedinstvenog indeksa, pa se baza koja već ima duplikate i dalje pokreće (novi duplikati se samo više ne prave). Dodat test `Two_companies_cannot_share_a_name_case_insensitively` (`LookupRulesTests`). Dosljedno s poslovnicama (jedinstven email) i podposlovnicama (jedinstven naziv).
 
 **Testovi:** **757 backend** (1 nov), 1027 frontend, svi prolaze; `dotnet format` čist; nema promjena modela vs. migracije. Osim ove jedne stavke, u dubljem krugu nije nađen nijedan nov propust.
+
+### 9.15 Vanjska analiza `Analiza_10.11` (2026-11-10)
+
+Vlasnik je dostavio novu analizu (`Analiza_10.11.md`) i tražio da se provjeri šta stoji i ispravi. Svaki nalaz je provjeren u kodu; dio ih je potvrđen i ispravljen, nekoliko tvrdnji ne stoji (navedeno niže). **Testovi poslije: 763 backend (6 novih) i 1032 frontend (5 novih), svi prolaze; `tsc`, lint, format i provjera migracija čisti.**
+
+**Ispravljeni blokeri (odjeljak 1 analize):**
+- **1.1 Interna bilješka je mogla otići klijentu.** Uređivač odgovora (`RichTextEditor`, TipTap) je sadržaj postavljao samo pri montiranju, a pri praznjenju ga je brisao — ali kad bi roditelj ubacio *drugi* nacrt (prebacivanje Response ↔ Internal note drži zaseban nacrt po modu), vidljivi tekst se nije mijenjao, pa je odgovor mogao ponijeti riječi interne bilješke. Sada se uređivač usklađuje sa `value` kad god se promijeni izvana, a kucanje (gdje `value` dolazi iz uređivača) ne ometa kursor. Test `shows the value the parent gives it…`.
+- **1.2 Outbox je čuvao linkove za reset i privremene lozinke kao čist tekst.** `EmailOutboxItem.HtmlBody` nije bio šifrovan (samo `ToEmail`), a komentar je tvrdio da tijelo „ne kaže više od poruke tiketa" — netačno za mail s reset-tokenom i privremenom lozinkom. Sada se **tijelo šifruje** istom konverzijom kao adresa (kopija baze bez ključa ne otkriva ništa) i **briše se čim poruka ode** (ne stoji u tabeli danima). Test provjerava da sirova kolona ne sadrži tajnu, da se dešifruje nazad, i da je prazna poslije slanja.
+- **1.3 `Startup:Migrate=false` je preskakao provjeru ključeva.** Taj način (README ga nudi za server) je vraćao prije „Encryption check", pa bi s pogrešnim `Pii:HashKey` aplikacija startala „zdravo" a sve prijave padale. Sada se provjera ključeva izvršava i u tom načinu (samo čita; odbija start ako ključ ne odgovara).
+- **1.4 Sesija radnog zadatka ostajala u toku poslije prebacivanja.** `ReassignAsync` nije zatvarao pokrenuti tajmer: novi vlasnik je dobijao „Timer is already running", stari 403 na Stop, a sesija se brojala do „sada" i blokirala njegov drugi rad. Sada se pokrenuta sesija zatvara pri prebacivanju, deaktivaciji i anonimizaciji. Testovi `Reassigning_a_task_stops_the_previous_owners_running_timer`, `Deactivating_an_employee_stops_their_running_task_timer`.
+- **1.5 (dio) SignalR se beskonačno spajao s isteklim tokenom i nije odjavljivao.** Odluka o modelu (httpOnly kolačić ili refresh token) ostaje vlasniku; ali uveden je ograničen popravak: kad token istekne, veza prestaje da se ponovo spaja i korisnik se odjavljuje (ekran „sesija istekla"). Test `stops reconnecting and signs the person out once the token expires`.
+
+**Ispravljeno (odjeljak 2):**
+- **`//uploads/` je zaobilazio blokadu.** `StartsWithSegments("/uploads")` nije hvatao vodeću dvostruku kosu crtu, pa je `UseStaticFiles` služio privatni fajl. Sada se statički serira **samo** `wwwroot/avatars` (vlastiti `FileProvider` na `/avatars`), pa `uploads` nije dostupan ni pod jednim oblikom putanje.
+- **Tuđe sesije zadatka (`PATCH …/time`).** Kolega iz iste poslovnice je mogao pomjeriti tuđu sesiju, bez audita, a preklapanje se provjeravalo za pogrešnu osobu. Sada izmjenu smije samo onaj ko je radio, trenutni nosilac ili admin; preklapanje se provjerava za vlasnika te sesije; svaka izmjena ide u audit. (Kao kod tiketa.)
+- **Reset lozinke bez limita po nalogu.** 6 zahtjeva je slalo 6 mailova. Dodan zaseban throttle (najviše jedan reset-mail po nalogu u 3 minute); odgovor je i dalje isti, pa se ne otkriva da li adresa postoji.
+- **Odbijen upload više fajlova ostavljao prihvaćene na disku.** Sada se svi fajlovi provjere prije ijednog upisa (sve-ili-ništa), a greška u toku briše ono što je već zapisano.
+- **Zaposleni je dobijao privremenu lozinku klijenta u odgovoru.** Sada je vidi samo admin; zaposlenom ide klijentu mailom (isto kao regenerisanje).
+- **Deaktivirani se mogao zadužiti radnim zadatkom** (provjeravala se uloga, ne i `IsActive`). Sada se odbija pri kreiranju i prebacivanju.
+- **Rotacija ključa:** potvrđeno i ispravljena dokumentacija (vidi dolje); alat za re-key ostaje nerađen (vlasnička odluka).
+
+**Dokumentacija (odjeljak 3):**
+- Ispravljene netačne tvrdnje: „više instanci nikad ne šalje isti mail dvaput" → isporuka je „barem jednom" (ADR 0002); „stari ključ nešifrovan samo do rotacije" → ostaje trajno ako je instalacija startana bez certifikata, nema re-key alata, certifikat podesiti prije prvog starta (ADR 0004, README); dodано `engines` polje u `frontend/package.json` (README ga je spominjao a nije postojalo).
+- **GDPR izvoz:** dodani prilozi koje je osoba otpremila. (Napomena: tvrdnja da izvoz „ne sadrži poruke ni audit" **ne stoji** — i poruke koje je napisala i audit su već bili u izvozu na linijama koje analiza citira.)
+- **Pristupačnost:** uređivač odgovora i login polja dobili naziv (`aria-label`), prekidač Response/Internal note dobio `aria-pressed`.
+- **CI:** Docker posao više nije `continue-on-error` (sada blokira spajanje).
+
+**Tvrdnje iz analize koje NE stoje (provjereno u kodu):**
+- GDPR izvoz „ne sadrži tikete koje je osoba napisala ni audit" — netačno: `messagesWritten` i `actionsRecordedInTheAuditLog` su već u `UserPrivacyService.ExportAsync` (linije koje analiza citira). Nedostajali su samo prilozi (dodani).
+- „svaki start provjerava ključeve" (navedeno kao netačna tvrdnja) — bilo je tačno u normalnom startu, a sada vrijedi i za `Migrate=false`.
+
+**Ostaje kao vlasnička odluka / veći posao (nije kod-greška):** model JWT sesije (refresh/kolačić, T-18.1), alat za re-key ključeva, i18n (~90% engleskog uz `lang="bs"`, T-45), i rad u više instanci (T-20) — gdje lease štiti istovremeno uzimanje, ali isporuka ostaje „barem jednom".
