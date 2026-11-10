@@ -4,8 +4,10 @@ import { Button, Select } from '../../components/ui';
 import { DateRangePicker } from '../../components/DateRangePicker';
 import { PersonOptions } from './PersonOptions';
 import type { EmployeeGroups } from './employeeGroups';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 function ExportButton({ from, to, departmentId, agentId }: { from: Date; to: Date; departmentId?: string; agentId?: string }) {
+  const { t } = useLanguage();
   const [exporting, setExporting] = useState(false);
 
   async function download() {
@@ -19,7 +21,7 @@ function ExportButton({ from, to, departmentId, agentId }: { from: Date; to: Dat
 
   return (
     <Button variant="secondary" onClick={download} disabled={exporting}>
-      {exporting ? 'Exporting…' : <><span aria-hidden>⬇</span> Export XLSX</>}
+      {exporting ? t('dash_exporting') : <><span aria-hidden>⬇</span> {t('dash_exportXlsx')}</>}
     </Button>
   );
 }
@@ -50,18 +52,19 @@ export function DashboardFilters({
   onAgentChange: (agentId: string) => void;
   onPeriodChange: (from: Date | null, to: Date | null) => void;
 }) {
+  const { t } = useLanguage();
   return (
     <div className="sticky top-0 z-20 -mx-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-300 bg-slate-200 px-4 py-3">
       <div>
-        <h1 className="text-xl font-bold text-slate-900">Dashboard</h1>
-        {!isAdmin && ownBranchName && <p className="text-xs text-slate-600">Showing data for your branch: {ownBranchName}</p>}
-        {isAdmin && <p className="text-xs text-slate-600">Global statistics across all branches</p>}
+        <h1 className="text-xl font-bold text-slate-900">{t('nav_dashboard')}</h1>
+        {!isAdmin && ownBranchName && <p className="text-xs text-slate-600">{t('dash_branchScope', { name: ownBranchName })}</p>}
+        {isAdmin && <p className="text-xs text-slate-600">{t('dash_globalStats')}</p>}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {isAdmin && (
           <div className="w-48">
-            <Select aria-label="Branch" value={departmentId} onChange={(e) => onBranchChange(e.target.value)}>
-              <option value="">All branches</option>
+            <Select aria-label={t('filter_branchAria')} value={departmentId} onChange={(e) => onBranchChange(e.target.value)}>
+              <option value="">{t('filter_allBranches')}</option>
               {departments.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
@@ -72,8 +75,8 @@ export function DashboardFilters({
         )}
         {isAdmin && (
           <div className="w-56">
-            <Select aria-label="Employee" value={agentId} onChange={(e) => onAgentChange(e.target.value)}>
-              <option value="">All employees</option>
+            <Select aria-label={t('dash_employeeAria')} value={agentId} onChange={(e) => onAgentChange(e.target.value)}>
+              <option value="">{t('filter_allEmployees')}</option>
               <PersonOptions groups={people} />
             </Select>
           </div>

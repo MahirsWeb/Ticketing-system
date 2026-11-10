@@ -5,6 +5,7 @@ import { Button, Card, ErrorText, Select } from '../../components/ui';
 import { GanttChart } from '../../components/GanttChart';
 import { PersonOptions } from './PersonOptions';
 import type { EmployeeGroups } from './employeeGroups';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /**
  * One person's day (tickets and tasks on the same hour axis), or everybody's in a branch for an administrator. Staff see their own day at
@@ -21,6 +22,7 @@ export function DailyTimeline({
   departments: { id: string; name: string }[];
   people: EmployeeGroups;
 }) {
+  const { t } = useLanguage();
   const [mode, setMode] = useState<'person' | 'branch'>('person');
   const [personId, setPersonId] = useState('');
   const [departmentId, setDepartmentId] = useState('');
@@ -36,14 +38,14 @@ export function DailyTimeline({
   const branchTimeline = useBranchGantt(departmentId, day, mode === 'branch');
   const timeline = mode === 'branch' ? branchTimeline : personTimeline;
   const loading = timeline.isLoading;
-  const error = timeline.isError ? ((timeline.error as { response?: { data?: { message?: string } } }).response?.data?.message ?? 'Could not load the timeline.') : null;
+  const error = timeline.isError ? ((timeline.error as { response?: { data?: { message?: string } } }).response?.data?.message ?? t('dash_timelineError')) : null;
   const branchData = branchTimeline.data ?? null;
 
   return (
     <Card className="p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">Daily timeline</h2>
+          <h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">{t('dash_dailyTimeline')}</h2>
           <p className="text-xs text-slate-600">Tickets and tasks for one person, on the same hour axis — see what was squeezed in alongside a ticket.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -65,15 +67,15 @@ export function DailyTimeline({
           )}
           {mode === 'person' ? (
             <div className="w-72">
-              <Select aria-label="Person" value={personId} onChange={(e) => setPersonId(e.target.value)}>
-                <option value="">Select a person…</option>
+              <Select aria-label={t('dash_personAria')} value={personId} onChange={(e) => setPersonId(e.target.value)}>
+                <option value="">{t('dash_selectPerson')}</option>
                 <PersonOptions groups={people} />
               </Select>
             </div>
           ) : (
             <div className="w-56">
-              <Select aria-label="Branch" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
-                <option value="">Select a branch…</option>
+              <Select aria-label={t('filter_branchAria')} value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
+                <option value="">{t('newTicket_selectBranchOption')}</option>
                 {departments.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.name}
@@ -84,7 +86,7 @@ export function DailyTimeline({
           )}
           <input
             type="date"
-            aria-label="Day"
+            aria-label={t('dash_dayAria')}
             value={day}
             onChange={(e) => e.target.value && setDate(new Date(`${e.target.value}T00:00:00`))}
             className="rounded-md border border-slate-300 px-3 py-2 text-sm"
@@ -96,13 +98,13 @@ export function DailyTimeline({
       </div>
       {mode === 'branch' ? (
         !departmentId ? (
-          <p className="py-10 text-center text-sm text-slate-600">Choose a branch above to see everyone's timeline.</p>
+          <p className="py-10 text-center text-sm text-slate-600">{t('dash_chooseBranch')}</p>
         ) : loading ? (
-          <p className="py-10 text-center text-sm text-slate-600">Loading…</p>
+          <p className="py-10 text-center text-sm text-slate-600">{t('common_loading')}</p>
         ) : error ? (
           <ErrorText>{error}</ErrorText>
         ) : !branchData || branchData.users.length === 0 ? (
-          <p className="py-10 text-center text-sm text-slate-600">No active employees in this branch.</p>
+          <p className="py-10 text-center text-sm text-slate-600">{t('dash_noEmployees')}</p>
         ) : (
           <div className="space-y-5">
             {branchData.users.map((u) => (
@@ -116,7 +118,7 @@ export function DailyTimeline({
       ) : !personId ? (
         <p className="py-10 text-center text-sm text-slate-600">Choose a person above to see their timeline.</p>
       ) : loading ? (
-        <p className="py-10 text-center text-sm text-slate-600">Loading…</p>
+        <p className="py-10 text-center text-sm text-slate-600">{t('common_loading')}</p>
       ) : error ? (
         <ErrorText>{error}</ErrorText>
       ) : (

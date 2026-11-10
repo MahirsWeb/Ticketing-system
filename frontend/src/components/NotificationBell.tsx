@@ -5,10 +5,12 @@ import { notificationsApi, type NotificationDto } from '../api/notifications';
 import { notificationKeys, useNotifications } from '../api/notificationQueries';
 import { getNotificationsHub } from '../lib/notificationsHub';
 import { formatDistanceToNow } from 'date-fns';
+import { useLanguage } from '../i18n/LanguageContext';
 
 const EVENTS = ['newTicket', 'ticketOpened', 'ticketAssigned', 'ticketClosed', 'newResponse', 'userActivatedViaInvite', 'ticketTransferred', 'ticketOverdue', 'taskAssigned', 'ticketUnassigned'];
 
 export function NotificationBell() {
+  const { t } = useLanguage();
   const queryClient = useQueryClient();
   const list = useNotifications();
   const items = list.data ?? [];
@@ -81,11 +83,11 @@ export function NotificationBell() {
         ref={buttonRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
-        aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+        aria-label={unreadCount > 0 ? t('notif_ariaUnread', { count: unreadCount }) : t('notif_title')}
         aria-expanded={open}
         aria-haspopup="true"
         className="relative rounded-full p-2 text-slate-600 hover:bg-slate-100"
-        title="Notifications"
+        title={t('notif_title')}
       >
         <span aria-hidden>🔔</span>
         {unreadCount > 0 && (
@@ -95,19 +97,19 @@ export function NotificationBell() {
         )}
       </button>
       {open && (
-        <div role="group" aria-label="Notifications" className="absolute right-0 z-50 mt-2 w-80 rounded-md border border-slate-200 bg-white shadow-lg">
-          <div className="border-b border-slate-100 px-3 py-2 text-xs font-semibold text-slate-600">Notifications</div>
+        <div role="group" aria-label={t('notif_title')} className="absolute right-0 z-50 mt-2 w-80 rounded-md border border-slate-200 bg-white shadow-lg">
+          <div className="border-b border-slate-100 px-3 py-2 text-xs font-semibold text-slate-600">{t('notif_title')}</div>
           <div className="max-h-96 overflow-y-auto">
             {list.isError && (
               <div className="border-b border-slate-100 px-3 py-3 text-sm text-red-700">
-                <p>The notifications could not be loaded.</p>
+                <p>{t('notif_loadError')}</p>
                 <button type="button" onClick={() => void list.refetch()} className="mt-1 text-xs font-medium text-blue-700 hover:underline">
-                  Try again
+                  {t('common_tryAgain')}
                 </button>
               </div>
             )}
-            {list.isPending && <p className="px-3 py-4 text-sm text-slate-600">Loading notifications…</p>}
-            {list.isSuccess && items.length === 0 && <p className="px-3 py-4 text-sm text-slate-600">No notifications yet.</p>}
+            {list.isPending && <p className="px-3 py-4 text-sm text-slate-600">{t('notif_loading')}</p>}
+            {list.isSuccess && items.length === 0 && <p className="px-3 py-4 text-sm text-slate-600">{t('notif_empty')}</p>}
             {items.map((n) => (
               <button
                 key={n.id}
