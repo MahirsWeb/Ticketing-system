@@ -4,22 +4,24 @@ import { useEmailPrefill } from '../../api/emailQueries';
 import type { InboxMessageSummaryDto } from '../../api/emailIntegration';
 import { Card, ErrorText, Spinner } from '../../components/ui';
 import { SafeHtml } from '../../components/SafeHtml';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /**
  * The message that is chosen. Each message is an entry of its own, so the text of the one that was chosen before can never be shown under
  * the sender of the one that is chosen now, and a message that cannot be loaded says so instead of waiting for ever.
  */
 export function MessageDetail({ selected }: { selected: InboxMessageSummaryDto | null }) {
+  const { t } = useLanguage();
   const detail = useEmailPrefill(selected?.messageId ?? null);
 
   return (
     <Card className="flex-1 p-5">
       {!selected ? (
-        <p className="py-16 text-center text-sm text-slate-600">Select an email to read it.</p>
+        <p className="py-16 text-center text-sm text-slate-600">{t('email_selectToRead')}</p>
       ) : detail.isError ? (
-        <ErrorText>Could not load this email.</ErrorText>
+        <ErrorText>{t('email_loadDetailFail')}</ErrorText>
       ) : !detail.data ? (
-        <div role="status" aria-label="Loading the email" className="flex justify-center py-16">
+        <div role="status" aria-label={t('email_loadingDetailAria')} className="flex justify-center py-16">
           <Spinner className="h-6 w-6 text-blue-700" />
         </div>
       ) : (

@@ -5,6 +5,7 @@ import { useEmployees } from '../../api/userQueries';
 import { messageOf } from '../../lib/messageOf';
 import type { WorkTaskDetailDto } from '../../types';
 import { Button, ErrorText, Select } from '../../components/ui';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 function toLocalInputValue(iso: string | null) {
   if (!iso) return '';
@@ -26,6 +27,7 @@ export function TaskDetailPanel({
   canManage: boolean;
   onChanged: (t: WorkTaskDetailDto) => void;
 }) {
+  const { t } = useLanguage();
   // The colleagues of the branch the task is in, except the one who has it.
   const colleagues = useEmployees({ departmentId: task.departmentId, enabled: canManage });
   const candidates = useMemo(
@@ -56,7 +58,7 @@ export function TaskDetailPanel({
       onChanged(await fn());
       return true;
     } catch (err) {
-      setError(messageOf(err, 'Action failed.'));
+      setError(messageOf(err, t('task_actionFail')));
       return false;
     } finally {
       setBusy(false);
@@ -66,18 +68,18 @@ export function TaskDetailPanel({
   return (
     <div role="presentation" className="space-y-4 border-t border-slate-100 bg-slate-50 px-4 py-4" onClick={(e) => e.stopPropagation()}>
       <div>
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">Description</div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">{t('task_description')}</div>
         <p className="mt-1 whitespace-pre-wrap text-sm text-slate-800">{task.description}</p>
       </div>
 
       {canManage && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">Reassign to</div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">{t('task_reassignTo')}</div>
             <div className="mt-1 flex items-center gap-2">
               <div className="w-56">
                 <Select value={reassignTo} onChange={(e) => setReassignTo(e.target.value)} className="text-xs">
-                  <option value="">Choose a colleague…</option>
+                  <option value="">{t('task_chooseColleague')}</option>
                   {candidates.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
@@ -92,23 +94,23 @@ export function TaskDetailPanel({
                 disabled={!reassignTo || busy}
                 onClick={() => run(() => workTasksApi.reassign(task.id, reassignTo)).then((worked) => worked && setReassignTo(''))}
               >
-                Reassign
+                {t('task_reassign')}
               </Button>
             </div>
-            {colleagues.isError && <p className="mt-1 text-xs text-red-700">The list of colleagues could not be loaded.</p>}
+            {colleagues.isError && <p className="mt-1 text-xs text-red-700">{t('task_colleaguesFail')}</p>}
           </div>
 
           {isAssignee && (
             <div>
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">Live timer</div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">{t('task_liveTimer')}</div>
               <div className="mt-1">
                 {timerRunning ? (
                   <Button type="button" variant="danger" className="text-xs" disabled={busy} onClick={() => run(() => workTasksApi.stop(task.id))}>
-                    <span aria-hidden>⏹</span> Stop
+                    <span aria-hidden>⏹</span> {t('task_stop')}
                   </Button>
                 ) : (
                   <Button type="button" className="text-xs" disabled={busy} onClick={() => run(() => workTasksApi.start(task.id))}>
-                    <span aria-hidden>▶</span> Start
+                    <span aria-hidden>▶</span> {t('task_start')}
                   </Button>
                 )}
               </div>
@@ -116,7 +118,7 @@ export function TaskDetailPanel({
           )}
 
           <div className="md:col-span-2">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">Start / end of the latest work session</div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">{t('task_sessionRange')}</div>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <input
                 type="datetime-local"
@@ -146,7 +148,7 @@ export function TaskDetailPanel({
                   )
                 }
               >
-                Save
+                {t('common_save')}
               </Button>
             </div>
           </div>
@@ -154,9 +156,9 @@ export function TaskDetailPanel({
       )}
 
       <div>
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">Work sessions</div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">{t('task_workSessions')}</div>
         {task.sessions.length === 0 ? (
-          <p className="mt-1 text-xs text-slate-600">No work has been logged on this task yet.</p>
+          <p className="mt-1 text-xs text-slate-600">{t('task_noWork')}</p>
         ) : (
           <ul className="mt-1 space-y-1 text-xs text-slate-600">
             {task.sessions.map((s) => (
@@ -170,7 +172,7 @@ export function TaskDetailPanel({
       </div>
 
       <div>
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">Assignment history</div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">{t('task_assignmentHistory')}</div>
         <ul className="mt-1 space-y-1 text-xs text-slate-600">
           {task.history.map((h, i) => (
             <li key={i}>

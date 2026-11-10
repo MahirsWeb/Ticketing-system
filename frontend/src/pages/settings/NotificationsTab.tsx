@@ -8,9 +8,11 @@ import { KnowledgeBaseDocumentsPanel } from './KnowledgeBaseDocumentsPanel';
 import { KnowledgeBaseMaintenancePanel } from './KnowledgeBaseMaintenancePanel';
 import { messageOf } from './settingsHelpers';
 import { Panel } from './settingsUi';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /** The form is drawn from the settings the server has, and only from them: made-up starting values that could be saved over the real ones are never shown. */
 function OverdueForm({ initial }: { initial: OverdueNotificationSettingsDto }) {
+  const { t } = useLanguage();
   const queryClient = useQueryClient();
   const [notifyOnSlaBreach, setNotifyOnSlaBreach] = useState(initial.notifyOnSlaBreach);
   const [manualOverdueDays, setManualOverdueDays] = useState<string>(initial.manualOverdueDays?.toString() ?? '');
@@ -27,7 +29,7 @@ function OverdueForm({ initial }: { initial: OverdueNotificationSettingsDto }) {
       queryClient.setQueryData(settingsKeys.overdue, result);
       setSaved(true);
     } catch (err) {
-      setError(messageOf(err, 'Could not save settings.'));
+      setError(messageOf(err, t('notif_saveFail')));
     } finally {
       setSaving(false);
     }
@@ -35,7 +37,7 @@ function OverdueForm({ initial }: { initial: OverdueNotificationSettingsDto }) {
 
   return (
     <Panel className="max-w-lg">
-      <h2 className="text-sm font-bold text-slate-800">Overdue ticket notifications</h2>
+      <h2 className="text-sm font-bold text-slate-800">{t('notif_overdueTitle')}</h2>
       <p className="mt-0.5 mb-4 text-xs text-slate-600">
         Emails every assignee once a ticket first becomes overdue. Each ticket is only notified once.
       </p>
@@ -44,12 +46,12 @@ function OverdueForm({ initial }: { initial: OverdueNotificationSettingsDto }) {
         Notify when a ticket passes its SLA due date
       </label>
       <Field>
-        <Label>Also notify after this many days open (optional)</Label>
+        <Label>{t('notif_overdueDaysLabel')}</Label>
         <Input
           type="number"
           min={1}
           max={365}
-          placeholder="e.g. 3"
+          placeholder={t('notif_overdueDaysPlaceholder')}
           value={manualOverdueDays}
           onChange={(e) => setManualOverdueDays(e.target.value)}
           className="max-w-[8rem]"
@@ -57,9 +59,9 @@ function OverdueForm({ initial }: { initial: OverdueNotificationSettingsDto }) {
       </Field>
       <div className="mt-4">
         <ErrorText>{error}</ErrorText>
-        <SuccessText>{saved ? 'Saved.' : null}</SuccessText>
+        <SuccessText>{saved ? t('notif_saved') : null}</SuccessText>
         <Button onClick={handleSave} disabled={saving}>
-          {saving ? 'Saving…' : 'Save'}
+          {saving ? t('common_saving') : t('common_save')}
         </Button>
       </div>
     </Panel>
@@ -68,13 +70,14 @@ function OverdueForm({ initial }: { initial: OverdueNotificationSettingsDto }) {
 
 /** When to warn about overdue tickets, and the upkeep of what the AI assistant reads. */
 export function NotificationsTab() {
+  const { t } = useLanguage();
   const settings = useOverdueSettings();
 
   return (
     <div className="space-y-6">
       {settings.isError && (
         <Panel className="max-w-lg">
-          <ErrorText>The settings could not be loaded. Try again in a moment.</ErrorText>
+          <ErrorText>{t('notif_settingsLoadFail')}</ErrorText>
         </Panel>
       )}
       {settings.isSuccess && <OverdueForm initial={settings.data} />}

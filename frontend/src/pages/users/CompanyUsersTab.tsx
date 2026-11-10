@@ -5,9 +5,11 @@ import clsx from 'clsx';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { Button, Card, ErrorText, Input, StatusPill } from '../../components/ui';
 import type { UserListItemDto } from '../../types';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /** The clients of the company, with a search over their names and e-mail addresses (ignoring capital letters and the spaces around what was typed) and a way to add one. */
 export function CompanyUsersTab({ companyId, clients }: { companyId: string; clients: UseQueryResult<UserListItemDto[]> }) {
+  const { t } = useLanguage();
   const [search, setSearch] = useState('');
   const all = clients.data;
   const shown = useMemo(() => {
@@ -17,12 +19,12 @@ export function CompanyUsersTab({ companyId, clients }: { companyId: string; cli
   }, [all, search]);
 
   // What the empty table says depends on why it is empty: not loaded yet, could not be, nobody there, or nobody matches.
-  const message = clients.isPending ? 'Loading the users…' : clients.isError ? null : all && all.length === 0 ? 'This company has no users yet.' : 'No matching users.';
+  const message = clients.isPending ? t('compusers_loading') : clients.isError ? null : all && all.length === 0 ? t('compusers_empty') : t('compusers_noMatch');
 
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between gap-3 border-b border-slate-100 p-3">
-        <Input placeholder="Search by name or email…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+        <Input placeholder={t('compusers_searchPlaceholder')} value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
         <Link to={`/users?companyId=${companyId}`}>
           <Button variant="secondary" className="whitespace-nowrap text-xs">
             + Add user
@@ -31,17 +33,17 @@ export function CompanyUsersTab({ companyId, clients }: { companyId: string; cli
       </div>
       {clients.isError && (
         <div className="px-3 pb-3">
-          <ErrorText>The users could not be loaded. Try again in a moment.</ErrorText>
+          <ErrorText>{t('compusers_loadFail')}</ErrorText>
         </div>
       )}
       <table className="w-full text-sm">
         <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-600">
           <tr>
-            <th scope="col" className="px-4 py-2">Name</th>
-            <th scope="col" className="px-4 py-2">Email</th>
-            <th scope="col" className="px-4 py-2">Phone</th>
-            <th scope="col" className="px-4 py-2">Created</th>
-            <th scope="col" className="px-4 py-2">Status</th>
+            <th scope="col" className="px-4 py-2">{t('common_name')}</th>
+            <th scope="col" className="px-4 py-2">{t('common_email')}</th>
+            <th scope="col" className="px-4 py-2">{t('profile_phone')}</th>
+            <th scope="col" className="px-4 py-2">{t('table_created')}</th>
+            <th scope="col" className="px-4 py-2">{t('col_status')}</th>
           </tr>
         </thead>
         <tbody>

@@ -2,6 +2,7 @@ import clsx from 'clsx';
 import { Button, Card, ErrorText, Field, Input, Label } from '../../components/ui';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import type { CompanyEdit } from './useCompanyEdit';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 const NAME_MAX = 120;
 const ADDRESS_MAX = 100;
@@ -11,6 +12,7 @@ export const EDIT_PANEL_ID = 'company-edit-panel';
 
 /** The form for the details of the company. Folded away while closed: out of reach of the keyboard and of a screen reader, not only invisible. */
 export function CompanyEditPanel({ edit, open }: { edit: CompanyEdit; open: boolean }) {
+  const { t } = useLanguage();
   const { values, set } = edit;
   return (
     <>
@@ -24,15 +26,15 @@ export function CompanyEditPanel({ edit, open }: { edit: CompanyEdit; open: bool
           <Card className="p-5">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <Field>
-                <Label>Name</Label>
+                <Label>{t('common_name')}</Label>
                 <Input value={values.name} maxLength={NAME_MAX} onChange={(e) => set.name(e.target.value)} />
               </Field>
               <Field>
-                <Label>Address</Label>
+                <Label>{t('compedit_address')}</Label>
                 <Input value={values.address} maxLength={ADDRESS_MAX} onChange={(e) => set.address(e.target.value)} />
               </Field>
               <Field>
-                <Label>Contact info</Label>
+                <Label>{t('compedit_contact')}</Label>
                 <Input value={values.contactInfo} maxLength={CONTACT_MAX} onChange={(e) => set.contactInfo(e.target.value)} />
               </Field>
               <label className="flex items-center gap-2 text-sm text-slate-700">
@@ -43,7 +45,7 @@ export function CompanyEditPanel({ edit, open }: { edit: CompanyEdit; open: bool
                 <ErrorText>{edit.error}</ErrorText>
                 <div className="flex gap-2">
                   <Button onClick={edit.requestSave} disabled={edit.saving || !values.name.trim()}>
-                    {edit.saving ? 'Saving…' : 'Save'}
+                    {edit.saving ? t('common_saving') : t('common_save')}
                   </Button>
                   <Button variant="secondary" onClick={edit.cancel}>
                     Cancel
@@ -57,13 +59,13 @@ export function CompanyEditPanel({ edit, open }: { edit: CompanyEdit; open: bool
 
       {edit.confirming && (
         <ConfirmDialog
-          title={values.isActive ? 'Reactivate this company?' : 'Deactivate this company?'}
+          title={values.isActive ? t('compedit_reactivateTitle') : t('compedit_deactivateTitle')}
           message={
             values.isActive
               ? `"${values.name}" will become active again and reappear in the company picker when creating a new client account.`
               : `Existing clients and tickets for "${values.name}" are completely unaffected — nothing is deleted or changed for them. Deactivating only removes this company from the picker when creating a new client account.`
           }
-          confirmLabel={values.isActive ? 'Reactivate' : 'Deactivate'}
+          confirmLabel={values.isActive ? t('compedit_reactivate') : t('compedit_deactivate')}
           danger={!values.isActive}
           onConfirm={edit.save}
           onCancel={edit.dismissQuestion}

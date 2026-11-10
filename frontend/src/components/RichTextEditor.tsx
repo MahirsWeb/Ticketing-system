@@ -7,6 +7,7 @@ import Link from '@tiptap/extension-link';
 import { FontSize } from './FontSizeExtension';
 import clsx from 'clsx';
 import { useEffect, useRef } from 'react';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface Props {
   value: string;
@@ -46,21 +47,22 @@ function ToolbarButton({
 }
 
 function Toolbar({ editor, onAttachClick }: { editor: Editor; onAttachClick?: () => void }) {
+  const { t } = useLanguage();
   return (
     <div className="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-slate-50 p-1.5">
-      <ToolbarButton title="Bold" active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}>
+      <ToolbarButton title={t('editor_bold')} active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}>
         B
       </ToolbarButton>
-      <ToolbarButton title="Italic" active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}>
+      <ToolbarButton title={t('editor_italic')} active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}>
         <span className="italic">I</span>
       </ToolbarButton>
-      <ToolbarButton title="Underline" active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()}>
+      <ToolbarButton title={t('editor_underline')} active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()}>
         <span className="underline">U</span>
       </ToolbarButton>
       <div className="mx-1 h-5 w-px bg-slate-300" />
       <select
-        title="Font size"
-        aria-label="Font size"
+        title={t('editor_fontSize')}
+        aria-label={t('editor_fontSize')}
         className="rounded border border-slate-300 bg-white px-1 py-1 text-xs"
         onChange={(e) => (editor.chain().focus() as any).setFontSize(e.target.value).run()}
         defaultValue="16px"
@@ -72,27 +74,27 @@ function Toolbar({ editor, onAttachClick }: { editor: Editor; onAttachClick?: ()
         ))}
       </select>
       <div className="mx-1 h-5 w-px bg-slate-300" />
-      <ToolbarButton title="Align left" active={editor.isActive({ textAlign: 'left' })} onClick={() => editor.chain().focus().setTextAlign('left').run()}>
+      <ToolbarButton title={t('editor_alignLeft')} active={editor.isActive({ textAlign: 'left' })} onClick={() => editor.chain().focus().setTextAlign('left').run()}>
         ⬅
       </ToolbarButton>
-      <ToolbarButton title="Align center" active={editor.isActive({ textAlign: 'center' })} onClick={() => editor.chain().focus().setTextAlign('center').run()}>
+      <ToolbarButton title={t('editor_alignCenter')} active={editor.isActive({ textAlign: 'center' })} onClick={() => editor.chain().focus().setTextAlign('center').run()}>
         ↔
       </ToolbarButton>
-      <ToolbarButton title="Align right" active={editor.isActive({ textAlign: 'right' })} onClick={() => editor.chain().focus().setTextAlign('right').run()}>
+      <ToolbarButton title={t('editor_alignRight')} active={editor.isActive({ textAlign: 'right' })} onClick={() => editor.chain().focus().setTextAlign('right').run()}>
         ➡
       </ToolbarButton>
       <div className="mx-1 h-5 w-px bg-slate-300" />
-      <ToolbarButton title="Bullet list" active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()}>
-        • List
+      <ToolbarButton title={t('editor_bulletList')} active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()}>
+        • {t('editor_listLabel')}
       </ToolbarButton>
-      <ToolbarButton title="Numbered list" active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
-        1. List
+      <ToolbarButton title={t('editor_numberedList')} active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
+        1. {t('editor_listLabel')}
       </ToolbarButton>
       {onAttachClick && (
         <>
           <div className="mx-1 h-5 w-px bg-slate-300" />
-          <ToolbarButton title="Attach a file" onClick={onAttachClick}>
-            <span aria-hidden>📎</span> Attach
+          <ToolbarButton title={t('editor_attachFile')} onClick={onAttachClick}>
+            <span aria-hidden>📎</span> {t('editor_attachLabel')}
           </ToolbarButton>
         </>
       )}
@@ -101,6 +103,7 @@ function Toolbar({ editor, onAttachClick }: { editor: Editor; onAttachClick?: ()
 }
 
 export function RichTextEditor({ value, onChange, placeholder, onFilesSelected, ariaLabel }: Props) {
+  const { t } = useLanguage();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const editor = useEditor({
@@ -159,7 +162,7 @@ export function RichTextEditor({ value, onChange, placeholder, onFilesSelected, 
         <input
           ref={fileInputRef}
           type="file"
-          aria-label="Attach files"
+          aria-label={t('editor_attachFiles')}
           multiple
           accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.txt"
           className="hidden"

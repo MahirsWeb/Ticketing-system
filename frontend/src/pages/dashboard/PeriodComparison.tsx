@@ -2,14 +2,16 @@ import { useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Card, Select } from '../../components/ui';
 import type { PeriodComparisonPointDto } from '../../types';
+import { useLanguage } from '../../i18n/LanguageContext';
+import type { TranslationKey } from '../../i18n/translations';
 
 export type GroupBy = 'week' | 'month' | 'quarter' | 'year';
 
-const GROUP_BY_OPTIONS: { value: GroupBy; label: string }[] = [
-  { value: 'week', label: 'By week' },
-  { value: 'month', label: 'By month' },
-  { value: 'quarter', label: 'By quarter' },
-  { value: 'year', label: 'By year' },
+const GROUP_BY_OPTIONS: { value: GroupBy; labelKey: TranslationKey }[] = [
+  { value: 'week', labelKey: 'dash_byWeek' },
+  { value: 'month', labelKey: 'dash_byMonth' },
+  { value: 'quarter', labelKey: 'dash_byQuarter' },
+  { value: 'year', labelKey: 'dash_byYear' },
 ];
 
 /** Tickets per week, month, quarter or year, as numbers or as shares of the whole, with the busiest period in red and the quietest in green. */
@@ -22,6 +24,7 @@ export function PeriodComparison({
   groupBy: GroupBy;
   onGroupByChange: (groupBy: GroupBy) => void;
 }) {
+  const { t } = useLanguage();
   const [mode, setMode] = useState<'count' | 'percent'>('count');
 
   const total = points.reduce((sum, p) => sum + p.count, 0);
@@ -35,13 +38,13 @@ export function PeriodComparison({
   return (
     <Card className="p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">Period comparison</h2>
+        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">{t('dash_periodComparison')}</h2>
         <div className="flex items-center gap-2">
           <div className="w-36">
-            <Select aria-label="Compare by" value={groupBy} onChange={(e) => onGroupByChange(e.target.value as GroupBy)}>
+            <Select aria-label={t('dash_compareByAria')} value={groupBy} onChange={(e) => onGroupByChange(e.target.value as GroupBy)}>
               {GROUP_BY_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
-                  {o.label}
+                  {t(o.labelKey)}
                 </option>
               ))}
             </Select>
@@ -77,8 +80,8 @@ export function PeriodComparison({
       </ResponsiveContainer>
       {busiest && quietest && (
         <p className="mt-3 text-xs text-slate-600">
-          <span className="font-semibold text-red-600">Busiest: {busiest.label}</span> ({busiest.count} tickets) ·{' '}
-          <span className="font-semibold text-green-700">Quietest: {quietest.label}</span> ({quietest.count} tickets)
+          <span className="font-semibold text-red-600">{t('dash_busiest', { label: busiest.label })}</span> {t('dash_countTickets', { count: busiest.count })} ·{' '}
+          <span className="font-semibold text-green-700">{t('dash_quietest', { label: quietest.label })}</span> {t('dash_countTickets', { count: quietest.count })}
         </p>
       )}
     </Card>

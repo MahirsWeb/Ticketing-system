@@ -1,5 +1,6 @@
 import { Card } from '../../components/ui';
 import type { ReportSummaryDto } from '../../types';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 function KpiCard({ label, value, hint, accent }: { label: string; value: string | number; hint: string; accent?: string }) {
   return (
@@ -17,26 +18,27 @@ function KpiCard({ label, value, hint, accent }: { label: string; value: string 
 
 /** The five figures at the top. A dash stands for a figure that has not arrived (or does not exist, like the SLA share when no ticket had a due date). */
 export function SummaryCards({ summary }: { summary: ReportSummaryDto | null }) {
+  const { t } = useLanguage();
   return (
     <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-      <KpiCard label="New" value={summary?.totalNew ?? '—'} hint="Tickets submitted but not yet opened/routed to a branch." />
+      <KpiCard label={t('kpi_new')} value={summary?.totalNew ?? '—'} hint={t('kpi_newHint')} />
       <KpiCard
-        label="Open / In progress"
+        label={t('kpi_openInProgress')}
         value={summary?.totalOpen ?? '—'}
         accent="text-amber-700"
-        hint="Tickets submitted in this period that are opened, in progress or resolved, but not yet closed."
+        hint={t('kpi_openInProgressHint')}
       />
-      <KpiCard label="Closed" value={summary?.totalClosed ?? '—'} accent="text-green-700" hint="Tickets resolved and closed in this period." />
+      <KpiCard label={t('kpi_closed')} value={summary?.totalClosed ?? '—'} accent="text-green-700" hint={t('kpi_closedHint')} />
       <KpiCard
-        label="Avg. resolution (h)"
+        label={t('kpi_avgResolution')}
         value={summary?.avgResolutionHours ?? '—'}
-        hint="Average time between a ticket being opened and being closed, in hours, over the tickets closed in this period."
+        hint={t('kpi_avgResolutionHint')}
       />
       <KpiCard
-        label="SLA compliance"
+        label={t('kpi_slaCompliance')}
         value={summary?.slaComplianceRate != null ? `${summary.slaComplianceRate}%` : '—'}
         accent="text-blue-700"
-        hint="Share of tickets closed in this period (that had a due date) which were closed by that date. Shows — when none had one."
+        hint={t('kpi_slaComplianceHint')}
       />
     </div>
   );

@@ -8,9 +8,11 @@ import { SubBranchesInline } from './SubBranchesInline';
 import { LIMITS, messageOf } from './settingsHelpers';
 import { ListRow, ListStatus, Panel } from './settingsUi';
 import { useLookupActions } from './useLookupActions';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /** The branches: added, renamed, switched off and on, deleted, and each with its sub-branches. */
 export function BranchesTab() {
+  const { t } = useLanguage();
   const departments = useDepartmentsAdmin();
   const data = departments.data;
   const count = data?.length ?? 0;
@@ -40,7 +42,7 @@ export function BranchesTab() {
     e.preventDefault();
     setError(null);
     if (!name.trim() || !email.trim()) {
-      setError('Both branch name and email are required.');
+      setError(t('branches_bothRequired'));
       return;
     }
     try {
@@ -48,7 +50,7 @@ export function BranchesTab() {
       setName('');
       setEmail('');
     } catch (err) {
-      setError(messageOf(err, 'Could not add branch.'));
+      setError(messageOf(err, t('branches_addFail')));
     }
   }
 
@@ -59,7 +61,7 @@ export function BranchesTab() {
       await lookupsApi.updateDepartment(item.id, editingName.trim(), editingEmail.trim(), item.isActive);
       setEditingId(null);
     } catch (err) {
-      setEditError(messageOf(err, 'Could not update branch.'));
+      setEditError(messageOf(err, t('branches_updateFail')));
     }
   }
 
@@ -68,13 +70,13 @@ export function BranchesTab() {
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[300px_1fr]">
       <Panel className="h-fit">
-        <h2 className="text-sm font-bold text-slate-800">Add new branch</h2>
-        <p className="mt-0.5 mb-4 text-xs text-slate-600">Every branch needs a dedicated email address.</p>
+        <h2 className="text-sm font-bold text-slate-800">{t('branches_addTitle')}</h2>
+        <p className="mt-0.5 mb-4 text-xs text-slate-600">{t('branches_emailNote')}</p>
         <form onSubmit={handleCreate} className="space-y-3">
           <Field>
-            <Label>Branch name</Label>
+            <Label>{t('branches_nameLabel')}</Label>
             <Input
-              placeholder="e.g. Servis"
+              placeholder={t('branches_namePlaceholder')}
               value={name}
               maxLength={LIMITS.name}
               onChange={(e) => {
@@ -84,7 +86,7 @@ export function BranchesTab() {
             />
           </Field>
           <Field>
-            <Label>Branch email</Label>
+            <Label>{t('branches_emailLabel')}</Label>
             <Input
               type="email"
               placeholder="servis@firma.ba"
@@ -106,10 +108,10 @@ export function BranchesTab() {
       <Panel>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-sm font-bold text-slate-800">Existing branches{departments.isSuccess ? ` (${count})` : ''}</h2>
-          <Input aria-label="Search branches" placeholder="Search branches…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+          <Input aria-label={t('branches_searchAria')} placeholder={t('branches_searchPlaceholder')} value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
         </div>
         <ErrorText>{editError ?? actions.changeError}</ErrorText>
-        <ListStatus loading={departments.isPending} failed={departments.isError} plural="branches" />
+        <ListStatus loading={departments.isPending} failed={departments.isError} plural={t('noun_branches')} />
         {departments.isSuccess && (
           <div className="divide-y divide-slate-100">
             {filtered.map((item) => (
@@ -139,7 +141,7 @@ export function BranchesTab() {
                       <>
                         <StatusPill active={item.isActive} />
                         <button className="text-slate-600 hover:underline" onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}>
-                          {expandedId === item.id ? 'Hide sub-branches' : 'Sub-branches'}
+                          {expandedId === item.id ? t('branches_hideSub') : 'Sub-branches'}
                         </button>
                         <button
                           className="font-medium text-blue-700 hover:underline"

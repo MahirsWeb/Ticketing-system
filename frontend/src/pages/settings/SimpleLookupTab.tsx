@@ -6,6 +6,7 @@ import { LookupDialogs } from './LookupDialogs';
 import { messageOf } from './settingsHelpers';
 import { ListRow, ListStatus, Panel } from './settingsUi';
 import { useLookupActions } from './useLookupActions';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /** A list of names that can be added, renamed, switched off and on and deleted: the help topics and the ticket categories. */
 export function SimpleLookupTab({
@@ -29,6 +30,7 @@ export function SimpleLookupTab({
   deleteWarning: string;
   deactivateWarning: string;
 }) {
+  const { t } = useLanguage();
   const plural = pluralNoun ?? `${itemNoun}s`;
   const data = list.data;
   const count = data?.length ?? 0;
@@ -59,7 +61,7 @@ export function SimpleLookupTab({
       await onCreate(name.trim());
       setName('');
     } catch (err) {
-      setError(messageOf(err, 'Could not add item.'));
+      setError(messageOf(err, t('lookup_addFail')));
     }
   }
 
@@ -70,19 +72,19 @@ export function SimpleLookupTab({
       await onUpdate(item.id, editingName.trim(), item.isActive);
       setEditingId(null);
     } catch (err) {
-      setEditError(messageOf(err, `Could not rename this ${itemNoun}.`));
+      setEditError(messageOf(err, t('lookup_renameFail', { noun: itemNoun })));
     }
   }
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[300px_1fr]">
       <Panel className="h-fit">
-        <h2 className="text-sm font-bold text-slate-800">Add new {itemNoun}</h2>
+        <h2 className="text-sm font-bold text-slate-800">{t('lookup_addNew', { noun: itemNoun })}</h2>
         <form onSubmit={handleCreate} className="mt-4 space-y-3">
           <Field>
-            <Label>Name</Label>
+            <Label>{t('common_name')}</Label>
             <Input
-              placeholder={`Enter ${itemNoun} name…`}
+              placeholder={t('lookup_namePlaceholder', { noun: itemNoun })}
               value={name}
               maxLength={maxLength}
               onChange={(e) => {
@@ -93,7 +95,7 @@ export function SimpleLookupTab({
           </Field>
           <ErrorText>{error}</ErrorText>
           <Button type="submit" className="w-full" disabled={!name.trim()}>
-            + Add {itemNoun}
+            {t('lookup_addBtn', { noun: itemNoun })}
           </Button>
         </form>
       </Panel>
@@ -101,10 +103,10 @@ export function SimpleLookupTab({
       <Panel>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-sm font-bold text-slate-800">
-            Existing {plural}
+            {t('lookup_existing', { plural })}
             {list.isSuccess ? ` (${count})` : ''}
           </h2>
-          <Input aria-label={`Search ${plural}`} placeholder={`Search ${plural}…`} value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+          <Input aria-label={t('lookup_searchAria', { plural })} placeholder={t('lookup_searchPlaceholder', { plural })} value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
         </div>
         <ErrorText>{editError ?? actions.changeError}</ErrorText>
         <ListStatus loading={list.isPending} failed={list.isError} plural={plural} />
@@ -141,7 +143,7 @@ export function SimpleLookupTab({
                         Rename
                       </button>
                       <button className="text-slate-600 hover:underline" onClick={() => actions.toggle(item)}>
-                        {item.isActive ? 'Deactivate' : 'Reactivate'}
+                        {item.isActive ? t('common_deactivate') : t('common_reactivate')}
                       </button>
                       <button className="font-medium text-red-600 hover:underline" onClick={() => actions.askDelete(item)}>
                         Delete
@@ -151,7 +153,7 @@ export function SimpleLookupTab({
                 </div>
               </ListRow>
             ))}
-            {filtered.length === 0 && <p className="py-8 text-center text-sm text-slate-600">No {plural} found.</p>}
+            {filtered.length === 0 && <p className="py-8 text-center text-sm text-slate-600">{t('lookup_empty', { plural })}</p>}
           </div>
         )}
       </Panel>
@@ -159,7 +161,7 @@ export function SimpleLookupTab({
       <LookupDialogs
         actions={actions}
         remove={{ title: (item) => `Delete "${item.name}"?`, message: () => deleteWarning }}
-        deactivate={{ title: (item) => `Deactivate "${item.name}"?`, message: () => deactivateWarning }}
+        deactivate={{ title: (item) => t('lookup_deactivateTitle', { name: item.name }), message: () => deactivateWarning }}
       />
     </div>
   );

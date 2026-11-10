@@ -8,8 +8,11 @@ import { useAuthStore } from '../../store/authStore';
 import { DueDateField, SelectField } from './ticketFields';
 import { PRIORITIES, SOURCES, dueDateToUtc } from './ticketOptions';
 import { useTicketLists } from './useTicketLists';
+import { useLanguage } from '../../i18n/LanguageContext';
+import type { TranslationKey } from '../../i18n/translations';
 
 export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; onOpened: (t: TicketDetailDto) => void }) {
+  const { t } = useLanguage();
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === 'Admin';
 
@@ -52,11 +55,11 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
     e.preventDefault();
     setError(null);
     if (!helpTopicId || !departmentId || !slaPlanId || !assignedToUserId) {
-      setError('All fields except due date are required to open a ticket.');
+      setError(t('open_allRequired'));
       return;
     }
     if (subBranches.length > 0 && !subBranchId) {
-      setError('Please select a sub-branch.');
+      setError(t('open_selectSub'));
       return;
     }
     setLoading(true);
@@ -74,7 +77,7 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
       });
       onOpened(updated);
     } catch (err: any) {
-      setError(err?.response?.data?.message ?? 'Could not open the ticket.');
+      setError(err?.response?.data?.message ?? t('open_fail'));
     } finally {
       setLoading(false);
     }
@@ -84,24 +87,24 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
     <Card className="p-5">
       <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-600">Open ticket</h2>
       <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
-        <SelectField label="Ticket source" value={source} onChange={(v) => setSource(v as TicketSource)} options={SOURCES.map((s) => ({ value: s, label: s }))} />
-        <SelectField label="Help topic" value={helpTopicId} onChange={setHelpTopicId} options={lists.helpTopics.map((t) => ({ value: t.id, label: t.name }))} />
-        <SelectField label="Branch" value={departmentId} onChange={setDepartmentId} placeholder="Select a branch…" options={lists.departments.map((d) => ({ value: d.id, label: d.name }))} />
+        <SelectField label={t('form_ticketSource')} value={source} onChange={(v) => setSource(v as TicketSource)} options={SOURCES.map((s) => ({ value: s, label: t(`source_${s}` as TranslationKey) }))} />
+        <SelectField label={t('detail_helpTopic')} value={helpTopicId} onChange={setHelpTopicId} options={lists.helpTopics.map((t) => ({ value: t.id, label: t.name }))} />
+        <SelectField label={t('detail_branch')} value={departmentId} onChange={setDepartmentId} placeholder={t('newTicket_selectBranchOption')} options={lists.departments.map((d) => ({ value: d.id, label: d.name }))} />
         {subBranches.length > 0 && (
-          <SelectField label="Sub-branch" value={subBranchId} onChange={setSubBranchId} placeholder="Select a sub-branch…" options={subBranches.map((s) => ({ value: s.id, label: s.name }))} />
+          <SelectField label={t('detail_subBranch')} value={subBranchId} onChange={setSubBranchId} placeholder={t('transfer_subOption')} options={subBranches.map((s) => ({ value: s.id, label: s.name }))} />
         )}
         <SelectField
-          label="SLA plan"
+          label={t('detail_slaPlan')}
           value={slaPlanId}
           onChange={setSlaPlanId}
           options={lists.slaPlans.map((s) => ({ value: s.id, label: `${s.name} (${s.resolutionTimeHours}h resolution)` }))}
         />
-        <SelectField label="Priority" value={priority} onChange={(v) => setPriority(v as TicketPriority)} options={PRIORITIES.map((p) => ({ value: p, label: p }))} />
+        <SelectField label={t('table_priority')} value={priority} onChange={(v) => setPriority(v as TicketPriority)} options={PRIORITIES.map((p) => ({ value: p, label: t(`priority_${p}` as TranslationKey) }))} />
         <DueDateField value={dueDate} onChange={setDueDate} />
         <Field>
-          <Label>Assign to</Label>
+          <Label>{t('form_assignTo')}</Label>
           <Select value={assignedToUserId} onChange={(e) => setAssignedToUserId(e.target.value)}>
-            <option value="">Select an agent…</option>
+            <option value="">{t('form_selectAgent')}</option>
             {assignees.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
@@ -111,16 +114,16 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
           {employees.isError && <ErrorText>The list of agents could not be loaded.</ErrorText>}
         </Field>
         <SelectField
-          label="Category (internal, staff only)"
+          label={t('form_category')}
           value={categoryId}
           onChange={setCategoryId}
-          placeholder="No category"
+          placeholder={t('form_noCategory')}
           options={lists.categories.map((c) => ({ value: c.id, label: c.name }))}
         />
         <div className="col-span-2">
           <ErrorText>{error}</ErrorText>
           <Button type="submit" disabled={loading}>
-            {loading ? 'Opening…' : 'Open ticket'}
+            {loading ? t('open_opening') : t('open_submit')}
           </Button>
         </div>
       </form>

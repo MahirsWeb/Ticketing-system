@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useId } from 'react';
 import clsx from 'clsx';
+import { useLanguage } from '../i18n/LanguageContext';
+import type { TranslationKey } from '../i18n/translations';
 
 export function Button({
   variant = 'primary',
@@ -140,9 +142,11 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 export function StatusBadge({ status }: { status: string }) {
+  const { t } = useLanguage();
+  const label = STATUS_STYLES[status] ? t(`status_${status}` as TranslationKey) : status;
   return (
     <span className={clsx('rounded-full px-2.5 py-0.5 text-xs font-semibold', STATUS_STYLES[status] ?? 'bg-slate-100 text-slate-700')}>
-      {status}
+      {label}
     </span>
   );
 }
@@ -155,15 +159,20 @@ const PRIORITY_STYLES: Record<string, string> = {
 };
 
 export function PriorityBadge({ priority }: { priority: string | null }) {
-  if (!priority) return <span aria-label="No priority" className="text-xs text-slate-600">—</span>;
+  const { t } = useLanguage();
+  if (!priority) return <span aria-label={t('common_noPriority')} className="text-xs text-slate-600">—</span>;
+  const label = PRIORITY_STYLES[priority] ? t(`priority_${priority}` as TranslationKey) : priority;
   return (
     <span className={clsx('rounded-full px-2.5 py-0.5 text-xs font-semibold', PRIORITY_STYLES[priority] ?? 'bg-slate-100 text-slate-600')}>
-      {priority}
+      {label}
     </span>
   );
 }
 
-export function StatusPill({ active, activeLabel = 'Active', inactiveLabel = 'Inactive' }: { active: boolean; activeLabel?: string; inactiveLabel?: string }) {
+export function StatusPill({ active, activeLabel, inactiveLabel }: { active: boolean; activeLabel?: string; inactiveLabel?: string }) {
+  const { t } = useLanguage();
+  activeLabel = activeLabel ?? t('common_active');
+  inactiveLabel = inactiveLabel ?? t('common_inactive');
   return (
     <span
       className={clsx(

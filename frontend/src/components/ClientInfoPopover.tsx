@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useLanguage } from '../i18n/LanguageContext';
 
 function initialsOf(name: string) {
   const parts = name.trim().split(/\s+/);
@@ -24,6 +25,7 @@ export function ClientInfoPopover({
   phoneNumber?: string | null;
   companyName: string;
 }) {
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
 
   return (
@@ -53,11 +55,11 @@ export function ClientInfoPopover({
             </div>
             <dl className="mt-3 space-y-1.5 text-xs">
               <div className="flex justify-between gap-2">
-                <dt className="text-slate-600">Email</dt>
+                <dt className="text-slate-600">{t('common_email')}</dt>
                 <dd className="truncate text-slate-700">{email ?? '—'}</dd>
               </div>
               <div className="flex justify-between gap-2">
-                <dt className="text-slate-600">Phone</dt>
+                <dt className="text-slate-600">{t('profile_phone')}</dt>
                 <dd className="truncate text-slate-700">{phoneNumber ?? '—'}</dd>
               </div>
             </dl>

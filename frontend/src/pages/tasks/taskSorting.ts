@@ -1,13 +1,14 @@
+import type { TranslationKey } from '../../i18n/translations';
 import type { WorkTaskListItem, WorkTaskStatus } from '../../types';
 
 /** The columns a list of tasks can be sorted by. `adminOnly` ones are only shown to an administrator. */
-export const SORTABLE_BEFORE_STATUS: { key: string; label: string }[] = [{ key: 'title', label: 'Title' }];
-export const SORTABLE_AFTER_STATUS: { key: string; label: string; adminOnly?: boolean }[] = [
-  { key: 'assignedTo', label: 'Assigned to' },
-  { key: 'assignedBy', label: 'Assigned by' },
-  { key: 'branch', label: 'Branch', adminOnly: true },
-  { key: 'started', label: 'Started' },
-  { key: 'ended', label: 'Ended' },
+export const SORTABLE_BEFORE_STATUS: { key: string; labelKey: TranslationKey }[] = [{ key: 'title', labelKey: 'table_title' }];
+export const SORTABLE_AFTER_STATUS: { key: string; labelKey: TranslationKey; adminOnly?: boolean }[] = [
+  { key: 'assignedTo', labelKey: 'table_assignedTo' },
+  { key: 'assignedBy', labelKey: 'taskcol_assignedBy' },
+  { key: 'branch', labelKey: 'detail_branch', adminOnly: true },
+  { key: 'started', labelKey: 'taskcol_started' },
+  { key: 'ended', labelKey: 'taskcol_ended' },
 ];
 
 const TEXT: Record<string, (t: WorkTaskListItem) => string> = {

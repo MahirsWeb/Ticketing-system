@@ -6,10 +6,12 @@ import { WorkSessionForm } from './workTime/WorkSessionForm';
 import { WorkSessionList } from './workTime/WorkSessionList';
 import { useNow, useWorkTimeForm } from './workTime/useWorkTimeForm';
 import { durationOf, formatDuration } from './workTime/workTimeModel';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /// A ticket's work log: any number of sessions (the morning and the afternoon are two). They are the main assignee's work.
 /// People added as extra help log no time of their own.
 export function WorkTimeEditor({ ticket, onChanged }: { ticket: TicketDetailDto; onChanged: (t: TicketDetailDto) => void }) {
+  const { t } = useLanguage();
   const form = useWorkTimeForm(ticket.id, ticket.workSessions, onChanged);
   const now = useNow(ticket.workSessions.some((s) => !s.endedAtUtc));
   const total = ticket.workSessions.reduce((sum, s) => sum + durationOf(s, now), 0);
@@ -18,7 +20,7 @@ export function WorkTimeEditor({ ticket, onChanged }: { ticket: TicketDetailDto;
   return (
     <div className="rounded-lg border border-slate-100 bg-slate-50/60 p-3">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">Work time</div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">{t('worktime_title')}</div>
         {ticket.workSessions.length > 0 && <div className="text-xs font-medium text-slate-600">Total: {formatDuration(total)}</div>}
       </div>
 
@@ -27,16 +29,16 @@ export function WorkTimeEditor({ ticket, onChanged }: { ticket: TicketDetailDto;
       {ticket.assignedToUserId ? (
         <WorkSessionForm form={form} workerName={ticket.assignedToName ?? null} />
       ) : (
-        <p className="text-xs text-slate-600">Assign the ticket to somebody to log work time on it.</p>
+        <p className="text-xs text-slate-600">{t('worktime_assignFirst')}</p>
       )}
 
       <ErrorText>{form.error}</ErrorText>
 
       {toDelete && (
         <ConfirmDialog
-          title="Delete this work session?"
+          title={t('worktime_deleteTitle')}
           message={`${toDelete.userName}, ${format(new Date(toDelete.startedAtUtc), 'dd.MM.yyyy HH:mm')}. This cannot be undone.`}
-          confirmLabel="Delete"
+          confirmLabel={t('common_delete')}
           danger
           onConfirm={() => form.deleteConfirmed(toDelete)}
           onCancel={() => form.setToDelete(null)}

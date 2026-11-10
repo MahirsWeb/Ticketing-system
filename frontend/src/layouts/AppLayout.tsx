@@ -179,7 +179,7 @@ export default function AppLayout() {
           </div>
         </div>
 
-        <nav aria-label="Main" className="mx-auto flex max-w-5xl gap-1 px-4 max-sm:overflow-x-auto">
+        <nav aria-label={t('common_mainNav')} className="mx-auto flex max-w-5xl gap-1 px-4 max-sm:overflow-x-auto">
           {nav.map((item) =>
             item.ticketsDropdown ? (
               <TicketsNavItem key={item.to} to={item.to} label={item.label} />

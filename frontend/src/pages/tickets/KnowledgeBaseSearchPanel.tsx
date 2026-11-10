@@ -4,10 +4,12 @@ import { knowledgeBaseApi } from '../../api/knowledgeBase';
 import type { KnowledgeBaseSearchResultDto } from '../../types';
 import { Button, Card, Input, Spinner, StatusBadge } from '../../components/ui';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 const SOURCES_PREVIEW_COUNT = 7;
 
 function SourceRow({ r }: { r: KnowledgeBaseSearchResultDto }) {
+  const { t } = useLanguage();
   const body = (
     <>
       <div className="flex items-center gap-2 text-sm font-medium text-blue-700">
@@ -21,7 +23,7 @@ function SourceRow({ r }: { r: KnowledgeBaseSearchResultDto }) {
         )}
       </div>
       {r.resolutionSummary && <p className="mt-1 line-clamp-2 text-xs text-slate-600">{r.resolutionSummary}</p>}
-      {r.sourceType === 'Document' && <p className="mt-1 text-xs text-slate-600">Uploaded documentation</p>}
+      {r.sourceType === 'Document' && <p className="mt-1 text-xs text-slate-600">{t('kb_uploadedDoc')}</p>}
     </>
   );
 
@@ -36,6 +38,7 @@ function SourceRow({ r }: { r: KnowledgeBaseSearchResultDto }) {
 }
 
 export function KnowledgeBaseSearchPanel({ initialQuery = '', alwaysOpen = false }: { initialQuery?: string; alwaysOpen?: boolean }) {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [query, setQuery] = useState(initialQuery);
   const [askedQuery, setAskedQuery] = useState('');
@@ -90,7 +93,7 @@ export function KnowledgeBaseSearchPanel({ initialQuery = '', alwaysOpen = false
   if (!open) {
     return (
       <Button variant="secondary" onClick={() => setOpen(true)}>
-        <span aria-hidden>🤖</span> Ask the AI assistant about this ticket
+        <span aria-hidden>🤖</span> {t('kb_askAbout')}
       </Button>
     );
   }
@@ -99,58 +102,55 @@ export function KnowledgeBaseSearchPanel({ initialQuery = '', alwaysOpen = false
     <Card className="p-5">
       {confirmingStop && (
         <ConfirmDialog
-          title="Stop the AI request?"
-          message="This will cancel the search that's currently in progress."
-          confirmLabel="Stop"
+          title={t('kb_stopTitle')}
+          message={t('kb_stopMsg')}
+          confirmLabel={t('kb_stop')}
           danger
           onConfirm={confirmStop}
           onCancel={() => setConfirmingStop(false)}
         />
       )}
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">AI Assistant — Knowledge Base</h2>
+        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">{t('kb_title')}</h2>
         {!alwaysOpen && (
           <button className="text-xs text-slate-600 hover:underline" onClick={() => setOpen(false)}>
-            Hide
+            {t('kb_hide')}
           </button>
         )}
       </div>
       <p className="mb-3 text-xs text-slate-600">
-        Answers are generated only from your organization's own closed tickets and uploaded documentation — never
-        from general internet knowledge.
+        {t('kb_disclaimer')}
       </p>
       <form onSubmit={handleAsk} className="mb-3 flex gap-2">
-        <Input aria-label="Describe the problem" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Describe the problem in a few keywords…" />
+        <Input aria-label={t('kb_describeAria')} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('kb_describePlaceholder')} />
         {loading ? (
           <Button type="button" variant="danger" onClick={requestStop}>
-            Stop
+            {t('kb_stop')}
           </Button>
         ) : (
-          <Button type="submit">Ask AI</Button>
+          <Button type="submit">{t('kb_askAi')}</Button>
         )}
       </form>
 
       {loading && (
         <div className="flex items-center gap-2 py-4 text-sm text-slate-600">
-          <Spinner className="h-4 w-4" /> Searching the knowledge base and asking the AI…
+          <Spinner className="h-4 w-4" /> {t('kb_searching')}
         </div>
       )}
 
       {!loading && asked && answer && (
         <div className="mb-4 rounded-md border border-blue-100 bg-blue-50 p-4 text-sm text-slate-800">
-          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-blue-700">{aiAvailable ? 'AI answer' : 'AI unavailable'}</div>
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-blue-700">{aiAvailable ? t('kb_aiAnswer') : t('kb_aiUnavailable')}</div>
           <p className="whitespace-pre-wrap">{answer}</p>
           <p className="mt-3 border-t border-blue-100 pt-3 text-xs text-red-600">
-            <span className="font-bold">WARNING!</span> This answer is suggested based on tickets and documentation in
-            the knowledge base — it doesn't mean it's 100% relevant to use for this specific type of problem. Consult
-            with a more experienced colleague before relying on it.
+            <span className="font-bold">{t('kb_warning')}</span> {t('kb_warningBody')}
           </p>
         </div>
       )}
 
       {!loading && sources.length > 0 && (
         <>
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">Sources used as context</div>
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">{t('kb_sources')}</div>
           <ul className="space-y-2">
             {(showAllSources ? sources : sources.slice(0, SOURCES_PREVIEW_COUNT)).map((r) => (
               <li key={`${r.sourceType}-${r.ticketId ?? r.documentId}`}>
@@ -163,7 +163,7 @@ export function KnowledgeBaseSearchPanel({ initialQuery = '', alwaysOpen = false
               className="mt-2 text-xs font-medium text-blue-700 hover:underline"
               onClick={() => setShowAllSources(true)}
             >
-              See more ({sources.length - SOURCES_PREVIEW_COUNT} more)
+              {t('kb_seeMore', { count: sources.length - SOURCES_PREVIEW_COUNT })}
             </button>
           )}
         </>
@@ -173,23 +173,23 @@ export function KnowledgeBaseSearchPanel({ initialQuery = '', alwaysOpen = false
         <div className="mb-4 mt-4 flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
           <div className="text-sm text-slate-700">
             <span className="font-bold text-slate-900">
-              {similarCount} of {totalEligible} tickets ({similarPct}%)
+              {t('kb_similarStat', { a: similarCount, b: totalEligible, pct: similarPct })}
             </span>{' '}
-            look similar to this problem.
+            {t('kb_lookSimilar')}
           </div>
           {similarCount > 0 && (
             <button
               className="text-xs font-medium text-blue-700 hover:underline"
               onClick={() => navigate(`/knowledge-base/similar?query=${encodeURIComponent(askedQuery)}`)}
             >
-              View the list &amp; stats →
+              {t('kb_viewList')}
             </button>
           )}
         </div>
       )}
 
       {!loading && asked && sources.length === 0 && !answer && (
-        <p className="text-sm text-slate-600">No similar tickets or documentation found yet.</p>
+        <p className="text-sm text-slate-600">{t('kb_noResults')}</p>
       )}
     </Card>
   );

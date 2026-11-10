@@ -5,12 +5,14 @@ import { messageOf } from '../../lib/messageOf';
 import { useAuthStore } from '../../store/authStore';
 import type { UserListItemDto } from '../../types';
 import { Button, Card, ErrorText, Field, Input, Label, Select, SuccessText, Textarea } from '../../components/ui';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /**
  * The form for a new task. An administrator can give it to anybody; an employee to a colleague of their own branch, or to themselves.
  * The lists the page shows are asked again by the API layer when a task is made.
  */
 export function NewTaskForm({ isAdmin }: { isAdmin: boolean }) {
+  const { t } = useLanguage();
   const user = useAuthStore((s) => s.user);
   const branchId = isAdmin ? undefined : (user?.departmentId ?? undefined);
   // An employee who is in no branch has nobody to choose from, and the server is not asked.
@@ -27,12 +29,12 @@ export function NewTaskForm({ isAdmin }: { isAdmin: boolean }) {
   const colleaguesByBranch = useMemo(() => {
     const groups = new Map<string, UserListItemDto[]>();
     for (const c of colleagues.data ?? []) {
-      const key = c.departmentName ?? 'No branch';
+      const key = c.departmentName ?? t('filter_noBranch');
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(c);
     }
     return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [colleagues.data]);
+  }, [colleagues.data, t]);
 
   /** Writing anything new takes back "Task created.": it is about what was sent, not about what is being written. */
   const edit = <T,>(set: (value: T) => void) => (value: T) => {
@@ -47,7 +49,7 @@ export function NewTaskForm({ isAdmin }: { isAdmin: boolean }) {
     const cleanTitle = title.trim();
     const cleanDescription = description.trim();
     if (!cleanTitle || !cleanDescription || !assignedToUserId) {
-      setError('Title, description and assignee are all required.');
+      setError(t('task_allRequired'));
       return;
     }
     setLoading(true);
@@ -58,7 +60,7 @@ export function NewTaskForm({ isAdmin }: { isAdmin: boolean }) {
       setAssignedToUserId('');
       setCreated(true);
     } catch (err) {
-      setError(messageOf(err, 'Could not create the task.'));
+      setError(messageOf(err, t('task_createFail')));
     } finally {
       setLoading(false);
     }
@@ -69,11 +71,11 @@ export function NewTaskForm({ isAdmin }: { isAdmin: boolean }) {
       <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-600">New task</h2>
       <form onSubmit={handleCreate} className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Field>
-          <Label>Title</Label>
-          <Input value={title} maxLength={150} onChange={(e) => edit(setTitle)(e.target.value)} placeholder="e.g. Napravi plan za iduću sedmicu" />
+          <Label>{t('task_title')}</Label>
+          <Input value={title} maxLength={150} onChange={(e) => edit(setTitle)(e.target.value)} placeholder={t('task_titlePlaceholder')} />
         </Field>
         <Field>
-          <Label>Assign to</Label>
+          <Label>{t('form_assignTo')}</Label>
           <Select value={assignedToUserId} onChange={(e) => edit(setAssignedToUserId)(e.target.value)}>
             <option value="">Choose a colleague{isAdmin ? '' : ' (or yourself)'}…</option>
             {colleaguesByBranch.map(([branchName, group]) => (
@@ -88,17 +90,17 @@ export function NewTaskForm({ isAdmin }: { isAdmin: boolean }) {
             ))}
           </Select>
           {inNoBranch && <p className="mt-1 text-xs text-slate-600">You are not in a branch, so there are no colleagues to choose from.</p>}
-          {colleagues.isError && <ErrorText>The list of colleagues could not be loaded.</ErrorText>}
+          {colleagues.isError && <ErrorText>{t('task_colleaguesFail')}</ErrorText>}
         </Field>
         <Field className="md:col-span-2">
-          <Label>Description</Label>
-          <Textarea rows={3} value={description} onChange={(e) => edit(setDescription)(e.target.value)} placeholder="What needs to be done?" />
+          <Label>{t('task_description')}</Label>
+          <Textarea rows={3} value={description} onChange={(e) => edit(setDescription)(e.target.value)} placeholder={t('task_descriptionPlaceholder')} />
         </Field>
         <div className="md:col-span-2">
           <ErrorText>{error}</ErrorText>
-          {created && <SuccessText>Task created.</SuccessText>}
+          {created && <SuccessText>{t('task_created')}</SuccessText>}
           <Button type="submit" disabled={loading}>
-            {loading ? 'Creating…' : 'Create task'}
+            {loading ? t('onbehalf_creating') : t('task_createBtn')}
           </Button>
         </div>
       </form>

@@ -1,5 +1,6 @@
 import clsx from 'clsx';
 import { Card, ErrorText } from '../../components/ui';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 export function Panel({ children, className }: { children: React.ReactNode; className?: string }) {
   return <Card className={clsx('p-5', className)}>{children}</Card>;
@@ -11,7 +12,8 @@ export function ListRow({ children }: { children: React.ReactNode }) {
 
 /** In the place of a list that is on its way or could not be had; nothing when the list is there. */
 export function ListStatus({ loading, failed, plural }: { loading: boolean; failed: boolean; plural: string }) {
-  if (loading) return <p className="py-8 text-center text-sm text-slate-600">Loading {plural}…</p>;
-  if (failed) return <ErrorText>The {plural} could not be loaded. Try again in a moment.</ErrorText>;
+  const { t } = useLanguage();
+  if (loading) return <p className="py-8 text-center text-sm text-slate-600">{t('settings_loadingList', { plural })}</p>;
+  if (failed) return <ErrorText>{t('settings_listLoadFail', { plural })}</ErrorText>;
   return null;
 }

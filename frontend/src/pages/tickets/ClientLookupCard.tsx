@@ -4,8 +4,8 @@ import { usersApi } from '../../api/users';
 import { messageOf } from '../../lib/messageOf';
 import { Button, Card, ErrorText, Input } from '../../components/ui';
 import type { ClientLookupResult } from '../../types';
+import { useLanguage } from '../../i18n/LanguageContext';
 
-const AUTO_FAILED = 'Could not automatically find a client account for this email — search manually below.';
 
 /**
  * The first step: who the client is, found by e-mail. When the page was opened from an e-mail the sender is looked for at once (`autoLookupEmail`);
@@ -23,6 +23,7 @@ export function ClientLookupCard({
   initialEmail?: string;
   autoLookupEmail?: string;
 }) {
+  const { t } = useLanguage();
   const [email, setEmail] = useState(initialEmail);
   const [error, setError] = useState<string | null>(null);
   const [looking, setLooking] = useState(false);
@@ -50,21 +51,21 @@ export function ClientLookupCard({
       onClient(await usersApi.lookupByEmail(email));
     } catch (err) {
       onClient(null);
-      setError(messageOf(err, 'No client found with that email.'));
+      setError(messageOf(err, t('clookup_noClient')));
     } finally {
       setLooking(false);
     }
   }
 
-  const shown = error ?? (automatic.isError && !byHand ? AUTO_FAILED : null);
+  const shown = error ?? (automatic.isError && !byHand ? t('clookup_autoFailed') : null);
 
   return (
     <Card className="p-5">
-      <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">1. Find the client</h2>
+      <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">{t('clookup_title')}</h2>
       <form onSubmit={handleLookup} className="flex gap-2">
-        <Input type="email" required aria-label="Client email" placeholder="client@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <Input type="email" required aria-label={t('clookup_emailAria')} placeholder="client@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
         <Button type="submit" disabled={looking}>
-          {looking ? 'Looking…' : 'Find client'}
+          {looking ? t('clookup_looking') : t('clookup_find')}
         </Button>
       </form>
       <ErrorText>{shown}</ErrorText>
@@ -74,8 +75,8 @@ export function ClientLookupCard({
             {client.firstName} {client.lastName}
           </div>
           <div>{client.email}</div>
-          <div>{client.companyName ?? 'No company on file'}</div>
-          <div>{client.phoneNumber ?? 'No phone number on file'}</div>
+          <div>{client.companyName ?? t('clookup_noCompany')}</div>
+          <div>{client.phoneNumber ?? t('clookup_noPhone')}</div>
         </div>
       )}
     </Card>

@@ -6,29 +6,32 @@ import { BranchesTab } from './BranchesTab';
 import { CategoriesAndSlaTab } from './CategoriesAndSlaTab';
 import { NotificationsTab } from './NotificationsTab';
 import { SimpleLookupTab } from './SimpleLookupTab';
+import type { TranslationKey } from '../../i18n/translations';
 import { LIMITS } from './settingsHelpers';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 type TabKey = 'branches' | 'helpTopics' | 'categoriesAndSla' | 'notifications';
 
-const TABS: { key: TabKey; label: string; icon: string }[] = [
-  { key: 'branches', label: 'Branches', icon: '🏢' },
-  { key: 'helpTopics', label: 'Help Topics', icon: '🏷️' },
-  { key: 'categoriesAndSla', label: 'Categories & SLA', icon: '🗂️' },
-  { key: 'notifications', label: 'Notifications', icon: '⏰' },
+const TABS: { key: TabKey; labelKey: TranslationKey; icon: string }[] = [
+  { key: 'branches', labelKey: 'settingsTab_branches', icon: '🏢' },
+  { key: 'helpTopics', labelKey: 'settingsTab_helpTopics', icon: '🏷️' },
+  { key: 'categoriesAndSla', labelKey: 'settingsTab_categoriesSla', icon: '🗂️' },
+  { key: 'notifications', labelKey: 'settingsTab_notifications', icon: '⏰' },
 ];
 
 function HelpTopicsTab() {
+  const { t: tr } = useLanguage();
   const helpTopics = useHelpTopicsAdmin();
   return (
     <SimpleLookupTab
-      itemNoun="help topic"
+      itemNoun={tr('noun_helpTopic')}
       maxLength={LIMITS.helpTopic}
       list={helpTopics}
       onCreate={lookupsApi.createHelpTopic}
       onUpdate={lookupsApi.updateHelpTopic}
       onDelete={lookupsApi.deleteHelpTopic}
-      deleteWarning="This help topic will be permanently deleted. A help topic that tickets already use cannot be deleted (deactivate it instead), so nothing in the history of any ticket is lost."
-      deactivateWarning="Tickets currently using this help topic keep it and are completely unaffected — nothing changes for existing tickets or statistics. This only removes it from the picker when opening a new ticket."
+      deleteWarning={tr('lookup_deleteWarning', { noun: tr('noun_helpTopic') })}
+      deactivateWarning={tr('lookup_deactivateWarning', { noun: tr('noun_helpTopic') })}
     />
   );
 }
@@ -38,18 +41,19 @@ function HelpTopicsTab() {
  * ticket, the overdue warnings and the documentation of the AI assistant. Each section asks for its own data when it is opened.
  */
 export default function SettingsPage() {
+  const { t: tr } = useLanguage();
   const [tab, setTab] = useState<TabKey>('branches');
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-slate-900">Settings</h1>
+        <h1 className="text-xl font-bold text-slate-900">{tr('settings_title')}</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Manage the dropdown values agents choose from when opening a ticket. Only Admins can change these.
+          {tr('settings_subtitle')}
         </p>
       </div>
 
-      <div className="flex gap-1 overflow-x-auto border-b border-slate-200" role="tablist" aria-label="Settings sections">
+      <div className="flex gap-1 overflow-x-auto border-b border-slate-200" role="tablist" aria-label={tr('settings_sectionsAria')}>
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -62,7 +66,7 @@ export default function SettingsPage() {
             )}
           >
             <span>{t.icon}</span>
-            {t.label}
+            {tr(t.labelKey)}
           </button>
         ))}
       </div>

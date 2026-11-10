@@ -2,28 +2,31 @@ import { useState } from 'react';
 import { ticketsApi } from '../../api/tickets';
 import type { TicketDetailDto, TicketStatus } from '../../types';
 import { Button, ErrorText } from '../../components/ui';
+import { useLanguage } from '../../i18n/LanguageContext';
+import type { TranslationKey } from '../../i18n/translations';
 
 type LiveStatus = Extract<TicketStatus, 'Open' | 'InProgress' | 'Resolved'>;
 
 // Mirrors TicketWorkflow on the server. The server is the authority and rejects anything else; this only decides
 // which buttons are worth showing. Closing has its own form (a resolution summary is required).
-const MOVES: Record<LiveStatus, Array<{ to: LiveStatus; label: string }>> = {
+const MOVES: Record<LiveStatus, Array<{ to: LiveStatus; labelKey: TranslationKey }>> = {
   Open: [
-    { to: 'InProgress', label: 'Start work' },
-    { to: 'Resolved', label: 'Mark resolved' },
+    { to: 'InProgress', labelKey: 'status_startWork' },
+    { to: 'Resolved', labelKey: 'status_markResolved' },
   ],
   InProgress: [
-    { to: 'Resolved', label: 'Mark resolved' },
-    { to: 'Open', label: 'Back to open' },
+    { to: 'Resolved', labelKey: 'status_markResolved' },
+    { to: 'Open', labelKey: 'status_backToOpen' },
   ],
   Resolved: [
-    { to: 'InProgress', label: 'Back to in progress' },
-    { to: 'Open', label: 'Back to open' },
+    { to: 'InProgress', labelKey: 'status_backToInProgress' },
+    { to: 'Open', labelKey: 'status_backToOpen' },
   ],
 };
 
 /** Lets staff move a live ticket between Open, In progress and Resolved. */
 export function TicketStatusActions({ ticket, onChanged }: { ticket: TicketDetailDto; onChanged: (t: TicketDetailDto) => void }) {
+  const { t } = useLanguage();
   const [busy, setBusy] = useState<LiveStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,7 +40,7 @@ export function TicketStatusActions({ ticket, onChanged }: { ticket: TicketDetai
       onChanged(await ticketsApi.setStatus(ticket.id, to));
     } catch (err) {
       const message = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
-      setError(message ?? 'Could not change the status.');
+      setError(message ?? t('status_changeFail'));
     } finally {
       setBusy(null);
     }
@@ -48,7 +51,7 @@ export function TicketStatusActions({ ticket, onChanged }: { ticket: TicketDetai
       <div className="flex flex-wrap items-center gap-2">
         {moves.map((m) => (
           <Button key={m.to} variant="secondary" className="px-3 py-1.5 text-xs" disabled={busy !== null} onClick={() => move(m.to)}>
-            {busy === m.to ? 'Saving…' : m.label}
+            {busy === m.to ? t('common_saving') : t(m.labelKey)}
           </Button>
         ))}
       </div>

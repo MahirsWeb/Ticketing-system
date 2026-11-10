@@ -6,6 +6,7 @@ import type { WorkTaskDetailDto, WorkTaskListItem } from '../../types';
 import { SORTABLE_AFTER_STATUS, SORTABLE_BEFORE_STATUS } from './taskSorting';
 import { TaskRowDetail } from './TaskRowDetail';
 import { TaskStatusBadge } from './TaskStatusBadge';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 type Sorting = { sortBy: string | null; sortDir: 'asc' | 'desc'; onSort: (key: string) => void };
 
@@ -54,6 +55,7 @@ export function TasksTable({
   currentUserId: string | undefined;
   onChanged: (task: WorkTaskDetailDto) => void;
 }) {
+  const { t } = useLanguage();
   const colSpan = isAdmin ? 7 : 6;
   return (
     <Card className="overflow-hidden">
@@ -61,13 +63,13 @@ export function TasksTable({
         <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-600">
           <tr>
             {SORTABLE_BEFORE_STATUS.map((col) => (
-              <SortableHeader key={col.key} colKey={col.key} label={col.label} {...sorting} />
+              <SortableHeader key={col.key} colKey={col.key} label={t(col.labelKey)} {...sorting} />
             ))}
             <th scope="col" className="px-4 py-2">
-              Status
+              {t('col_status')}
             </th>
             {SORTABLE_AFTER_STATUS.filter((col) => !col.adminOnly || isAdmin).map((col) => (
-              <SortableHeader key={col.key} colKey={col.key} label={col.label} {...sorting} />
+              <SortableHeader key={col.key} colKey={col.key} label={t(col.labelKey)} {...sorting} />
             ))}
           </tr>
         </thead>

@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import clsx from 'clsx';
+import { useLanguage } from '../i18n/LanguageContext';
 
 const SIZES: Record<'sm' | 'lg', string> = {
   sm: 'h-10 w-10',
@@ -21,6 +22,7 @@ export function UserAvatar({
   onUpload?: (file: File) => void;
   className?: string;
 }) {
+  const { t } = useLanguage();
   const inputRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -41,7 +43,7 @@ export function UserAvatar({
             onClick={() => inputRef.current?.click()}
             className="absolute inset-0 flex items-center justify-center bg-black/0 text-[10px] font-medium text-transparent transition group-hover:bg-black/40 group-hover:text-white disabled:cursor-wait"
           >
-            {uploading ? '…' : 'Change'}
+            {uploading ? '…' : t('common_change')}
           </button>
           <input
             ref={inputRef}

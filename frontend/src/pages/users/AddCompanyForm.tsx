@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { lookupsApi } from '../../api/lookups';
 import { messageOf } from '../../lib/messageOf';
 import { Button, Card, ErrorText, Field, Input, Label } from '../../components/ui';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /**
  * The form for a new company. What is written is sent without the spaces around it, and an address or a contact of nothing but spaces is not
  * sent. The lists of companies on screen are asked again by the API layer when one is added.
  */
 export function AddCompanyForm() {
+  const { t } = useLanguage();
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [contactInfo, setContactInfo] = useState('');
@@ -19,7 +21,7 @@ export function AddCompanyForm() {
     setError(null);
     const cleanName = name.trim();
     if (!cleanName) {
-      setError('Company name is required.');
+      setError(t('addcompany_nameRequired'));
       return;
     }
     setLoading(true);
@@ -29,7 +31,7 @@ export function AddCompanyForm() {
       setAddress('');
       setContactInfo('');
     } catch (err) {
-      setError(messageOf(err, 'Could not create the company.'));
+      setError(messageOf(err, t('addcompany_createFail')));
     } finally {
       setLoading(false);
     }
@@ -37,24 +39,24 @@ export function AddCompanyForm() {
 
   return (
     <Card className="p-5">
-      <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-600">Add a company</h2>
+      <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-600">{t('addcompany_title')}</h2>
       <form onSubmit={handleCreate} className="grid grid-cols-3 gap-4">
         <Field>
-          <Label>Name</Label>
+          <Label>{t('common_name')}</Label>
           <Input required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
         <Field>
-          <Label>Address (optional)</Label>
+          <Label>{t('addcompany_address')}</Label>
           <Input maxLength={100} value={address} onChange={(e) => setAddress(e.target.value)} />
         </Field>
         <Field>
-          <Label>Contact info (optional)</Label>
+          <Label>{t('addcompany_contact')}</Label>
           <Input maxLength={120} value={contactInfo} onChange={(e) => setContactInfo(e.target.value)} />
         </Field>
         <div className="col-span-3">
           <ErrorText>{error}</ErrorText>
           <Button type="submit" disabled={loading}>
-            {loading ? 'Adding…' : 'Add company'}
+            {loading ? t('addcompany_adding') : t('addcompany_submit')}
           </Button>
         </div>
       </form>

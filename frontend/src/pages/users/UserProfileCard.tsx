@@ -7,6 +7,7 @@ import { UserAvatar } from '../../components/UserAvatar';
 import type { UserListItemDto } from '../../types';
 import { UserAdminActions } from './UserAdminActions';
 import { UserEditForm } from './UserEditForm';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /** Who the person is: the picture, the facts about the account and, for an administrator, the form for changing it and the actions on it. */
 export function UserProfileCard({
@@ -20,6 +21,7 @@ export function UserProfileCard({
   viewerIsAdmin: boolean;
   onChanged: () => void;
 }) {
+  const { t } = useLanguage();
   const [editing, setEditing] = useState(false);
   // A new form is drawn each time it is opened, so it starts from what the account is and not from what was typed the last time.
   const [editSession, setEditSession] = useState(0);
@@ -27,17 +29,17 @@ export function UserProfileCard({
   const [avatarError, setAvatarError] = useState<string | null>(null);
 
   const canEditAvatar = viewerIsAdmin || viewerId === user.id;
-  const orgLabel = user.role === 'Client' ? 'Organization' : 'Branch';
+  const orgLabel = user.role === 'Client' ? t('profile_organization') : t('detail_branch');
   const orgValue = user.role === 'Client' ? user.companyName ?? '—' : [user.departmentName, user.subBranchName].filter(Boolean).join(' / ') || '—';
 
   const profileFields: { label: string; value: ReactNode }[] = [
-    { label: 'Email', value: user.email },
-    ...(user.role === 'Client' && user.phoneNumber ? [{ label: 'Phone', value: user.phoneNumber }] : []),
+    { label: t('common_email'), value: user.email },
+    ...(user.role === 'Client' && user.phoneNumber ? [{ label: t('profile_phone'), value: user.phoneNumber }] : []),
     { label: orgLabel, value: orgValue },
-    { label: 'Status', value: <StatusPill active={user.isActive} /> },
-    { label: 'Email verified', value: user.emailConfirmed ? 'Yes' : 'No' },
-    { label: 'Created', value: format(new Date(user.createdAtUtc), 'dd.MM.yyyy') },
-    { label: 'Last login', value: user.lastLoginAtUtc ? format(new Date(user.lastLoginAtUtc), 'dd.MM.yyyy HH:mm') : 'Never' },
+    { label: t('col_status'), value: <StatusPill active={user.isActive} /> },
+    { label: t('profile_emailVerified'), value: user.emailConfirmed ? t('common_yes') : t('common_no') },
+    { label: t('table_created'), value: format(new Date(user.createdAtUtc), 'dd.MM.yyyy') },
+    { label: t('profile_lastLogin'), value: user.lastLoginAtUtc ? format(new Date(user.lastLoginAtUtc), 'dd.MM.yyyy HH:mm') : t('profile_never') },
   ];
   const profileColumns: (typeof profileFields)[] = [];
   for (let i = 0; i < profileFields.length; i += 3) profileColumns.push(profileFields.slice(i, i + 3));
@@ -49,7 +51,7 @@ export function UserProfileCard({
       await usersApi.uploadProfilePicture(user.id, file);
       onChanged();
     } catch (err: any) {
-      setAvatarError(err?.response?.data?.message ?? 'Could not upload the picture.');
+      setAvatarError(err?.response?.data?.message ?? t('profile_uploadFail'));
     } finally {
       setAvatarUploading(false);
     }
@@ -85,7 +87,7 @@ export function UserProfileCard({
             }}
             className="flex shrink-0 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
           >
-            ✏️ {editing ? 'Close' : 'Edit account details'}
+            ✏️ {editing ? t('profile_close') : t('profile_editDetails')}
           </button>
         )}
       </div>

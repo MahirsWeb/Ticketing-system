@@ -1,4 +1,5 @@
 import { Field, Input, Label, Select } from '../../components/ui';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /** A labelled choice from a list; `placeholder` adds an empty first entry that says nothing is chosen yet. */
 export function SelectField({
@@ -30,11 +31,12 @@ export function SelectField({
 }
 
 export function DueDateField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const { t } = useLanguage();
   return (
     <Field>
-      <Label>Due date (optional)</Label>
+      <Label>{t('ticketFields_dueDate')}</Label>
       <Input type="date" value={value} onChange={(e) => onChange(e.target.value)} />
-      <p className="mt-1 text-xs text-slate-600">Leave empty to use the SLA plan&apos;s resolution time.</p>
+      <p className="mt-1 text-xs text-slate-600">{t('ticketFields_dueHint')}</p>
     </Field>
   );
 }

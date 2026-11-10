@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { emailIntegrationApi } from '../../api/emailIntegration';
 import { Card, Spinner } from '../../components/ui';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 export default function EmailCallbackPage() {
+  const { t } = useLanguage();
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -32,14 +34,14 @@ export default function EmailCallbackPage() {
     }
     if (!code) {
       setStatus('error');
-      setMessage('No authorization code was returned by Microsoft.');
+      setMessage(t('email_noCode'));
       return;
     }
     // Fails closed: a missing stored state (this page opened directly, or from a link someone else crafted) is as much a
     // failure as a different one. It used to be skipped when nothing was stored, which let a forged callback through.
     if (!expectedState || state !== expectedState) {
       setStatus('error');
-      setMessage('Security check failed (state mismatch). Please try connecting again.');
+      setMessage(t('email_stateMismatch'));
       return;
     }
 
@@ -48,11 +50,11 @@ export default function EmailCallbackPage() {
       .connect(code, redirectUri, codeVerifier)
       .then((res) => {
         setStatus('success');
-        setMessage(`Connected: ${res.connectedEmail}`);
+        setMessage(t('email_connected', { email: res.connectedEmail ?? '' }));
       })
       .catch((err) => {
         setStatus('error');
-        setMessage(err?.response?.data?.message ?? 'Could not connect your mailbox.');
+        setMessage(err?.response?.data?.message ?? t('email_connectFail'));
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the authorisation code can be exchanged only once, so this must run on arrival and never again
   }, []);
@@ -67,9 +69,9 @@ export default function EmailCallbackPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
       <Card className="w-full max-w-sm p-8 text-center">
-        <h1 className="mb-4 text-xl font-bold text-slate-900">Connecting Outlook…</h1>
+        <h1 className="mb-4 text-xl font-bold text-slate-900">{t('email_connecting')}</h1>
         {status === 'loading' && (
-          <div role="status" aria-label="Connecting the mailbox">
+          <div role="status" aria-label={t('email_connectingAria')}>
             <Spinner className="mx-auto h-8 w-8 text-blue-700" />
           </div>
         )}
@@ -80,7 +82,7 @@ export default function EmailCallbackPage() {
         )}
         {status === 'error' && (
           <Link to="/emails" className="mt-6 inline-block text-sm text-blue-700 hover:underline">
-            Back to Emails
+            {t('email_backToEmails')}
           </Link>
         )}
       </Card>

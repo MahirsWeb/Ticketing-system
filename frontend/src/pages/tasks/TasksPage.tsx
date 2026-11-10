@@ -8,8 +8,10 @@ import { countByStatus, sortTasks } from './taskSorting';
 import { TaskFilters } from './TaskFilters';
 import { TaskStatusTabs } from './TaskStatusTabs';
 import { TasksTable } from './TasksTable';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 export default function TasksPage() {
+  const { t } = useLanguage();
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === 'Admin';
   const canManage = user?.role === 'Employee';
@@ -40,11 +42,11 @@ export default function TasksPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-slate-900">Tasks</h1>
+        <h1 className="text-xl font-bold text-slate-900">{t('task_pageTitle')}</h1>
         <p className="mt-1 text-sm text-slate-600">
           {isAdmin
-            ? 'You can create and assign tasks into any branch. Otherwise you only have read-only insight — reassigning or timing an existing task stays with the staff involved.'
-            : 'Quick, informal work items you and your colleagues hand to each other alongside ticket work.'}
+            ? t('task_adminNote')
+            : t('task_staffNote')}
         </p>
       </div>
 
@@ -52,11 +54,11 @@ export default function TasksPage() {
 
       <TaskFilters isAdmin={isAdmin} departmentId={departmentFilter} onDepartment={setDepartmentFilter} mineOnly={mineOnly} onMineOnly={setMineOnly} />
 
-      {isError && <ErrorText>The tasks could not be loaded. Try again in a moment.</ErrorText>}
+      {isError && <ErrorText>{t('task_loadError')}</ErrorText>}
       <TaskStatusTabs active={statusFilter} counts={counts} onSelect={setStatusFilter} />
       <TasksTable
         tasks={shown}
-        message={isPending ? 'Loading tasks…' : isError ? null : 'No tasks in this status yet.'}
+        message={isPending ? t('task_loading') : isError ? null : t('task_empty')}
         isAdmin={isAdmin}
         sorting={{ sortBy, sortDir, onSort: handleSort }}
         expandedId={expandedId}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { reportsApi } from '../../api/reports';
 import { Button } from '../../components/ui';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 export const MIN_AI_INSIGHTS_DAYS = 28;
 
@@ -9,6 +10,7 @@ export const MIN_AI_INSIGHTS_DAYS = 28;
  * belongs to the selection it was made for: choosing another period, branch or employee clears it.
  */
 export function AiInsights({ from, to, departmentId, agentId }: { from: Date; to: Date; departmentId?: string; agentId?: string }) {
+  const { t } = useLanguage();
   const [insight, setInsight] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +32,7 @@ export function AiInsights({ from, to, departmentId, agentId }: { from: Date; to
       const res = await reportsApi.aiInsights(params);
       setInsight(res.summary);
     } catch (err: any) {
-      setError(err?.response?.data?.message ?? 'Could not generate AI insights.');
+      setError(err?.response?.data?.message ?? t('dash_aiFail'));
     } finally {
       setLoading(false);
     }
@@ -40,15 +42,15 @@ export function AiInsights({ from, to, departmentId, agentId }: { from: Date; to
     <div className="mt-5 border-t border-slate-100 pt-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h3 className="text-sm font-semibold text-slate-700">AI insights</h3>
+          <h3 className="text-sm font-semibold text-slate-700">{t('dash_aiTitle')}</h3>
           <p className="text-xs text-slate-600">
             {canRun
-              ? 'Ask AI to summarize what went wrong most in the selected period and what to do about it.'
+              ? t('dash_aiPrompt')
               : `Select a period of at least ${MIN_AI_INSIGHTS_DAYS} days to run AI analysis.`}
           </p>
         </div>
         <Button variant="secondary" onClick={generate} disabled={!canRun || loading}>
-          {loading ? 'Analyzing…' : '✨ Generate AI insights'}
+          {loading ? t('dash_aiAnalyzing') : t('dash_aiGenerate')}
         </Button>
       </div>
       {error && <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}

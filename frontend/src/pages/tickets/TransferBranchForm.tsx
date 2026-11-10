@@ -3,8 +3,10 @@ import { useDepartments, useSubBranches } from '../../api/lookupQueries';
 import { ticketsApi } from '../../api/tickets';
 import type { TicketDetailDto } from '../../types';
 import { Button, ErrorText, Select } from '../../components/ui';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 export function TransferBranchForm({ ticket, onTransferred }: { ticket: TicketDetailDto; onTransferred: (t: TicketDetailDto) => void }) {
+  const { t } = useLanguage();
   const [expanded, setExpanded] = useState(false);
   const [departmentId, setDepartmentId] = useState('');
   const [subBranchId, setSubBranchId] = useState('');
@@ -25,11 +27,11 @@ export function TransferBranchForm({ ticket, onTransferred }: { ticket: TicketDe
     e.preventDefault();
     setError(null);
     if (!departmentId) {
-      setError('Select a destination branch.');
+      setError(t('transfer_selectDest'));
       return;
     }
     if (subBranches.length > 0 && !subBranchId) {
-      setError('Select a sub-branch of the destination branch.');
+      setError(t('transfer_selectSub'));
       return;
     }
     setLoading(true);
@@ -39,7 +41,7 @@ export function TransferBranchForm({ ticket, onTransferred }: { ticket: TicketDe
       setExpanded(false);
       onTransferred(updated);
     } catch (err: any) {
-      setError(err?.response?.data?.message ?? 'Could not transfer this ticket.');
+      setError(err?.response?.data?.message ?? t('transfer_fail'));
     } finally {
       setLoading(false);
     }
@@ -52,7 +54,7 @@ export function TransferBranchForm({ ticket, onTransferred }: { ticket: TicketDe
         onClick={() => setExpanded(true)}
         className="text-xs text-slate-600 hover:text-slate-800 hover:underline"
       >
-        Transfer to another branch…
+        {t('transfer_open')}
       </button>
     );
   }
@@ -62,7 +64,7 @@ export function TransferBranchForm({ ticket, onTransferred }: { ticket: TicketDe
       <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-2">
         <div className="w-52">
           <Select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} className="text-xs">
-            <option value="">Select destination branch…</option>
+            <option value="">{t('transfer_destOption')}</option>
             {departments.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.name}
@@ -72,8 +74,8 @@ export function TransferBranchForm({ ticket, onTransferred }: { ticket: TicketDe
         </div>
         {subBranches.length > 0 && (
           <div className="w-52">
-            <Select value={subBranchId} onChange={(e) => setSubBranchId(e.target.value)} className="text-xs" aria-label="Destination sub-branch">
-              <option value="">Select a sub-branch…</option>
+            <Select value={subBranchId} onChange={(e) => setSubBranchId(e.target.value)} className="text-xs" aria-label={t('transfer_subAria')}>
+              <option value="">{t('transfer_subOption')}</option>
               {subBranches.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -83,10 +85,10 @@ export function TransferBranchForm({ ticket, onTransferred }: { ticket: TicketDe
           </div>
         )}
         <Button type="submit" variant="secondary" disabled={loading} className="text-xs">
-          {loading ? 'Transferring…' : 'Transfer'}
+          {loading ? t('transfer_transferring') : t('transfer_submit')}
         </Button>
         <button type="button" onClick={() => setExpanded(false)} className="text-xs text-slate-600 hover:underline">
-          Cancel
+          {t('common_cancel')}
         </button>
       </form>
       <ErrorText>{error}</ErrorText>

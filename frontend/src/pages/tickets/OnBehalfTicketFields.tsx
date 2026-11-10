@@ -3,28 +3,31 @@ import { RichTextEditor } from '../../components/RichTextEditor';
 import { DueDateField, SelectField } from './ticketFields';
 import { PRIORITIES, SOURCES } from './ticketOptions';
 import type { OnBehalfTicket } from './useOnBehalfTicket';
+import { useLanguage } from '../../i18n/LanguageContext';
+import type { TranslationKey } from '../../i18n/translations';
 
 /** The second step: describe the issue and say where the ticket goes. All of it is drawn from the model, which keeps what was typed. */
 export function OnBehalfTicketFields({ model }: { model: OnBehalfTicket }) {
+  const { t } = useLanguage();
   const { values, set, lists, subBranches, employeesByDepartment } = model;
 
   return (
     <Card className="p-5">
-      <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-600">2. Describe the issue &amp; open the ticket</h2>
+      <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-600">{t('onbehalf_heading')}</h2>
       <form onSubmit={model.submit} className="space-y-4">
         {lists.failed && <ErrorText>Some of the lists could not be loaded. Reload the page to try again.</ErrorText>}
         <Field>
-          <Label>Title *</Label>
-          <Input required value={values.title} onChange={(e) => set.setTitle(e.target.value)} placeholder="Short summary of the issue" />
+          <Label>{t('newTicket_titleLabel')}</Label>
+          <Input required value={values.title} onChange={(e) => set.setTitle(e.target.value)} placeholder={t('newTicket_titlePlaceholder')} />
         </Field>
         <div>
-          <Label>Description *</Label>
+          <Label>{t('newTicket_descLabel')}</Label>
           <RichTextEditor
             ariaLabel="Description"
             value={values.description}
             onChange={set.setDescription}
             onFilesSelected={model.addFiles}
-            placeholder="Describe the issue as reported by the client…"
+            placeholder={t('onbehalf_descPlaceholder')}
           />
           {values.files.length > 0 && (
             <ul className="mt-2 flex flex-wrap gap-2">
@@ -41,43 +44,43 @@ export function OnBehalfTicketFields({ model }: { model: OnBehalfTicket }) {
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <SelectField label="Ticket source" value={values.source} onChange={(v) => set.setSource(v as typeof values.source)} options={SOURCES.map((s) => ({ value: s, label: s }))} />
-          <SelectField label="Help topic" value={values.helpTopicId} onChange={set.setHelpTopicId} options={lists.helpTopics.map((t) => ({ value: t.id, label: t.name }))} />
+          <SelectField label={t('form_ticketSource')} value={values.source} onChange={(v) => set.setSource(v as typeof values.source)} options={SOURCES.map((s) => ({ value: s, label: t(`source_${s}` as TranslationKey) }))} />
+          <SelectField label={t('detail_helpTopic')} value={values.helpTopicId} onChange={set.setHelpTopicId} options={lists.helpTopics.map((t) => ({ value: t.id, label: t.name }))} />
           {model.isAdmin ? (
             <SelectField
-              label="Branch"
+              label={t('detail_branch')}
               value={values.departmentId}
               onChange={set.changeDepartment}
-              placeholder="Select a branch…"
+              placeholder={t('newTicket_selectBranchOption')}
               options={lists.departments.map((d) => ({ value: d.id, label: d.name }))}
             />
           ) : (
             <Field>
-              <Label>Branch</Label>
-              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{model.ownBranchName ?? 'No branch assigned'}</div>
+              <Label>{t('detail_branch')}</Label>
+              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{model.ownBranchName ?? t('onbehalf_noBranchAssigned')}</div>
             </Field>
           )}
           {subBranches.length > 0 && (
             <SelectField
-              label="Sub-branch"
+              label={t('detail_subBranch')}
               value={values.subBranchId}
               onChange={set.setSubBranchId}
-              placeholder="Select a sub-branch…"
+              placeholder={t('transfer_subOption')}
               options={subBranches.map((s) => ({ value: s.id, label: s.name }))}
             />
           )}
           <SelectField
-            label="SLA plan"
+            label={t('detail_slaPlan')}
             value={values.slaPlanId}
             onChange={set.setSlaPlanId}
             options={lists.slaPlans.map((s) => ({ value: s.id, label: `${s.name} (${s.resolutionTimeHours}h resolution)` }))}
           />
-          <SelectField label="Priority" value={values.priority} onChange={(v) => set.setPriority(v as typeof values.priority)} options={PRIORITIES.map((p) => ({ value: p, label: p }))} />
+          <SelectField label={t('table_priority')} value={values.priority} onChange={(v) => set.setPriority(v as typeof values.priority)} options={PRIORITIES.map((p) => ({ value: p, label: t(`priority_${p}` as TranslationKey) }))} />
           <DueDateField value={values.dueDate} onChange={set.setDueDate} />
           <Field>
-            <Label>Assign to</Label>
+            <Label>{t('form_assignTo')}</Label>
             <Select value={values.assignedToUserId} onChange={(e) => set.changeAssignee(e.target.value)}>
-              <option value="">Select an agent…</option>
+              <option value="">{t('form_selectAgent')}</option>
               {lists.departments.map((d) => {
                 const deptEmployees = employeesByDepartment.get(d.id) ?? [];
                 if (deptEmployees.length === 0) return null;
@@ -92,20 +95,20 @@ export function OnBehalfTicketFields({ model }: { model: OnBehalfTicket }) {
                 );
               })}
             </Select>
-            {model.staffFailed && <ErrorText>The staff could not be loaded. Try again in a moment.</ErrorText>}
+            {model.staffFailed && <ErrorText>{t('form_staffFail')}</ErrorText>}
           </Field>
           <SelectField
-            label="Category (internal, staff only)"
+            label={t('form_category')}
             value={values.categoryId}
             onChange={set.setCategoryId}
-            placeholder="No category"
+            placeholder={t('form_noCategory')}
             options={lists.categories.map((c) => ({ value: c.id, label: c.name }))}
           />
         </div>
 
         <ErrorText>{model.error}</ErrorText>
         <Button type="submit" disabled={model.loading}>
-          {model.loading ? 'Creating…' : 'Create & open ticket'}
+          {model.loading ? t('onbehalf_creating') : t('onbehalf_submit')}
         </Button>
       </form>
     </Card>

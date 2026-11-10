@@ -9,6 +9,7 @@ import type { KnowledgeBaseDocumentDto } from '../../types';
 import { messageOf } from './settingsHelpers';
 import { ReindexStatusError } from './ReindexStatusError';
 import { ListRow, Panel } from './settingsUi';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 function formatBytesAsChunks(chunkCount: number) {
   return `${chunkCount} ${chunkCount === 1 ? 'chunk' : 'chunks'}`;
@@ -16,6 +17,7 @@ function formatBytesAsChunks(chunkCount: number) {
 
 /** The manuals and instructions the AI assistant answers from: uploaded, removed, and rebuilt from their stored originals. */
 export function KnowledgeBaseDocumentsPanel() {
+  const { t } = useLanguage();
   const queryClient = useQueryClient();
   const list = useKnowledgeBaseDocuments();
   const documents = list.data ?? [];
@@ -40,7 +42,7 @@ export function KnowledgeBaseDocumentsPanel() {
 
   async function handleReindexDocument(d: KnowledgeBaseDocumentDto) {
     setError(null);
-    const failure = await startReindex(queryClient, () => knowledgeBaseApi.reindexDocument(d.id), 'Could not start the re-index.');
+    const failure = await startReindex(queryClient, () => knowledgeBaseApi.reindexDocument(d.id), t('kbdoc_startFail'));
     setError(failure);
     if (!failure) setWatching(true);
   }
@@ -55,7 +57,7 @@ export function KnowledgeBaseDocumentsPanel() {
       await knowledgeBaseApi.uploadDocuments(files);
       refresh();
     } catch (err) {
-      setError(messageOf(err, 'Could not upload one or more of the selected files.'));
+      setError(messageOf(err, t('kbdoc_uploadFail')));
     } finally {
       setUploading(false);
     }
@@ -70,13 +72,13 @@ export function KnowledgeBaseDocumentsPanel() {
       await knowledgeBaseApi.deleteDocument(target.id);
       refresh();
     } catch (err) {
-      setError(messageOf(err, 'Could not remove this document.'));
+      setError(messageOf(err, t('kbdoc_removeFail')));
     }
   }
 
   return (
     <Panel className="max-w-lg">
-      <h2 className="text-sm font-bold text-slate-800">Knowledge base documentation</h2>
+      <h2 className="text-sm font-bold text-slate-800">{t('kbdoc_title')}</h2>
       <p className="mt-0.5 mb-4 text-xs text-slate-600">
         Upload manuals or instructions (Word .docx, Excel .xls/.xlsx, PDF) so the AI assistant can answer
         questions using official documentation, not just past tickets. Legacy binary .doc isn't supported —
@@ -84,7 +86,7 @@ export function KnowledgeBaseDocumentsPanel() {
       </p>
       <ErrorText>{error}</ErrorText>
       <label>
-        <span className="sr-only">Upload documentation files</span>
+        <span className="sr-only">{t('kbdoc_uploadBtn')}</span>
         <input
           type="file"
           multiple
@@ -96,7 +98,7 @@ export function KnowledgeBaseDocumentsPanel() {
       </label>
       {uploading && <p className="mt-2 text-xs text-slate-600">Uploading and indexing — this can take a moment per file…</p>}
 
-      {list.isError && <ErrorText>The documentation could not be loaded. Try again in a moment.</ErrorText>}
+      {list.isError && <ErrorText>{t('kbdoc_loadFail')}</ErrorText>}
       {list.isSuccess && documents.length > 0 && (
         <ul className="mt-4 space-y-1">
           {documents.map((d) => (
@@ -112,7 +114,7 @@ export function KnowledgeBaseDocumentsPanel() {
                   className="text-xs text-blue-700 hover:underline disabled:opacity-50"
                   disabled={reindexRunning}
                   onClick={() => handleReindexDocument(d)}
-                  title={reindexRunning ? 'A re-index is already running.' : 'Re-read the stored original and rebuild its searchable content'}
+                  title={reindexRunning ? 'A re-index is already running.' : t('kbdoc_rebuildTitle')}
                 >
                   Re-index
                 </button>
@@ -124,7 +126,7 @@ export function KnowledgeBaseDocumentsPanel() {
           ))}
         </ul>
       )}
-      {list.isSuccess && documents.length === 0 && <p className="mt-4 text-sm text-slate-600">No documentation uploaded yet.</p>}
+      {list.isSuccess && documents.length === 0 && <p className="mt-4 text-sm text-slate-600">{t('kbdoc_empty')}</p>}
       {watching && <ReindexStatusError run={run} />}
       {watching && reindex && reindex.state !== 'Idle' && (
         <p className={`mt-3 text-xs ${reindex.state === 'Failed' ? 'text-red-700' : reindex.state === 'Completed' ? 'text-green-700' : 'text-slate-600'}`}>
@@ -135,9 +137,9 @@ export function KnowledgeBaseDocumentsPanel() {
 
       {confirmDelete && (
         <ConfirmDialog
-          title="Remove this document?"
-          message={`"${confirmDelete.title}" and its indexed content will be permanently removed from the knowledge base. The AI assistant will no longer be able to reference it.`}
-          confirmLabel="Delete"
+          title={t('kbdoc_removeTitle')}
+          message={t('kbdoc_removeMsg', { name: confirmDelete.title })}
+          confirmLabel={t('common_delete')}
           onConfirm={handleDeleteConfirmed}
           onCancel={() => setConfirmDelete(null)}
         />

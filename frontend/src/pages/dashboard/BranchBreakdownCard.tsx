@@ -1,14 +1,16 @@
 import { Card } from '../../components/ui';
 import { TopFiveList } from './TopFiveList';
 import type { BranchBreakdownEntryDto } from '../../types';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /** For administrators: how many tickets each branch has in the period. */
 export function BranchBreakdownCard({ items }: { items: BranchBreakdownEntryDto[] }) {
+  const { t } = useLanguage();
   return (
     <Card className="p-5">
-      <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-600">By branch</h2>
+      <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-600">{t('dash_byBranch')}</h2>
       {items.length === 0 ? (
-        <p className="text-sm text-slate-600">No routed tickets in this period yet.</p>
+        <p className="text-sm text-slate-600">{t('dash_noRouted')}</p>
       ) : (
         <TopFiveList
           items={items}

@@ -1,4 +1,5 @@
 import { Button } from './ui';
+import { useLanguage } from '../i18n/LanguageContext';
 
 /**
  * Previous and next. Shown when there is more than one page, and also when the address is for a page after the last (a bookmark of a list that
@@ -6,9 +7,10 @@ import { Button } from './ui';
  * one before the one that does not exist.
  */
 export function Pager({ page, totalPages, onPage }: { page: number; totalPages: number; onPage: (page: number) => void }) {
+  const { t } = useLanguage();
   if (totalPages <= 1 && page <= 1) return null;
   return (
-    <nav aria-label="Pages" className="mt-4 flex items-center justify-center gap-2">
+    <nav aria-label={t('pager_aria')} className="mt-4 flex items-center justify-center gap-2">
       <Button variant="secondary" disabled={page <= 1} onClick={() => onPage(Math.min(page - 1, totalPages))}>
         Previous
       </Button>

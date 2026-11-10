@@ -3,6 +3,7 @@ import { ErrorText } from '../../components/ui';
 import { messageOf } from '../../lib/messageOf';
 import type { WorkTaskDetailDto } from '../../types';
 import { TaskDetailPanel } from './TaskDetailPanel';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /** The row under a task that is open: the task as soon as it has been had, why it could not be had, or a word that it is on its way. */
 export function TaskRowDetail({
@@ -18,6 +19,7 @@ export function TaskRowDetail({
   currentUserId: string | undefined;
   onChanged: (task: WorkTaskDetailDto) => void;
 }) {
+  const { t } = useLanguage();
   const { data, isError, error } = useTask(id);
   if (data) {
     return (
@@ -31,7 +33,7 @@ export function TaskRowDetail({
   return (
     <tr>
       <td colSpan={colSpan} className="px-4 py-3">
-        {isError ? <ErrorText>{messageOf(error, 'Could not load this task.')}</ErrorText> : <p className="text-sm text-slate-600">Loading the task…</p>}
+        {isError ? <ErrorText>{messageOf(error, t('taskrow_loadFail'))}</ErrorText> : <p className="text-sm text-slate-600">Loading the task…</p>}
       </td>
     </tr>
   );

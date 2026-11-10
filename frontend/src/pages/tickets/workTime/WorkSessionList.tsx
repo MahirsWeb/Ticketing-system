@@ -2,6 +2,7 @@ import { format } from 'date-fns';
 import type { TicketWorkSessionDto } from '../../../types';
 import { Button } from '../../../components/ui';
 import { durationOf, formatDuration } from './workTimeModel';
+import { useLanguage } from '../../../i18n/LanguageContext';
 
 const when = (iso: string) => format(new Date(iso), 'dd.MM.yyyy HH:mm');
 
@@ -21,7 +22,8 @@ export function WorkSessionList({
   onEdit: (s: TicketWorkSessionDto) => void;
   onDelete: (s: TicketWorkSessionDto) => void;
 }) {
-  if (sessions.length === 0) return <p className="mb-3 text-sm text-slate-600">No work logged yet.</p>;
+  const { t } = useLanguage();
+  if (sessions.length === 0) return <p className="mb-3 text-sm text-slate-600">{t('worktime_noWork')}</p>;
 
   return (
     <ul className="mb-3 divide-y divide-slate-100 rounded-md border border-slate-100 bg-white text-sm">

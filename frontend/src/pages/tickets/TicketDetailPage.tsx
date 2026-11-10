@@ -6,6 +6,7 @@ import { ticketsApi } from '../../api/tickets';
 import { ticketKeys, useTicket } from '../../api/ticketQueries';
 import type { TicketDetailDto } from '../../types';
 import { Card, ErrorText, PriorityBadge, Spinner, StatusBadge } from '../../components/ui';
+import { useLanguage } from '../../i18n/LanguageContext';
 import { SafeHtml } from '../../components/SafeHtml';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useAuthStore } from '../../store/authStore';
@@ -30,13 +31,14 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export default function TicketDetailPage() {
+  const { t } = useLanguage();
   const { id } = useParams<{ id: string }>();
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
   // Another ticket is another entry: the previous one is forgotten at once (its drafts and its data must not be shown under the new
   // address) and a slow answer for a ticket that is no longer the one on screen has nowhere to land.
   const { data: ticket, isPending: loading, error } = useTicket(id);
-  const loadError = error ? ((error as { response?: { data?: { message?: string } } }).response?.data?.message ?? 'Could not load this ticket.') : null;
+  const loadError = error ? ((error as { response?: { data?: { message?: string } } }).response?.data?.message ?? t('detail_loadError')) : null;
   /** Every change comes back as the whole ticket; it is written into the entry, or worked out from the one that is there now. */
   function setTicket(next: TicketDetailDto | ((current: TicketDetailDto | undefined) => TicketDetailDto | undefined)) {
     if (id) queryClient.setQueryData<TicketDetailDto>(ticketKeys.detail(id), next);
@@ -63,7 +65,7 @@ export default function TicketDetailPage() {
     );
   }
   if (loadError) return <ErrorText>{loadError}</ErrorText>;
-  if (!ticket || !user) return <p>Ticket not found.</p>;
+  if (!ticket || !user) return <p>{t('detail_notFound')}</p>;
 
   const isStaff = user.role === 'Admin' || user.role === 'Employee';
   const canOpen = isStaff && ticket.status === 'New';
@@ -85,14 +87,14 @@ export default function TicketDetailPage() {
           {isStaff && <PriorityBadge priority={ticket.priority} />}
         </div>
         <p className="mt-1 text-sm text-slate-600">
-          Submitted by{' '}
+          {t('detail_submittedBy')}{' '}
           <ClientInfoPopover
             name={ticket.clientName}
             email={ticket.clientEmail}
             phoneNumber={ticket.clientPhoneNumber}
             companyName={ticket.companyName}
           />{' '}
-          ({ticket.companyName}) on {format(new Date(ticket.createdAt), 'dd.MM.yyyy HH:mm')}
+          ({ticket.companyName}) {t('detail_on')} {format(new Date(ticket.createdAt), 'dd.MM.yyyy HH:mm')}
         </p>
         {isStaff && (
           <div className="mt-3">
@@ -104,15 +106,15 @@ export default function TicketDetailPage() {
       {ticket.status !== 'New' && (
         <Card className="p-5">
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <InfoRow label="Source" value={ticket.source} />
-            <InfoRow label="Help topic" value={ticket.helpTopicName} />
-            <InfoRow label="Branch" value={ticket.departmentName} />
-            <InfoRow label="Sub-branch" value={ticket.subBranchName} />
-            {isStaff && <InfoRow label="Due date" value={ticket.dueDateUtc ? format(new Date(ticket.dueDateUtc), 'dd.MM.yyyy HH:mm') : null} />}
-            <InfoRow label="Opened at" value={ticket.openedAtUtc ? format(new Date(ticket.openedAtUtc), 'dd.MM.yyyy HH:mm') : null} />
-            <InfoRow label="Closed at" value={ticket.closedAtUtc ? format(new Date(ticket.closedAtUtc), 'dd.MM.yyyy HH:mm') : null} />
-            {isStaff && <InfoRow label="SLA plan" value={ticket.slaPlanName} />}
-            {isStaff && <InfoRow label="Category" value={ticket.categoryName} />}
+            <InfoRow label={t('detail_source')} value={ticket.source} />
+            <InfoRow label={t('detail_helpTopic')} value={ticket.helpTopicName} />
+            <InfoRow label={t('detail_branch')} value={ticket.departmentName} />
+            <InfoRow label={t('detail_subBranch')} value={ticket.subBranchName} />
+            {isStaff && <InfoRow label={t('detail_dueDate')} value={ticket.dueDateUtc ? format(new Date(ticket.dueDateUtc), 'dd.MM.yyyy HH:mm') : null} />}
+            <InfoRow label={t('detail_openedAt')} value={ticket.openedAtUtc ? format(new Date(ticket.openedAtUtc), 'dd.MM.yyyy HH:mm') : null} />
+            <InfoRow label={t('detail_closedAt')} value={ticket.closedAtUtc ? format(new Date(ticket.closedAtUtc), 'dd.MM.yyyy HH:mm') : null} />
+            {isStaff && <InfoRow label={t('detail_slaPlan')} value={ticket.slaPlanName} />}
+            {isStaff && <InfoRow label={t('detail_category')} value={ticket.categoryName} />}
           </div>
           {isStaff && (
             <div className="mt-4 space-y-4 border-t border-slate-100 pt-4">
@@ -129,7 +131,7 @@ export default function TicketDetailPage() {
       )}
 
       <Card className="p-5">
-        <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">Original request</h2>
+        <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">{t('detail_originalRequest')}</h2>
         <SafeHtml className="prose prose-sm max-w-none" html={ticket.description} />
         {ticket.attachments.length > 0 && (
           <ul className="mt-3 space-y-1 text-xs">
@@ -146,7 +148,7 @@ export default function TicketDetailPage() {
 
       {ticket.status === 'Closed' && (
         <Card className="p-5">
-          <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">Resolution</h2>
+          <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">{t('detail_resolution')}</h2>
           <p className="whitespace-pre-wrap text-sm text-slate-800">{ticket.resolutionSummary}</p>
           {canReopen && (
             <button
@@ -155,7 +157,7 @@ export default function TicketDetailPage() {
               onClick={() => setConfirmReopen(true)}
               className="mt-3 text-xs text-slate-600 hover:text-slate-800 hover:underline disabled:opacity-50"
             >
-              {reopening ? 'Reopening…' : 'Reopen ticket…'}
+              {reopening ? t('detail_reopening') : t('detail_reopenBtn')}
             </button>
           )}
         </Card>
@@ -167,7 +169,7 @@ export default function TicketDetailPage() {
       {canOpen && <OpenTicketForm key={`open-${ticket.id}`} ticket={ticket} onOpened={setTicket} />}
 
       <Card className="p-5">
-        <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-600">Activity</h2>
+        <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-600">{t('detail_activity')}</h2>
         <TicketActivityFeed key={`activity-${ticket.id}`}
           ticket={ticket}
           messages={ticket.messages}
@@ -183,9 +185,9 @@ export default function TicketDetailPage() {
 
       {confirmReopen && (
         <ConfirmDialog
-          title="Reopen this ticket?"
-          message="The ticket goes back to Open and the client and assignees can pick it back up. Its previous resolution notes stay in place until it's closed again."
-          confirmLabel="Reopen"
+          title={t('detail_reopenTitle')}
+          message={t('detail_reopenMsg')}
+          confirmLabel={t('detail_reopenConfirm')}
           onConfirm={handleReopenConfirmed}
           onCancel={() => setConfirmReopen(false)}
         />

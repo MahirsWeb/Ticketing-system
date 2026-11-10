@@ -3,17 +3,19 @@ import { useCompany } from '../../api/adminLookupQueries';
 import { ErrorText, Spinner } from '../../components/ui';
 import { messageOf } from '../../lib/messageOf';
 import { CompanyView } from './CompanyView';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 function LoadedCompany({ id }: { id: string }) {
+  const { t } = useLanguage();
   const company = useCompany(id);
   if (company.isPending) {
     return (
-      <div role="status" aria-label="Loading the company" className="flex justify-center py-16">
+      <div role="status" aria-label={t('compdetail_loadingAria')} className="flex justify-center py-16">
         <Spinner className="h-8 w-8 text-blue-700" />
       </div>
     );
   }
-  if (company.isError) return <ErrorText>{messageOf(company.error, 'Could not load this company.')}</ErrorText>;
+  if (company.isError) return <ErrorText>{messageOf(company.error, t('compdetail_loadFail'))}</ErrorText>;
   return <CompanyView company={company.data} />;
 }
 

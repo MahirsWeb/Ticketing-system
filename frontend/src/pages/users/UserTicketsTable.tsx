@@ -4,9 +4,11 @@ import clsx from 'clsx';
 import { useUserTickets } from '../../api/userQueries';
 import { Card, ErrorText, PriorityBadge, Spinner, StatusBadge } from '../../components/ui';
 import type { UserListItemDto } from '../../types';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /** The tickets a client submitted, or those a member of the staff has. Only the first hundred are listed; the heading says how many there are. */
 export function UserTicketsTable({ user }: { user: UserListItemDto }) {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const list = useUserTickets(user);
   const tickets = list.data?.items ?? [];
@@ -27,18 +29,18 @@ export function UserTicketsTable({ user }: { user: UserListItemDto }) {
           </div>
         ) : list.isError ? (
           <div className="px-3 py-4">
-            <ErrorText>The tickets could not be loaded. Try again in a moment.</ErrorText>
+            <ErrorText>{t('ticket_loadError')}</ErrorText>
           </div>
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-600">
               <tr>
                 <th className="px-3 py-1.5">#</th>
-                <th className="px-3 py-1.5">Title</th>
-                <th className="px-3 py-1.5">Status</th>
-                <th className="px-3 py-1.5">Priority</th>
-                <th className="px-3 py-1.5">{isClient ? 'Assigned to' : 'Client'}</th>
-                <th className="px-3 py-1.5">Created</th>
+                <th className="px-3 py-1.5">{t('table_title')}</th>
+                <th className="px-3 py-1.5">{t('col_status')}</th>
+                <th className="px-3 py-1.5">{t('table_priority')}</th>
+                <th className="px-3 py-1.5">{isClient ? t('table_assignedTo') : 'Client'}</th>
+                <th className="px-3 py-1.5">{t('table_created')}</th>
               </tr>
             </thead>
             <tbody>

@@ -3,12 +3,14 @@ import { usersApi } from '../../api/users';
 import { useCompanies, useDepartments, useSubBranches } from '../../api/lookupQueries';
 import { Button, ErrorText, Field, Input, Label, Select } from '../../components/ui';
 import type { UserListItemDto, UserRole } from '../../types';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /**
  * The form for changing the name and the place of an account. It starts from what the account is when it is drawn, so closing it and opening
  * it again forgets what was typed (the page draws a new one each time).
  */
 export function UserEditForm({ user, onSaved, onCancel }: { user: UserListItemDto; onSaved: () => void; onCancel: () => void }) {
+  const { t } = useLanguage();
   const { data: companies = [] } = useCompanies();
   const { data: departments = [] } = useDepartments();
   const [firstName, setFirstName] = useState(user.firstName);
@@ -29,15 +31,15 @@ export function UserEditForm({ user, onSaved, onCancel }: { user: UserListItemDt
     setError(null);
 
     if (accountType === 'Client' && !companyId) {
-      setError('Please select a company.');
+      setError(t('edit_selectCompany'));
       return;
     }
     if (needsBranch && !departmentId) {
-      setError('Please select a branch.');
+      setError(t('edit_selectBranch'));
       return;
     }
     if (needsBranch && availableSubBranches.length > 0 && !subBranchId) {
-      setError('Please select a sub-branch.');
+      setError(t('edit_selectSub'));
       return;
     }
 
@@ -53,7 +55,7 @@ export function UserEditForm({ user, onSaved, onCancel }: { user: UserListItemDt
       });
       onSaved();
     } catch (err: any) {
-      setError(err?.response?.data?.message ?? 'Could not save changes.');
+      setError(err?.response?.data?.message ?? t('edit_saveFail'));
     } finally {
       setSaving(false);
     }
@@ -62,26 +64,26 @@ export function UserEditForm({ user, onSaved, onCancel }: { user: UserListItemDt
   return (
     <form onSubmit={handleSave} className="mt-5 grid grid-cols-1 gap-4 border-t border-slate-100 pt-5 sm:grid-cols-2">
       <Field>
-        <Label>First name</Label>
+        <Label>{t('common_firstName')}</Label>
         <Input required maxLength={25} value={firstName} onChange={(e) => setFirstName(e.target.value)} />
       </Field>
       <Field>
-        <Label>Last name</Label>
+        <Label>{t('common_lastName')}</Label>
         <Input required maxLength={30} value={lastName} onChange={(e) => setLastName(e.target.value)} />
       </Field>
       <Field>
-        <Label>Account type</Label>
+        <Label>{t('common_accountType')}</Label>
         <Select value={accountType} onChange={(e) => setAccountType(e.target.value as UserRole)}>
-          <option value="Client">Client</option>
-          <option value="Employee">Employee</option>
-          <option value="Admin">Admin</option>
+          <option value="Client">{t('role_Client')}</option>
+          <option value="Employee">{t('role_Employee')}</option>
+          <option value="Admin">{t('role_Admin')}</option>
         </Select>
       </Field>
       {accountType === 'Client' && (
         <Field>
-          <Label>Company</Label>
+          <Label>{t('common_company')}</Label>
           <Select value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
-            <option value="">Select a company…</option>
+            <option value="">{t('common_selectCompany')}</option>
             {companies.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -92,7 +94,7 @@ export function UserEditForm({ user, onSaved, onCancel }: { user: UserListItemDt
       )}
       {needsBranch && (
         <Field>
-          <Label>Branch</Label>
+          <Label>{t('detail_branch')}</Label>
           <Select
             value={departmentId}
             onChange={(e) => {
@@ -100,7 +102,7 @@ export function UserEditForm({ user, onSaved, onCancel }: { user: UserListItemDt
               setSubBranchId('');
             }}
           >
-            <option value="">Select a branch…</option>
+            <option value="">{t('newTicket_selectBranchOption')}</option>
             {departments.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.name} ({d.email})
@@ -111,9 +113,9 @@ export function UserEditForm({ user, onSaved, onCancel }: { user: UserListItemDt
       )}
       {needsBranch && availableSubBranches.length > 0 && (
         <Field>
-          <Label>Sub-branch</Label>
+          <Label>{t('detail_subBranch')}</Label>
           <Select value={subBranchId} onChange={(e) => setSubBranchId(e.target.value)}>
-            <option value="">Select a sub-branch…</option>
+            <option value="">{t('transfer_subOption')}</option>
             {availableSubBranches.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
@@ -126,7 +128,7 @@ export function UserEditForm({ user, onSaved, onCancel }: { user: UserListItemDt
         <ErrorText>{error}</ErrorText>
         <div className="flex gap-2">
           <Button type="submit" disabled={saving}>
-            {saving ? 'Saving…' : 'Save'}
+            {saving ? t('common_saving') : t('common_save')}
           </Button>
           <Button type="button" variant="secondary" onClick={onCancel}>
             Cancel

@@ -15,6 +15,7 @@ import { SummaryCards } from './SummaryCards';
 import { TicketsOverTime } from './TicketsOverTime';
 import { TopIssuesCard } from './TopIssuesCard';
 import { groupEmployeesByBranch } from './employeeGroups';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /**
  * The figures of the period: who they are for (a branch, an employee) and which days is the page's to decide, and every part below it only
@@ -22,6 +23,7 @@ import { groupEmployeesByBranch } from './employeeGroups';
  * answer to the current one; while the figures of a new selection are on their way, those of the previous one stay on the screen.
  */
 export default function DashboardPage() {
+  const { t } = useLanguage();
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === 'Admin';
 
@@ -45,7 +47,7 @@ export default function DashboardPage() {
   const periodQuery = usePeriodComparison(params, groupBy);
   // A failed request is a message on the screen, not an unhandled error in the console.
   const reportError = [summaryQuery, seriesQuery, leaderboardQuery, topIssuesQuery, branchQuery, periodQuery].some((q) => q.isError)
-    ? 'Some of the figures could not be loaded for this selection. Change the selection or reload the page.'
+    ? t('dash_partialFail')
     : null;
 
   return (

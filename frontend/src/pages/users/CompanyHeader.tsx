@@ -2,9 +2,11 @@ import { Link } from 'react-router-dom';
 import { StatusPill } from '../../components/ui';
 import type { CompanyItemFull } from '../../types';
 import { EDIT_PANEL_ID } from './CompanyEditPanel';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /** The name of the company, whether it is active, its address and contact, the way back, and the button that opens the editing. */
 export function CompanyHeader({ company, editing, onToggleEdit }: { company: CompanyItemFull; editing: boolean; onToggleEdit: () => void }) {
+  const { t } = useLanguage();
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
@@ -26,7 +28,7 @@ export function CompanyHeader({ company, editing, onToggleEdit }: { company: Com
         onClick={onToggleEdit}
         className="flex shrink-0 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
       >
-        ✏️ {editing ? 'Close' : 'Edit company details'}
+        ✏️ {editing ? t('profile_close') : t('comphdr_edit')}
       </button>
     </div>
   );

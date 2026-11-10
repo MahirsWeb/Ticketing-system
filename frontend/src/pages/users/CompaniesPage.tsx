@@ -2,20 +2,22 @@ import { Link } from 'react-router-dom';
 import { useCompaniesAdmin } from '../../api/adminLookupQueries';
 import { Card, ErrorText, StatusPill } from '../../components/ui';
 import { AddCompanyForm } from './AddCompanyForm';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 export default function CompaniesPage() {
+  const { t } = useLanguage();
   const companies = useCompaniesAdmin();
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-slate-900">Client companies</h1>
-        <p className="mt-1 text-sm text-slate-600">Click a company to see its users and tickets.</p>
+        <h1 className="text-xl font-bold text-slate-900">{t('companies_title')}</h1>
+        <p className="mt-1 text-sm text-slate-600">{t('companies_subtitle')}</p>
       </div>
 
       <AddCompanyForm />
 
-      {companies.isError && <ErrorText>The companies could not be loaded. Try again in a moment.</ErrorText>}
+      {companies.isError && <ErrorText>{t('companies_loadError')}</ErrorText>}
       <Card className="divide-y divide-slate-100">
         {(companies.data ?? []).map((c) => (
           <Link
@@ -35,8 +37,8 @@ export default function CompaniesPage() {
             </div>
           </Link>
         ))}
-        {companies.isPending && <div className="px-4 py-6 text-center text-sm text-slate-600">Loading companies…</div>}
-        {companies.isSuccess && companies.data.length === 0 && <div className="px-4 py-6 text-center text-sm text-slate-600">No companies yet.</div>}
+        {companies.isPending && <div className="px-4 py-6 text-center text-sm text-slate-600">{t('companies_loading')}</div>}
+        {companies.isSuccess && companies.data.length === 0 && <div className="px-4 py-6 text-center text-sm text-slate-600">{t('companies_empty')}</div>}
       </Card>
     </div>
   );

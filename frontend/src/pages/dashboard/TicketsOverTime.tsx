@@ -4,6 +4,7 @@ import { CartesianGrid, Legend, Line, LineChart, ReferenceArea, ResponsiveContai
 import { zoomRange } from '../../lib/chartRange';
 import { Card } from '../../components/ui';
 import type { TimeSeriesPointDto } from '../../types';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /**
  * Tickets opened and closed per day. Dragging across the chart narrows the period of the whole dashboard to those days, a right click goes
@@ -21,6 +22,7 @@ export function TicketsOverTime({
   to: Date;
   onRangeChange: (from: Date, to: Date) => void;
 }) {
+  const { t } = useLanguage();
   const [hideWeekends, setHideWeekends] = useState(false);
   const [zoomStack, setZoomStack] = useState<{ from: Date; to: Date }[]>([]);
   const [refAreaLeft, setRefAreaLeft] = useState<string | null>(null);
@@ -59,7 +61,7 @@ export function TicketsOverTime({
   return (
     <Card className="p-5">
       <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">Tickets over time</h2>
+        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">{t('dash_ticketsOverTime')}</h2>
         <div className="flex items-center gap-3">
           {zoomStack.length > 0 && (
             <button

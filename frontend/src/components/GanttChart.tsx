@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import clsx from 'clsx';
 import type { GanttEntryDto } from '../types';
+import { useLanguage } from '../i18n/LanguageContext';
 
 function describe(e: GanttEntryDto) {
   const from = e.startedAtUtc ? fmtTime(e.startedAtUtc) : '?';
@@ -35,6 +36,7 @@ const TASK_COLORS: Record<string, string> = {
 /// Per-person daily timeline combining ticket work sessions and task work sessions on a shared hour
 /// axis, so it's immediately visible when a task was squeezed in alongside an open ticket.
 export function GanttChart({ entries, date }: { entries: GanttEntryDto[]; date: Date }) {
+  const { t } = useLanguage();
   const [hovered, setHovered] = useState<GanttEntryDto | null>(null);
 
   const { dayStart, dayEnd, now, isToday } = useMemo(() => {
@@ -175,17 +177,17 @@ export function GanttChart({ entries, date }: { entries: GanttEntryDto[]; date: 
       <div className="mt-2 flex items-center gap-3">
         <div className="w-20 shrink-0 text-xs font-semibold text-slate-600"><span aria-hidden>🎫</span> Tickets</div>
         <div className="flex-1">
-          <Lane label="Ticket work" items={tickets} colors={TICKET_COLORS} emptyLabel="No ticket work logged this day" />
+          <Lane label={t('gantt_ticketWork')} items={tickets} colors={TICKET_COLORS} emptyLabel="No ticket work logged this day" />
         </div>
       </div>
       <div className="mt-2 flex items-center gap-3">
         <div className="w-20 shrink-0 text-xs font-semibold text-slate-600"><span aria-hidden>📋</span> Tasks</div>
         <div className="flex-1">
-          <Lane label="Task work" items={tasks} colors={TASK_COLORS} emptyLabel="No tasks logged this day" />
+          <Lane label={t('gantt_taskWork')} items={tasks} colors={TASK_COLORS} emptyLabel="No tasks logged this day" />
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-600" aria-label="Colour legend">
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-600" aria-label={t('gantt_legendAria')}>
         {Object.entries(TICKET_COLORS).map(([status, color]) => (
           <span key={'t' + status} className="inline-flex items-center gap-1">
             <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: color }} />
@@ -213,7 +215,7 @@ export function GanttChart({ entries, date }: { entries: GanttEntryDto[]; date: 
             {hovered.isLogged === false && ' · open time, no work logged'}
           </div>
         ) : (
-          <p className="px-3 text-xs text-slate-600">Hover or focus a block for details.</p>
+          <p className="px-3 text-xs text-slate-600">{t('gantt_hint')}</p>
         )}
       </div>
     </div>

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { addMonths, format, isAfter, isBefore, isSameDay, isSameMonth, subMonths } from 'date-fns';
 import { HEADING_BUTTON, PickerHeader } from './PickerHeader';
 import { WEEKDAY_LABELS, isFutureDay, monthGrid } from './rangeModel';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /** The days of a month, with the range that is being chosen marked. A day that has not come yet cannot be chosen. */
 export function DaysView({
@@ -21,11 +22,12 @@ export function DaysView({
   onPick: (day: Date) => void;
   onHover: (day: Date) => void;
 }) {
+  const { t } = useLanguage();
   const days = useMemo(() => monthGrid(month), [month]);
 
   return (
     <>
-      <PickerHeader previous={{ label: 'Previous month', onClick: () => onMonth(subMonths(month, 1)) }} next={{ label: 'Next month', onClick: () => onMonth(addMonths(month, 1)) }}>
+      <PickerHeader previous={{ label: t('dateRange_prevMonth'), onClick: () => onMonth(subMonths(month, 1)) }} next={{ label: t('dateRange_nextMonth'), onClick: () => onMonth(addMonths(month, 1)) }}>
         <button type="button" onClick={onTitle} className={HEADING_BUTTON}>
           {format(month, 'MMMM yyyy')}
         </button>

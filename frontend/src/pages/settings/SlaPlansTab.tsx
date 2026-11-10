@@ -7,11 +7,13 @@ import { LookupDialogs } from './LookupDialogs';
 import { LIMITS, messageOf } from './settingsHelpers';
 import { ListRow, ListStatus, Panel } from './settingsUi';
 import { useLookupActions } from './useLookupActions';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 const DEFAULT_HOURS = 72;
 
 /** The SLA plans: how many hours a ticket has before it is overdue. A plan is not edited, only switched off and on, or deleted when no ticket uses it. */
 export function SlaPlansTab() {
+  const { t } = useLanguage();
   const plans = useSlaPlansAdmin();
   const data = plans.data;
   const count = data?.length ?? 0;
@@ -44,19 +46,19 @@ export function SlaPlansTab() {
       setName('');
       setResolutionHours(DEFAULT_HOURS);
     } catch (err) {
-      setError(messageOf(err, 'Could not add SLA plan.'));
+      setError(messageOf(err, t('sla_addFail')));
     }
   }
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[300px_1fr]">
       <Panel className="h-fit">
-        <h2 className="text-sm font-bold text-slate-800">Add new SLA plan</h2>
+        <h2 className="text-sm font-bold text-slate-800">{t('sla_addTitle')}</h2>
         <form onSubmit={handleCreate} className="mt-4 space-y-3">
           <Field>
-            <Label>Name</Label>
+            <Label>{t('common_name')}</Label>
             <Input
-              placeholder="e.g. Standard"
+              placeholder={t('sla_namePlaceholder')}
               value={name}
               maxLength={LIMITS.slaName}
               onChange={(e) => {
@@ -66,7 +68,7 @@ export function SlaPlansTab() {
             />
           </Field>
           <Field>
-            <Label>Resolution time (hours)</Label>
+            <Label>{t('sla_resolutionLabel')}</Label>
             <Input
               type="number"
               min={1}
@@ -87,10 +89,10 @@ export function SlaPlansTab() {
       <Panel>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-sm font-bold text-slate-800">Existing SLA plans{plans.isSuccess ? ` (${count})` : ''}</h2>
-          <Input aria-label="Search SLA plans" placeholder="Search SLA plans…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+          <Input aria-label={t('sla_searchAria')} placeholder={t('sla_searchPlaceholder')} value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
         </div>
         <ErrorText>{actions.changeError}</ErrorText>
-        <ListStatus loading={plans.isPending} failed={plans.isError} plural="SLA plans" />
+        <ListStatus loading={plans.isPending} failed={plans.isError} plural={t('noun_slaPlans')} />
         {plans.isSuccess && (
           <div className="divide-y divide-slate-100">
             {filtered.map((item) => (
@@ -101,7 +103,7 @@ export function SlaPlansTab() {
                 <div className="flex items-center gap-3 text-xs">
                   <StatusPill active={item.isActive} />
                   <button className="text-slate-600 hover:underline" onClick={() => actions.toggle(item)}>
-                    {item.isActive ? 'Deactivate' : 'Reactivate'}
+                    {item.isActive ? t('common_deactivate') : t('common_reactivate')}
                   </button>
                   <button className="font-medium text-red-600 hover:underline" onClick={() => actions.askDelete(item)}>
                     Delete
@@ -109,7 +111,7 @@ export function SlaPlansTab() {
                 </div>
               </ListRow>
             ))}
-            {filtered.length === 0 && <p className="py-8 text-center text-sm text-slate-600">No SLA plans found.</p>}
+            {filtered.length === 0 && <p className="py-8 text-center text-sm text-slate-600">{t('sla_empty')}</p>}
           </div>
         )}
       </Panel>
@@ -119,7 +121,7 @@ export function SlaPlansTab() {
         remove={{
           title: (item) => `Delete "${item.name}"?`,
           message: () =>
-            'This SLA plan will be permanently deleted. An SLA plan that tickets already use cannot be deleted (deactivate it instead), so nothing in the history of any ticket is lost.',
+            t('sla_deleteMsg'),
         }}
         deactivate={{
           title: (item) => `Deactivate "${item.name}"?`,

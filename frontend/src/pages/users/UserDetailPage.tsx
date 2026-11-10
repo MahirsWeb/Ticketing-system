@@ -5,12 +5,14 @@ import { userKeys, useUser } from '../../api/userQueries';
 import { ErrorText, Spinner } from '../../components/ui';
 import { UserProfileCard } from './UserProfileCard';
 import { UserTicketsTable } from './UserTicketsTable';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /**
  * One person: who they are and, for an administrator, what can be done to their account, and the tickets they submitted or have. Another person
  * in the address is another entry, so the page is drawn from nothing while it is on its way: what was typed or asked about the previous one is not carried over.
  */
 export default function UserDetailPage() {
+  const { t } = useLanguage();
   const { id } = useParams<{ id: string }>();
   const currentUser = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
@@ -20,7 +22,7 @@ export default function UserDetailPage() {
   if (!target) {
     if (query.isError) {
       const notFound = (query.error as { response?: { status?: number } })?.response?.status === 404;
-      return notFound ? <p>User not found.</p> : <ErrorText>The user could not be loaded. Try again in a moment.</ErrorText>;
+      return notFound ? <p>{t('userdetail_notFound')}</p> : <ErrorText>{t('userdetail_loadFail')}</ErrorText>;
     }
     return (
       <div className="flex justify-center py-16">

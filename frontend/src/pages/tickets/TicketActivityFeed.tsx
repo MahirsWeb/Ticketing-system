@@ -9,6 +9,7 @@ import { sanitizeHtml } from '../../lib/sanitizeHtml';
 import { newIdempotencyKey } from '../../lib/idempotency';
 import { clearDraft, draftKey, loadDraft, saveDraft } from '../../lib/drafts';
 import { isBlankHtml } from '../../lib/htmlText';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /// Unified chat-like feed: Response, Internal Note, and system lifecycle events (opened/assigned/transferred/closed)
 /// all shown together in one chronological stream, distinguished by bubble color — no more switching tabs to see everything.
@@ -25,6 +26,7 @@ export function TicketActivityFeed({
   canReplyInternal: boolean;
   onMessageAdded: (m: TicketMessageDto) => void;
 }) {
+  const { t } = useLanguage();
   const [replyType, setReplyType] = useState<MessageType>('Response');
   const [files, setFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
@@ -75,7 +77,7 @@ export function TicketActivityFeed({
       setFiles([]);
     } catch (err: any) {
       // The text stays in the editor (and in the draft); pressing send again uses the same key, so it cannot be posted twice.
-      setSendError(err?.response?.data?.message ?? 'The message could not be sent. Your text is still here; try again.');
+      setSendError(err?.response?.data?.message ?? t('feed_sendError'));
     } finally {
       setSending(false);
     }
@@ -84,7 +86,7 @@ export function TicketActivityFeed({
   return (
     <div className="space-y-4">
       <div className="space-y-3">
-        {messages.length === 0 && <p className="text-sm text-slate-600">No activity yet.</p>}
+        {messages.length === 0 && <p className="text-sm text-slate-600">{t('feed_noActivity')}</p>}
         {messages.map((m) => {
           if (m.type === 'SystemEvent') {
             return (
@@ -107,7 +109,7 @@ export function TicketActivityFeed({
                 <span className="flex items-center gap-2">
                   <span className="font-semibold text-slate-700">{m.authorName}</span>
                   <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${isInternal ? 'bg-amber-200 text-amber-800' : 'bg-blue-200 text-blue-800'}`}>
-                    {isInternal ? 'Internal note' : 'Response'}
+                    {isInternal ? t('feed_internalNote') : t('feed_response')}
                   </span>
                 </span>
                 <span>{format(new Date(m.createdAt), 'dd.MM.yyyy HH:mm')}</span>
@@ -139,7 +141,7 @@ export function TicketActivityFeed({
                 onClick={() => setReplyType('Response')}
                 className={`rounded-full px-3 py-1 font-semibold ${replyType === 'Response' ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-600'}`}
               >
-                Response
+                {t('feed_response')}
               </button>
               <button
                 type="button"
@@ -147,7 +149,7 @@ export function TicketActivityFeed({
                 onClick={() => setReplyType('InternalNote')}
                 className={`rounded-full px-3 py-1 font-semibold ${replyType === 'InternalNote' ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-600'}`}
               >
-                Internal note
+                {t('feed_internalNote')}
               </button>
             </div>
           )}
@@ -155,8 +157,8 @@ export function TicketActivityFeed({
             value={body}
             onChange={setBody}
             onFilesSelected={addFiles}
-            ariaLabel={effectiveType === 'Response' ? 'Reply to the client' : 'Internal note (not visible to the client)'}
-            placeholder={effectiveType === 'Response' ? 'Write a reply…' : 'Write an internal note (not visible to the client)…'}
+            ariaLabel={effectiveType === 'Response' ? t('feed_replyAria') : t('feed_internalAria')}
+            placeholder={effectiveType === 'Response' ? t('feed_replyPlaceholder') : t('feed_internalPlaceholder')}
           />
           {files.length > 0 && (
             <ul className="flex flex-wrap gap-2">
@@ -172,7 +174,7 @@ export function TicketActivityFeed({
           )}
           <ErrorText>{sendError}</ErrorText>
           <Button onClick={handleSend} disabled={sending}>
-            {sending ? 'Sending…' : effectiveType === 'Response' ? 'Send reply' : 'Add internal note'}
+            {sending ? t('common_sending') : effectiveType === 'Response' ? t('feed_sendReply') : t('feed_addInternalNote')}
           </Button>
         </div>
       )}

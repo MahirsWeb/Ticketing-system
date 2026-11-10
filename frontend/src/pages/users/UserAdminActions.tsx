@@ -4,6 +4,7 @@ import { ErrorText } from '../../components/ui';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import type { CreatedUserResponse, UserListItemDto } from '../../types';
 import { TempPasswordModal } from './TempPasswordModal';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 const messageOf = (err: unknown, fallback: string) => (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? fallback;
 
@@ -13,6 +14,7 @@ const messageOf = (err: unknown, fallback: string) => (err as { response?: { dat
  * fails says why, in the words of the server when it had some.
  */
 export function UserAdminActions({ user, isSelf, onChanged }: { user: UserListItemDto; isSelf: boolean; onChanged: () => void }) {
+  const { t } = useLanguage();
   const [result, setResult] = useState<CreatedUserResponse | null>(null);
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
   const [confirmDeactivate, setConfirmDeactivate] = useState(false);
@@ -25,7 +27,7 @@ export function UserAdminActions({ user, isSelf, onChanged }: { user: UserListIt
       await usersApi.setActive(user.id, isActive);
       onChanged();
     } catch (err) {
-      setError(messageOf(err, 'Could not change the account.'));
+      setError(messageOf(err, t('useradmin_changeFail')));
     }
   }
 
@@ -40,7 +42,7 @@ export function UserAdminActions({ user, isSelf, onChanged }: { user: UserListIt
     try {
       setResult(await usersApi.regenerateTempPassword(user.id));
     } catch (err) {
-      setError(messageOf(err, 'Could not generate a new password.'));
+      setError(messageOf(err, t('useradmin_genFail')));
     }
   }
 
@@ -55,7 +57,7 @@ export function UserAdminActions({ user, isSelf, onChanged }: { user: UserListIt
       link.click();
       URL.revokeObjectURL(url);
     } catch {
-      setError('The data could not be exported.');
+      setError(t('useradmin_exportFail'));
     }
   }
 
@@ -66,7 +68,7 @@ export function UserAdminActions({ user, isSelf, onChanged }: { user: UserListIt
       await usersApi.anonymize(user.id);
       onChanged();
     } catch {
-      setError('The account could not be anonymized.');
+      setError(t('useradmin_anonFail'));
     }
   }
 
@@ -74,17 +76,17 @@ export function UserAdminActions({ user, isSelf, onChanged }: { user: UserListIt
     <>
       <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 border-t border-slate-100 pt-4 text-xs">
         <button className="font-medium text-slate-600 hover:underline" onClick={handleToggleActive}>
-          {user.isActive ? 'Deactivate account' : 'Reactivate account'}
+          {user.isActive ? t('useradmin_deactivate') : t('useradmin_reactivate')}
         </button>
         <button className="font-medium text-blue-700 hover:underline" onClick={() => setConfirmRegenerate(true)}>
-          Regenerate temp password
+          {t('useradmin_regenerate')}
         </button>
         <button className="font-medium text-slate-600 hover:underline" onClick={handleExport}>
-          Export personal data
+          {t('useradmin_export')}
         </button>
         {!isSelf && !user.email.endsWith('@anonymized.invalid') && (
           <button className="font-medium text-red-700 hover:underline" onClick={() => setConfirmAnonymize(true)}>
-            Anonymize…
+            {t('useradmin_anonymize')}
           </button>
         )}
       </div>
@@ -93,9 +95,9 @@ export function UserAdminActions({ user, isSelf, onChanged }: { user: UserListIt
       {result && <TempPasswordModal result={result} onClose={() => setResult(null)} />}
       {confirmRegenerate && (
         <ConfirmDialog
-          title="Regenerate temporary password?"
-          message={`This immediately invalidates ${user.firstName} ${user.lastName}'s current password and emails them a new temporary one. Are you sure?`}
-          confirmLabel="Regenerate"
+          title={t('useradmin_regenerateTitle')}
+          message={t('useradmin_regenerateMsg', { name: `${user.firstName} ${user.lastName}` })}
+          confirmLabel={t('useradmin_regenerateConfirm')}
           danger
           onConfirm={handleRegenerate}
           onCancel={() => setConfirmRegenerate(false)}
@@ -103,9 +105,9 @@ export function UserAdminActions({ user, isSelf, onChanged }: { user: UserListIt
       )}
       {confirmAnonymize && (
         <ConfirmDialog
-          title="Anonymize this person?"
-          message={`The name, e-mail address, telephone number and picture of ${user.firstName} ${user.lastName} will be removed for good and the account locked. Their tickets, messages and work time stay, under the name "Obrisan korisnik". This cannot be undone.`}
-          confirmLabel="Anonymize"
+          title={t('useradmin_anonTitle')}
+          message={t('useradmin_anonMsg', { name: `${user.firstName} ${user.lastName}` })}
+          confirmLabel={t('useradmin_anonConfirm')}
           danger
           onConfirm={handleAnonymize}
           onCancel={() => setConfirmAnonymize(false)}
@@ -113,9 +115,9 @@ export function UserAdminActions({ user, isSelf, onChanged }: { user: UserListIt
       )}
       {confirmDeactivate && (
         <ConfirmDialog
-          title="Deactivate this account?"
-          message={`${user.firstName} ${user.lastName} will no longer be able to log in and will stop receiving any emails from the app. You can reactivate this account at any time.`}
-          confirmLabel="Deactivate"
+          title={t('useradmin_deactTitle')}
+          message={t('useradmin_deactMsg', { name: `${user.firstName} ${user.lastName}` })}
+          confirmLabel={t('useradmin_deactConfirm')}
           danger
           onConfirm={() => {
             setConfirmDeactivate(false);

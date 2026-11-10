@@ -7,9 +7,11 @@ import { LookupDialogs } from './LookupDialogs';
 import { LIMITS, messageOf } from './settingsHelpers';
 import { ListRow } from './settingsUi';
 import { useLookupActions } from './useLookupActions';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /** The finer units of one branch, shown under it on request. */
 export function SubBranchesInline({ departmentId }: { departmentId: string }) {
+  const { t } = useLanguage();
   const subBranches = useSubBranchesAdmin(departmentId);
   const items = subBranches.data ?? [];
   const [name, setName] = useState('');
@@ -27,12 +29,12 @@ export function SubBranchesInline({ departmentId }: { departmentId: string }) {
       await lookupsApi.createSubBranch(departmentId, name.trim());
       setName('');
     } catch (err) {
-      setError(messageOf(err, 'Could not add sub-branch.'));
+      setError(messageOf(err, t('sub_addFail')));
     }
   }
 
-  if (subBranches.isPending) return <p className="py-2 text-xs text-slate-600">Loading sub-branches…</p>;
-  if (subBranches.isError) return <ErrorText>The sub-branches could not be loaded. Try again in a moment.</ErrorText>;
+  if (subBranches.isPending) return <p className="py-2 text-xs text-slate-600">{t('sub_loading')}</p>;
+  if (subBranches.isError) return <ErrorText>{t('sub_loadFail')}</ErrorText>;
 
   return (
     <div className="mt-1 mb-2 rounded-lg border border-slate-100 bg-slate-50/60 p-3">
@@ -42,7 +44,7 @@ export function SubBranchesInline({ departmentId }: { departmentId: string }) {
       </p>
       <form onSubmit={handleCreate} className="mb-2 flex gap-2">
         <Input
-          placeholder="Sub-branch name…"
+          placeholder={t('sub_namePlaceholder')}
           value={name}
           maxLength={LIMITS.name}
           onChange={(e) => {
@@ -63,7 +65,7 @@ export function SubBranchesInline({ departmentId }: { departmentId: string }) {
             <div className="flex items-center gap-2">
               <StatusPill active={item.isActive} />
               <button className="text-xs text-slate-600 hover:underline" onClick={() => actions.toggle(item)}>
-                {item.isActive ? 'Deactivate' : 'Reactivate'}
+                {item.isActive ? t('common_deactivate') : t('common_reactivate')}
               </button>
             </div>
           </ListRow>
@@ -74,7 +76,7 @@ export function SubBranchesInline({ departmentId }: { departmentId: string }) {
       <LookupDialogs
         actions={actions}
         deactivate={{
-          title: () => 'Deactivate this sub-branch?',
+          title: () => t('sub_deactivateTitle'),
           message: (item) =>
             `Tickets and staff already assigned to "${item.name}" keep that assignment and are completely unaffected — this does not change any existing tickets or statistics. It just removes "${item.name}" from the picker when opening a new ticket or assigning staff. If this is the branch's only active sub-branch, the branch will behave as if it has none until you reactivate it.`,
         }}

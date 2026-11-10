@@ -2,6 +2,7 @@ import { DaysView } from './dateRange/DaysView';
 import { MonthsView, YearsView } from './dateRange/MonthsAndYearsViews';
 import { PRESETS, rangeLabel } from './dateRange/rangeModel';
 import { useRangePicker } from './dateRange/useRangePicker';
+import { useLanguage } from '../i18n/LanguageContext';
 
 /// Single-popover "from – to" range picker: pick a start day, optionally an end day (defaults to
 /// today if you don't), or jump straight to a preset. Replaces the old two-native-input version
@@ -10,7 +11,7 @@ export function DateRangePicker({
   from,
   to,
   onChange,
-  placeholder = 'All time',
+  placeholder,
   clearable = false,
 }: {
   from: Date | null;
@@ -19,6 +20,7 @@ export function DateRangePicker({
   placeholder?: string;
   clearable?: boolean;
 }) {
+  const { t } = useLanguage();
   const picker = useRangePicker({ from, to, onChange });
   const { view, viewMonth } = picker;
 
@@ -37,17 +39,17 @@ export function DateRangePicker({
             <rect x="3" y="4" width="18" height="18" rx="2" />
             <path d="M16 2v4M8 2v4M3 10h18" />
           </svg>
-          {rangeLabel(from, to, placeholder)}
+          {rangeLabel(from, to, placeholder ?? t('dateRange_allTime'))}
         </button>
         {clearable && (from || to) && (
-          <button type="button" aria-label="Clear" onClick={picker.clear} className="mr-2 rounded-full px-1 text-slate-600 hover:bg-slate-100 hover:text-slate-800">
+          <button type="button" aria-label={t('common_clear')} onClick={picker.clear} className="mr-2 rounded-full px-1 text-slate-600 hover:bg-slate-100 hover:text-slate-800">
             ×
           </button>
         )}
       </div>
 
       {picker.open && (
-        <div role="dialog" aria-label="Choose a date range" className="absolute right-0 z-40 mt-2 flex overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+        <div role="dialog" aria-label={t('dateRange_chooseAria')} className="absolute right-0 z-40 mt-2 flex overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
           <div className="w-36 shrink-0 border-r border-slate-100 p-2">
             {PRESETS.map((p) => (
               <button

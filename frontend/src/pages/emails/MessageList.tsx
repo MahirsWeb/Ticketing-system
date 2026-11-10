@@ -2,6 +2,7 @@ import clsx from 'clsx';
 import { formatDistanceToNow } from 'date-fns';
 import { Card } from '../../components/ui';
 import type { InboxMessageSummaryDto } from '../../api/emailIntegration';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /**
  * The messages of the tab that is chosen. The whole row can be clicked with a mouse; the button with the subject is what a keyboard (or a screen
@@ -21,6 +22,7 @@ export function MessageList({
   onSelect: (messageId: string) => void;
   onToggleMark: (m: InboxMessageSummaryDto) => void;
 }) {
+  const { t } = useLanguage();
   return (
     <Card className="w-96 shrink-0 divide-y divide-slate-100 overflow-y-auto" style={{ maxHeight: '32rem' }}>
       {messages.length === 0 && message && <p className="px-4 py-8 text-center text-sm text-slate-600">{message}</p>}
@@ -37,7 +39,7 @@ export function MessageList({
             onClick={(e) => e.stopPropagation()}
             onChange={() => onToggleMark(m)}
             className="mt-1 h-3.5 w-3.5 shrink-0"
-            title="Mark as ticket"
+            title={t('email_markAsTicket')}
             aria-label={`Mark "${m.subject}" as a ticket`}
           />
           <div className="min-w-0 flex-1">
@@ -56,7 +58,7 @@ export function MessageList({
             >
               {m.subject}
               {m.hasAttachments && (
-                <span className="ml-1" role="img" aria-label="Has attachments">
+                <span className="ml-1" role="img" aria-label={t('email_hasAttachments')}>
                   📎
                 </span>
               )}

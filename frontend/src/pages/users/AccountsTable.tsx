@@ -2,9 +2,11 @@ import { Link } from 'react-router-dom';
 import clsx from 'clsx';
 import { Card, StatusPill } from '../../components/ui';
 import type { UserListItemDto } from '../../types';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /** The accounts of one page. The last column is the branch for the staff and the company for a client. `message` is what is said when there are no rows, or nothing when there is nothing to say. */
 export function AccountsTable({ rows, staff, message }: { rows: UserListItemDto[]; staff: boolean; message: string | null }) {
+  const { t } = useLanguage();
   return (
     <Card className="overflow-hidden">
       <table className="w-full text-sm">
@@ -17,7 +19,7 @@ export function AccountsTable({ rows, staff, message }: { rows: UserListItemDto[
               Email
             </th>
             <th scope="col" className="px-4 py-2">
-              {staff ? 'Branch' : 'Company'}
+              {staff ? t('detail_branch') : t('common_company')}
             </th>
             <th scope="col" className="px-4 py-2">
               Status
