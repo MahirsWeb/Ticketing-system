@@ -3,13 +3,16 @@ import { useTicketList } from '../../api/ticketQueries';
 import { Button, Card, ErrorText, Spinner } from '../../components/ui';
 import { useAuthStore } from '../../store/authStore';
 import { PAGE_SIZE, rangeLabel, TABS } from './ticketListAddress';
+import type { TranslationKey } from '../../i18n/translations';
 import { TicketFilterBar } from './TicketFilterBar';
 import { Pager } from '../../components/Pager';
 import { Tabs } from '../../components/Tabs';
 import { TicketsTable } from './TicketsTable';
 import { useTicketListFilters } from './useTicketListFilters';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 export default function TicketsListPage() {
+  const { t } = useLanguage();
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === 'Admin';
   const isEmployee = user?.role === 'Employee';
@@ -22,31 +25,33 @@ export default function TicketsListPage() {
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   // A count is only said when it is known: not while the list is on its way, and not when it could not be had.
   const countText = isPending
-    ? 'Loading tickets…'
+    ? t('ticket_loading')
     : isError
       ? ''
       : `${totalCount} ticket${totalCount === 1 ? '' : 's'} · ${rangeLabel(filters.createdFrom, filters.createdTo)}`;
 
+  const tabs = TABS.map((tb) => ({ key: tb.key, label: t(`tab_${tb.key}` as TranslationKey) }));
+
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-slate-900">{user?.role === 'Client' ? 'My Tickets' : 'Tickets'}</h1>
+        <h1 className="text-xl font-bold text-slate-900">{user?.role === 'Client' ? t('nav_myTickets') : t('nav_tickets')}</h1>
         {user?.role === 'Client' && (
           <Link to="/tickets/new">
-            <Button>Submit a ticket</Button>
+            <Button>{t('ticket_submit')}</Button>
           </Link>
         )}
         {isStaff && (
           <Link to="/tickets/new-on-behalf">
-            <Button>New ticket</Button>
+            <Button>{t('ticket_new')}</Button>
           </Link>
         )}
       </div>
 
-      <Tabs label="Ticket groups" tabs={TABS} active={filters.activeTab} onSelect={filters.selectTab} className="mb-4" />
+      <Tabs label={t('ticket_groupsLabel')} tabs={tabs} active={filters.activeTab} onSelect={filters.selectTab} className="mb-4" />
       <TicketFilterBar filters={filters} isAdmin={isAdmin} isEmployee={isEmployee} />
 
-      {isError && <ErrorText>The tickets could not be loaded. Try again in a moment.</ErrorText>}
+      {isError && <ErrorText>{t('ticket_loadError')}</ErrorText>}
       <p className="mb-2 px-1 text-xs text-slate-600" role="status">
         {countText}
       </p>
@@ -64,7 +69,7 @@ export default function TicketsListPage() {
             sortDir={filters.sortDir}
             onSort={filters.sortByColumn}
             // More tickets than are on this page, and none shown: the address is for a page after the last, not for a list with nothing in it.
-            emptyText={totalCount > 0 ? 'There are no tickets on this page.' : 'No tickets found.'}
+            emptyText={totalCount > 0 ? t('ticket_emptyPage') : t('ticket_emptyNone')}
           />
         )}
       </Card>

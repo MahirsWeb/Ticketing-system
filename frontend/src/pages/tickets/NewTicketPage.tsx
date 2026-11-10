@@ -6,8 +6,10 @@ import { Button, Card, ErrorText, Input, Label, Select, Field } from '../../comp
 import { RichTextEditor } from '../../components/RichTextEditor';
 import { newIdempotencyKey } from '../../lib/idempotency';
 import { isBlankHtml } from '../../lib/htmlText';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 export default function NewTicketPage() {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -31,11 +33,11 @@ export default function NewTicketPage() {
     e.preventDefault();
     setError(null);
     if (!title.trim() || isBlankHtml(description)) {
-      setError('Title and description are required.');
+      setError(t('newTicket_titleDescRequired'));
       return;
     }
     if (!departmentId) {
-      setError('Please select a branch to send this ticket to.');
+      setError(t('newTicket_selectBranch'));
       return;
     }
     setLoading(true);
@@ -46,7 +48,7 @@ export default function NewTicketPage() {
       }
       navigate(`/tickets/${ticket.id}`);
     } catch (err: any) {
-      setError(err?.response?.data?.message ?? 'Could not submit your ticket.');
+      setError(err?.response?.data?.message ?? t('newTicket_submitFail'));
     } finally {
       setLoading(false);
     }
@@ -54,17 +56,17 @@ export default function NewTicketPage() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="mb-4 text-xl font-bold text-slate-900">Submit a ticket</h1>
+      <h1 className="mb-4 text-xl font-bold text-slate-900">{t('ticket_submit')}</h1>
       <Card className="p-6">
         <form onSubmit={handleSubmit} className="space-y-4">
           <Field>
-            <Label>Title *</Label>
-            <Input required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Short summary of the issue" />
+            <Label>{t('newTicket_titleLabel')}</Label>
+            <Input required value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t('newTicket_titlePlaceholder')} />
           </Field>
           <Field>
-            <Label>Branch *</Label>
+            <Label>{t('newTicket_branchLabel')}</Label>
             <Select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
-              <option value="">Select a branch…</option>
+              <option value="">{t('newTicket_selectBranchOption')}</option>
               {departments.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name} ({d.email})
@@ -73,13 +75,13 @@ export default function NewTicketPage() {
             </Select>
           </Field>
           <div>
-            <Label>Description *</Label>
+            <Label>{t('newTicket_descLabel')}</Label>
             <RichTextEditor
-                ariaLabel="Description"
+                ariaLabel={t('newTicket_descAria')}
               value={description}
               onChange={setDescription}
               onFilesSelected={addFiles}
-              placeholder="Describe the issue in detail… (you can also paste or attach a screenshot)"
+              placeholder={t('newTicket_descPlaceholder')}
             />
             {files.length > 0 && (
               <ul className="mt-2 flex flex-wrap gap-2">
@@ -96,7 +98,7 @@ export default function NewTicketPage() {
           </div>
           <ErrorText>{error}</ErrorText>
           <Button type="submit" disabled={loading}>
-            {loading ? 'Submitting…' : 'Submit ticket'}
+            {loading ? t('newTicket_submitting') : t('newTicket_submitBtn')}
           </Button>
         </form>
       </Card>

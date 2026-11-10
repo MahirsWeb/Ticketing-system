@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { usersApi } from '../api/users';
 import { Button, Input } from './ui';
+import { useLanguage } from '../i18n/LanguageContext';
 
 export function PhoneNumberBanner() {
+  const { t } = useLanguage();
   const user = useAuthStore((s) => s.user);
   const updateUser = useAuthStore((s) => s.updateUser);
   const [phone, setPhone] = useState('');
@@ -31,12 +33,12 @@ export function PhoneNumberBanner() {
     <div className="flex flex-wrap items-center gap-3 border-b border-amber-200 bg-amber-50 px-6 py-2.5 text-sm text-amber-900">
       {!editing ? (
         <>
-          <span>Please add a phone number for your account (a company number works fine too).</span>
+          <span>{t('phone_prompt')}</span>
           <Button variant="secondary" className="py-1" onClick={() => setEditing(true)}>
-            Add phone number
+            {t('phone_add')}
           </Button>
           <button className="text-amber-700 underline" onClick={handleSkip}>
-            Skip for now
+            {t('phone_skip')}
           </button>
         </>
       ) : (
@@ -48,10 +50,10 @@ export function PhoneNumberBanner() {
             onChange={(e) => setPhone(e.target.value)}
           />
           <Button className="py-1" onClick={handleSave} disabled={saving || !phone}>
-            Save
+            {t('common_save')}
           </Button>
           <button className="text-amber-700 underline" onClick={() => setEditing(false)}>
-            Cancel
+            {t('common_cancel')}
           </button>
         </>
       )}

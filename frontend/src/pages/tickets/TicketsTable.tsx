@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import { format } from 'date-fns';
 import type { TicketListItem } from '../../types';
 import { PriorityBadge } from '../../components/ui';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /// A sortable column heading. A real button, so it can be reached and used with the keyboard, and `aria-sort` tells a screen
 /// reader which column the list is sorted by.
@@ -50,25 +51,26 @@ export function TicketsTable({
   onSort: (key: string) => void;
   emptyText: string;
 }) {
+  const { t: tr } = useLanguage();
   const navigate = useNavigate();
   const sorting = { sortBy, sortDir, onSort };
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
-        <caption className="sr-only">Tickets</caption>
+        <caption className="sr-only">{tr('nav_tickets')}</caption>
         <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-600">
           <tr>
             <SortableHeader colKey="ticketNumber" label="#" {...sorting} />
-            <SortableHeader colKey="title" label="Title" {...sorting} />
-            <SortableHeader colKey="createdAt" label="Created" {...sorting} />
+            <SortableHeader colKey="title" label={tr('table_title')} {...sorting} />
+            <SortableHeader colKey="createdAt" label={tr('table_created')} {...sorting} />
             {isStaff && (
               <th scope="col" className="whitespace-nowrap px-3 py-1.5">
-                Client
+                {tr('table_client')}
               </th>
             )}
-            {isStaff && <SortableHeader colKey="priority" label="Priority" {...sorting} />}
+            {isStaff && <SortableHeader colKey="priority" label={tr('table_priority')} {...sorting} />}
             <th scope="col" className="whitespace-nowrap px-3 py-1.5">
-              Assigned to
+              {tr('table_assignedTo')}
             </th>
           </tr>
         </thead>
