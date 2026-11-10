@@ -1,6 +1,7 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { DocumentMeta } from './components/DocumentMeta';
+import { refreshAccessToken } from './api/client';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './api/queryClient';
 import LoginPage from './pages/auth/LoginPage';
@@ -46,7 +47,21 @@ function PageFallback() {
   );
 }
 
+/// On first load the access token is gone (it only ever lived in memory), but the httpOnly refresh cookie may still be good.
+/// Try once to trade it for a session before deciding the person is signed out, so a reload is not a sign-out. While this runs
+/// the app shows a loader (RequireAuth waits on `initializing`) instead of flashing the sign-in page.
+function useSessionBootstrap() {
+  const finishInitializing = useAuthStore((s) => s.finishInitializing);
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current) return; // StrictMode runs effects twice in development; the refresh must fire once
+    started.current = true;
+    void refreshAccessToken().finally(finishInitializing);
+  }, [finishInitializing]);
+}
+
 export default function App() {
+  useSessionBootstrap();
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>

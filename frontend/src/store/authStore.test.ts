@@ -32,12 +32,15 @@ describe('authStore', () => {
     expect(useAuthStore.getState().signedOutOnPurpose).toBe(false);
   });
 
-  it('stores only the session in the browser, never the sign-out marker', () => {
+  it('never writes the session to browser storage — the access token lives in memory only', () => {
+    localStorage.clear();
     useAuthStore.getState().setSession('token', user);
     useAuthStore.getState().signOut();
 
-    const stored = JSON.parse(localStorage.getItem('tst-auth')!);
-    expect(Object.keys(stored.state).sort()).toEqual(['accessToken', 'user']);
+    // Nothing about the session is persisted: a script that reads localStorage finds no token to steal, and the refresh
+    // cookie it would need instead is httpOnly. (The session is restored on load from that cookie, not from storage.)
+    expect(localStorage.getItem('tst-auth')).toBeNull();
+    expect(localStorage.length).toBe(0);
   });
 });
 

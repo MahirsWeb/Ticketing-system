@@ -1,12 +1,12 @@
 import * as signalR from '@microsoft/signalr';
-import { API_BASE_URL } from '../api/client';
+import { API_BASE_URL, refreshAccessToken } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 import { reconnectDelayMs } from './reconnectPolicy';
 
 let connection: signalR.HubConnection | null = null;
 
-/// True when a token is present but its lifetime has passed. A null token is NOT treated as expired here: that case is handled
-/// by the 401 interceptor and the sign-out subscription below. We only read `exp`; a token we cannot parse is left alone.
+/// True when a token is present but its lifetime has passed. A null token is NOT treated as expired here. We only read `exp`;
+/// a token we cannot parse is left alone.
 export function accessTokenExpired(token: string | null): boolean {
   if (!token) return false;
   try {
@@ -18,15 +18,19 @@ export function accessTokenExpired(token: string | null): boolean {
   }
 }
 
-/// When the access token has expired, the socket must not keep reconnecting with it for ever: without a refresh token there is
-/// nothing to connect with, and the person should be signed out (which the "session expired" screen explains) instead of sitting
-/// on a page whose live updates silently never come back. Returns true if it took that action.
-function signOutIfTokenExpired(): boolean {
-  if (accessTokenExpired(useAuthStore.getState().accessToken)) {
-    useAuthStore.getState().logout(); // clears the token -> the subscription below stops the hub -> the app shows "session expired"
-    return true;
+/// The token the socket (re)connects with. The access token is short-lived by design, so when it has expired this trades the
+/// httpOnly refresh cookie for a fresh one — the connection stays live across token expiry without a reload. If the refresh
+/// fails (the session is really over) the person is signed out, which stops the hub and shows the "session expired" screen.
+export async function hubAccessToken(): Promise<string> {
+  let token = useAuthStore.getState().accessToken;
+  if (accessTokenExpired(token)) {
+    token = await refreshAccessToken();
+    if (!token) {
+      useAuthStore.getState().logout();
+      return '';
+    }
   }
-  return false;
+  return token ?? '';
 }
 
 export function getNotificationsHub(): signalR.HubConnection {
@@ -34,13 +38,12 @@ export function getNotificationsHub(): signalR.HubConnection {
 
   connection = new signalR.HubConnectionBuilder()
     .withUrl(`${API_BASE_URL}/hubs/notifications`, {
-      accessTokenFactory: () => useAuthStore.getState().accessToken ?? '',
+      accessTokenFactory: hubAccessToken,
     })
-    // Never gives up while the session is valid (the built-in policy stops after about 42 seconds and leaves the page without
-    // live updates until it is reloaded). The one thing that does stop it is an expired token: then the person is signed out.
-    .withAutomaticReconnect({
-      nextRetryDelayInMilliseconds: (context) => (signOutIfTokenExpired() ? null : reconnectDelayMs(context.previousRetryCount)),
-    })
+    // Never gives up (the built-in policy stops after about 42 seconds and leaves the page without live updates until it is
+    // reloaded). A truly dead session stops it a different way: hubAccessToken signs the person out, and the subscription below
+    // then drops the socket.
+    .withAutomaticReconnect({ nextRetryDelayInMilliseconds: (context) => reconnectDelayMs(context.previousRetryCount) })
     .build();
 
   void startUntilConnected(connection);
@@ -51,7 +54,6 @@ export function getNotificationsHub(): signalR.HubConnection {
 /// keep trying, with the same growing wait, until it works or the hub is stopped.
 async function startUntilConnected(hub: signalR.HubConnection) {
   for (let attempt = 0; connection === hub; attempt++) {
-    if (signOutIfTokenExpired()) return; // no point retrying the first connection with a token that has already expired
     try {
       await hub.start();
       return;

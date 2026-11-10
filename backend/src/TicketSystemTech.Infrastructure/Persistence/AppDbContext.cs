@@ -107,6 +107,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<WorkTaskAssignmentLog> WorkTaskAssignmentLogs => Set<WorkTaskAssignmentLog>();
     public DbSet<WorkTaskSession> WorkTaskSessions => Set<WorkTaskSession>();
     public DbSet<EmailOutboxItem> EmailOutbox => Set<EmailOutboxItem>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey> DataProtectionKeys => Set<Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
@@ -326,6 +327,15 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
         builder.Entity<WorkTaskAssignmentLog>(e =>
         {
             e.HasIndex(h => h.WorkTaskId);
+        });
+
+        builder.Entity<RefreshToken>(e =>
+        {
+            // Only the SHA-256 hash is stored (44 chars in Base64); the raw value lives in the browser's httpOnly cookie.
+            e.Property(t => t.TokenHash).HasMaxLength(64).IsRequired();
+            e.Property(t => t.ReplacedByTokenHash).HasMaxLength(64);
+            e.HasIndex(t => t.TokenHash).IsUnique(); // every refresh looks a presented token up by its hash
+            e.HasIndex(t => t.UserId);               // revoking a person's whole family (sign-out, theft signal, deactivation)
         });
 
         builder.Entity<EmailOutboxItem>(e =>

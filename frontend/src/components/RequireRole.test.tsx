@@ -41,7 +41,7 @@ function renderAt(path: string) {
 const employee = { id: 'u1', role: 'Employee' } as UserSummary;
 
 describe('RequireAuth', () => {
-  beforeEach(() => useAuthStore.setState({ accessToken: null, user: null, signedOutOnPurpose: false }));
+  beforeEach(() => useAuthStore.setState({ accessToken: null, user: null, signedOutOnPurpose: false, initializing: false }));
 
   it('lets a signed-in person through', () => {
     useAuthStore.setState({ accessToken: 't', user: employee });
@@ -62,7 +62,7 @@ describe('RequireAuth', () => {
 });
 
 describe('RequireRole', () => {
-  beforeEach(() => useAuthStore.setState({ accessToken: null, user: null, signedOutOnPurpose: false }));
+  beforeEach(() => useAuthStore.setState({ accessToken: null, user: null, signedOutOnPurpose: false, initializing: false }));
 
   it('lets the right role in', () => {
     useAuthStore.setState({ accessToken: 't', user: { ...employee, role: 'Admin' } });

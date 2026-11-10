@@ -5,10 +5,17 @@ const fake = vi.hoisted(() => {
   const state = {
     reconnectOptions: undefined as { nextRetryDelayInMilliseconds: (context: { previousRetryCount: number }) => number | null } | undefined,
     start: undefined as unknown as ReturnType<typeof import('vitest').vi.fn>,
-    stop: undefined as unknown as ReturnType<typeof import('vitest').vi.fn>
+    stop: undefined as unknown as ReturnType<typeof import('vitest').vi.fn>,
+    refresh: undefined as unknown as ReturnType<typeof import('vitest').vi.fn>
   };
   return state;
 });
+
+// The hub trades an expired access token for a fresh one through api/client; the test controls what that returns.
+vi.mock('../api/client', () => ({
+  API_BASE_URL: 'http://api.test',
+  refreshAccessToken: () => (fake.refresh as unknown as () => Promise<string | null>)(),
+}));
 
 vi.mock('@microsoft/signalr', () => {
   class HubConnectionBuilder {
@@ -33,6 +40,7 @@ describe('the live updates connection', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     fake.start = vi.fn();
     fake.stop = vi.fn().mockResolvedValue(undefined);
+    fake.refresh = vi.fn().mockResolvedValue(null);
     fake.reconnectOptions = undefined;
   });
   afterEach(() => {
@@ -59,31 +67,33 @@ describe('the live updates connection', () => {
     }
   });
 
-  it('stops reconnecting and signs the person out once the token expires mid-session (TS-1.5)', async () => {
+  it('hands the socket the current access token, and a refreshed one once it has expired (TS-1.5)', async () => {
     fake.start.mockResolvedValue(undefined);
+    fake.refresh.mockResolvedValue(jwt(3600)); // a refresh succeeds with a fresh token
     const { useAuthStore } = await import('../store/authStore');
-    useAuthStore.setState({ accessToken: jwt(3600), sessionExpired: false }); // valid when the page connects
-    const { getNotificationsHub } = await import('./notificationsHub');
+    const { getNotificationsHub, hubAccessToken } = await import('./notificationsHub');
     getNotificationsHub();
 
-    // the token now lapses while the socket is up; the next reconnect must stop and sign out, not loop on a dead token
-    useAuthStore.setState({ accessToken: jwt(-10) });
-    const next = fake.reconnectOptions!.nextRetryDelayInMilliseconds;
-    expect(next({ previousRetryCount: 0 })).toBeNull(); // told to stop, not keep retrying
-    expect(useAuthStore.getState().accessToken).toBeNull(); // signed out
-    expect(useAuthStore.getState().sessionExpired).toBe(true); // the "session expired" screen explains why
+    useAuthStore.setState({ accessToken: jwt(3600) });
+    expect(await hubAccessToken()).toBe(useAuthStore.getState().accessToken); // still valid: used as-is, no refresh
+    expect(fake.refresh).not.toHaveBeenCalled();
+
+    useAuthStore.setState({ accessToken: jwt(-10) }); // now expired: the cookie is traded for a new token
+    expect(await hubAccessToken()).toBe(jwt(3600));
+    expect(fake.refresh).toHaveBeenCalledTimes(1);
   });
 
-  it('does not even try the first connection with an already-expired token, and signs out (TS-1.5)', async () => {
+  it('signs the person out when the token has expired and the refresh cookie is dead too (TS-1.5)', async () => {
     fake.start.mockResolvedValue(undefined);
+    fake.refresh.mockResolvedValue(null); // the refresh fails: the session is really over
     const { useAuthStore } = await import('../store/authStore');
-    useAuthStore.setState({ accessToken: jwt(-10), sessionExpired: false });
-    const { getNotificationsHub } = await import('./notificationsHub');
+    const { getNotificationsHub, hubAccessToken } = await import('./notificationsHub');
     getNotificationsHub();
-    await vi.advanceTimersByTimeAsync(0);
 
-    expect(fake.start).not.toHaveBeenCalled(); // no point connecting with a dead token
-    expect(useAuthStore.getState().accessToken).toBeNull();
+    useAuthStore.setState({ accessToken: jwt(-10) });
+    expect(await hubAccessToken()).toBe(''); // nothing to connect with
+    expect(useAuthStore.getState().accessToken).toBeNull(); // signed out, which stops the hub
+    expect(useAuthStore.getState().sessionExpired).toBe(true);
   });
 
   it('exposes a token-expiry check that treats a missing token as not-expired and ignores an unparseable one', async () => {

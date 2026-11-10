@@ -1,7 +1,7 @@
 # Otvorene stavke: šta nije ispravljeno i šta je ispravljeno samo djelimično
 
-**Stanje:** poslije analize Analiza_10.11 (2026-11-10). Detalji i dokazi su u `IZVJESTAJ_ISPRAVKI.md` (odjeljci 9.8 do 9.15).
-**Testovi:** 763 backend i 1032 frontend testova prolaze, bez preskočenih. Format, ranjivi paketi, migracije u odnosu na model, lint, `tsc`, build i `npm audit` (visoke) su čisti.
+**Stanje:** poslije analize Analiza_10.11 (2026-11-10). Detalji i dokazi su u `IZVJESTAJ_ISPRAVKI.md` (odjeljci 9.8 do 9.16).
+**Testovi:** 769 backend i 1035 frontend testova prolaze, bez preskočenih. Format, ranjivi paketi, migracije u odnosu na model, lint, `tsc`, build i `npm audit` (visoke) su čisti.
 **Sedmi krug:** ~160 napada u izolovanom okruženju (autorizacija/IDOR, tokeni, ubacivanje, XSS, datoteke, zaglavlja, poslovna logika, konkurentnost, opoziv tokena, jedinstvenost); nađene i ispravljene tri stavke: `Server: Kestrel` zaglavlje i ponovno otvaranje koje nije brisalo `ResolutionSummary` (9.13), te naziv firme koji nije bio jedinstven (9.14). Potvrđeno: opoziv tokena deaktiviranog zaposlenika, zaštita zadnjeg admina, konkurentno zatvaranje daje 409 (ne 500). Vidi 9.13 i 9.14.
 **Izvor:** analiza `ANALYSIS_1` (T-01 … T-64), ponovno testiranje commita `7af778a` (149 scenarija) i moje ponovno izvođenje scenarija na izoliranoj kopiji.
 

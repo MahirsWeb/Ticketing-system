@@ -18,10 +18,28 @@ using TicketSystemTech.Infrastructure.Persistence;
 
 namespace TicketSystemTech.Api.Auth;
 
+/// <summary>What a successful refresh hands the controller: the answer for the browser plus the next cookie's value.</summary>
+public sealed record RefreshResult(LoginResponse Response, string RefreshToken, DateTime RefreshTokenExpiresAtUtc);
+
 /// <summary>Signing in and the passwords: the temporary one, a forgotten one, the link that proves an e-mail address.</summary>
 public interface IAuthService
 {
     Task<Outcome<LoginResponse>> LoginAsync(LoginRequest request);
+
+    /// <summary>Makes a new refresh token for a person who has just fully signed in, and returns its raw value (for the cookie)
+    /// with its expiry. The database keeps only the hash.</summary>
+    Task<(string RefreshToken, DateTime ExpiresAtUtc)> IssueRefreshTokenAsync(Guid userId);
+
+    /// <summary>
+    /// Trades the refresh cookie for a fresh access token (and a rotated refresh token). The presented token must be live:
+    /// one that was already rotated away is treated as stolen and the person's every token is revoked. The person must still
+    /// be welcome (active, not locked, no pending temporary password) — their claims are minted from the account as it is now.
+    /// Every failure is the same 401, so the answer does not say which check refused.
+    /// </summary>
+    Task<Outcome<RefreshResult>> RefreshAsync(string? rawRefreshToken);
+
+    /// <summary>Revokes the presented refresh token (sign-out). Unknown or absent tokens are ignored: signing out twice is fine.</summary>
+    Task RevokeRefreshTokenAsync(string? rawRefreshToken);
 
     Task<Outcome<object>> SetNewPasswordAsync(SetNewPasswordRequest request);
 
@@ -51,15 +69,19 @@ public sealed class AuthService : IAuthService
     /// <summary>At most one password-reset e-mail per account in this window, so a repeated request cannot flood a mailbox.</summary>
     private static readonly TimeSpan ResetEmailEvery = TimeSpan.FromMinutes(3);
 
+    private readonly JwtOptions _jwt;
+
     public AuthService(
         UserManager<ApplicationUser> userManager, ITokenService tokenService, IEmailSender emailSender, IOptions<FrontendOptions> frontendOptions,
         AppDbContext db, INotificationPublisher notificationPublisher, IMemoryCache cache, IBackgroundEmailQueue emailQueue,
-        NoticeThrottle lockoutNotices, [FromKeyedServices("password-reset")] NoticeThrottle resetNotices, LoginAttemptLimiter loginLimiter, TimeProvider time)
+        NoticeThrottle lockoutNotices, [FromKeyedServices("password-reset")] NoticeThrottle resetNotices, LoginAttemptLimiter loginLimiter, TimeProvider time,
+        IOptions<JwtOptions> jwtOptions)
     {
         _userManager = userManager;
         _tokenService = tokenService;
         _emailSender = emailSender;
         _frontendOptions = frontendOptions.Value;
+        _jwt = jwtOptions.Value;
         _db = db;
         _notificationPublisher = notificationPublisher;
         _cache = cache;
@@ -255,6 +277,9 @@ public sealed class AuthService : IAuthService
 
         // The reset rotated the security stamp: drop the cached status so sessions opened with the old password die at once.
         _cache.Remove(UserStatusCache.Key(user.Id));
+        // And drop every refresh token: regaining control of the mailbox must end any session a thief still holds.
+        await RevokeFamilyAsync(user.Id);
+        await _db.SaveChangesAsync();
 
         // The person just proved they control the account's mailbox, so a lockout caused by someone else's wrong guesses ends
         // here: it would otherwise be a way to keep a known account out for as long as an attacker cares to keep trying.
@@ -272,6 +297,100 @@ public sealed class AuthService : IAuthService
 
         return Outcome<object>.Ok(new { message = "Password reset successfully. You can now log in." });
     }
+
+    // ======================= refresh tokens =======================
+
+    private const string RefreshRejected = "The session is no longer valid. Please sign in again.";
+
+    private static string NewRawRefreshToken() =>
+        Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)); // 64 hex chars, cookie-safe
+
+    /// <summary>SHA-256 of the raw value; what the database stores and looks tokens up by. A copy of the table replays nothing.</summary>
+    private static string HashRefreshToken(string raw) =>
+        Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(raw)));
+
+    public async Task<(string RefreshToken, DateTime ExpiresAtUtc)> IssueRefreshTokenAsync(Guid userId)
+    {
+        var raw = NewRawRefreshToken();
+        var expires = UtcNow.AddDays(Math.Max(_jwt.RefreshTokenDays, 1));
+        _db.RefreshTokens.Add(new RefreshToken { UserId = userId, TokenHash = HashRefreshToken(raw), ExpiresAtUtc = expires });
+
+        // Housekeeping on the same trip: rows that can never be presented again (long expired, or long revoked) are dropped,
+        // so the table holds live sessions and a short forensic tail, not history.
+        var cutoff = UtcNow.AddDays(-7);
+        await _db.RefreshTokens
+            .Where(t => t.UserId == userId
+                        && (t.ExpiresAtUtc < cutoff || (t.RevokedAtUtc != null && t.RevokedAtUtc < cutoff)))
+            .ExecuteDeleteAsync();
+
+        await _db.SaveChangesAsync();
+        return (raw, expires);
+    }
+
+    public async Task<Outcome<RefreshResult>> RefreshAsync(string? rawRefreshToken)
+    {
+        Outcome<RefreshResult> Reject() =>
+            Outcome<RefreshResult>.Status(StatusCodes.Status401Unauthorized, new { message = RefreshRejected });
+
+        if (string.IsNullOrWhiteSpace(rawRefreshToken)) return Reject();
+
+        var hash = HashRefreshToken(rawRefreshToken);
+        var stored = await _db.RefreshTokens.FirstOrDefaultAsync(t => t.TokenHash == hash);
+        if (stored is null) return Reject();
+
+        // A token that was already rotated away is being presented again: either it was stolen, or an old copy is being
+        // replayed. Either way, trust in this session is gone — revoke every live token the person has and make them sign in.
+        if (stored.RevokedAtUtc is not null)
+        {
+            await RevokeFamilyAsync(stored.UserId);
+            await _db.SaveChangesAsync();
+            return Reject();
+        }
+
+        if (stored.ExpiresAtUtc <= UtcNow) return Reject();
+
+        var user = await _userManager.FindByIdAsync(stored.UserId.ToString());
+        // The account must still be welcome, and the token minted from it as it is now (role, branch and security stamp can all
+        // have changed since sign-in). A pending temporary password means the person never finished setting their own.
+        if (user is null || !user.IsActive || await _userManager.IsLockedOutAsync(user) || user.MustChangePassword)
+        {
+            stored.RevokedAtUtc = UtcNow;
+            await _db.SaveChangesAsync();
+            return Reject();
+        }
+
+        // Rotate: the presented token is spent, a fresh one takes its place, and the two are linked so a later replay of the
+        // old one is recognised as the theft signal above.
+        var rawNext = NewRawRefreshToken();
+        var nextHash = HashRefreshToken(rawNext);
+        var expires = UtcNow.AddDays(Math.Max(_jwt.RefreshTokenDays, 1));
+        stored.RevokedAtUtc = UtcNow;
+        stored.ReplacedByTokenHash = nextHash;
+        _db.RefreshTokens.Add(new RefreshToken { UserId = user.Id, TokenHash = nextHash, ExpiresAtUtc = expires });
+
+        var (accessToken, accessExpires) = _tokenService.GenerateAccessToken(
+            user.Id, user.Email!, user.FirstName, user.LastName, user.Role, user.CompanyId, user.DepartmentId, user.SecurityStamp ?? string.Empty);
+        await _db.SaveChangesAsync();
+
+        var response = new LoginResponse(false, accessToken, accessExpires, await ToSummaryAsync(user));
+        return Outcome<RefreshResult>.Ok(new RefreshResult(response, rawNext, expires));
+    }
+
+    public async Task RevokeRefreshTokenAsync(string? rawRefreshToken)
+    {
+        if (string.IsNullOrWhiteSpace(rawRefreshToken)) return;
+        var hash = HashRefreshToken(rawRefreshToken);
+        var stored = await _db.RefreshTokens.FirstOrDefaultAsync(t => t.TokenHash == hash && t.RevokedAtUtc == null);
+        if (stored is null) return;
+        stored.RevokedAtUtc = UtcNow;
+        await _db.SaveChangesAsync();
+    }
+
+    /// <summary>Revokes every still-live refresh token of one person (a theft signal, and reused on a password reset). Returns the count.</summary>
+    private Task<int> RevokeFamilyAsync(Guid userId) =>
+        _db.RefreshTokens
+            .Where(t => t.UserId == userId && t.RevokedAtUtc == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAtUtc, UtcNow));
 
     private async Task<UserSummary> ToSummaryAsync(ApplicationUser user)
     {

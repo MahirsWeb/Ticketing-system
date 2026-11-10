@@ -7,6 +7,7 @@ import { PhoneNumberBanner } from '../components/PhoneNumberBanner';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useTicketCounts } from '../api/ticketQueries';
+import { authApi } from '../api/auth';
 import clsx from 'clsx';
 
 function useNavByRole(): Record<string, { to: string; label: string; ticketsDropdown?: boolean }[]> {
@@ -167,6 +168,7 @@ export default function AppLayout() {
             <NotificationBell />
             <button
               onClick={() => {
+                void authApi.logout(); // revoke this browser's refresh token server-side; the cookie is cleared there too
                 signOut();
                 navigate('/login', { replace: true });
               }}

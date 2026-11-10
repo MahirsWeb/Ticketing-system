@@ -79,6 +79,8 @@ public class EndpointAuthorizationTests
         "PATCH /api/work-tasks/{id:guid}/time => Employee",
         "POST /api/auth/forgot-password => public",
         "POST /api/auth/login => public",
+        "POST /api/auth/logout => public",
+        "POST /api/auth/refresh => public",
         "POST /api/auth/reset-password => public",
         "POST /api/auth/set-new-password => public",
         "POST /api/auth/verify-email => public",

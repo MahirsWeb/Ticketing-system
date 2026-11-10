@@ -642,5 +642,9 @@ se ignoriše). Bez ikakvog SQL Servera ovi testovi se **preskaču** (prikažu se
   prije. Paket je odabran i zato da `dotnet list package --deprecated` ne prijavljuje stari xunit 2 kao *Legacy*.
 - Nije urađeno: OpenTelemetry (OTLP) izvoz, IIS paket, produkcijski docker-compose za kupce (postoji samo primjer
   `docker-compose.example.yml`), više davalaca prijave od lokalnih naloga.
-- JWT login tokeni se ne obnavljaju automatski (refresh token rotacija) — kad token istekne, korisnik se
-  jednostavno ponovo uloguje.
+- **Sesija:** kratki JWT access token stoji samo u memoriji preglednika (nikad u `localStorage`, pa ga ubačena skripta ne može
+  pročitati). Dugi dio je **refresh token u httpOnly kolačiću** (`tst_refresh`, `Path=/api/auth`, `SameSite=Strict`, `Secure`
+  izvan razvoja) koji server postavlja pri prijavi. `POST /api/auth/refresh` mijenja kolačić za novi access token i rotira sam
+  kolačić; stari kolačić iskorišten ponovo znači krađu — svi tokeni te osobe se tad poništavaju. `POST /api/auth/logout`
+  poništava token i briše kolačić. Trajanje: access `Jwt:AccessTokenMinutes`, refresh `Jwt:RefreshTokenDays` (podrazumijevano 14).
+  Frontend pri učitavanju jednom pokuša obnovu iz kolačića, pa reload nije odjava.
