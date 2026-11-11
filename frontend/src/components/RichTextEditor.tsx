@@ -34,6 +34,8 @@ function ToolbarButton({
     <button
       type="button"
       title={title}
+      aria-label={title}
+      aria-pressed={active ?? false}
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
       className={clsx(

@@ -23,6 +23,16 @@ describe('the rich text editor', () => {
     expect(unnamed.map((e) => e.outerHTML.slice(0, 60))).toEqual([]);
   });
 
+  it('names every toolbar button, including the three that show only an arrow (TS-46.5), and says which one is on', async () => {
+    const { container } = render(<RichTextEditor value="<p>x</p>" onChange={vi.fn()} ariaLabel="Reply" />);
+    await screen.findByRole('textbox', { name: 'Reply' });
+
+    const buttons = [...container.querySelectorAll('button')];
+    expect(buttons.length).toBeGreaterThanOrEqual(8);
+    expect(buttons.filter((b) => !b.getAttribute('aria-label')).map((b) => b.outerHTML.slice(0, 60))).toEqual([]);
+    expect(buttons.filter((b) => b.getAttribute('aria-pressed') === null)).toEqual([]);
+  });
+
   it('shows the value the parent gives it when that value changes on its own (TS-1.1 internal-note leak)', async () => {
     // The parent keeps a separate draft per mode and swaps `value` when the mode changes. The editor must follow it,
     // otherwise it keeps displaying the previous draft (e.g. the internal note) while a reply would carry that text.

@@ -26,6 +26,12 @@ U četvrtom krugu su svi scenariji iz paketa testera ponovo izvedeni (uživo, u 
 | **T-48** (TS-48.1) | Nema verzija API-ja, webhookova ni mašinskih kredencijala | Nije rađeno | Samo ako ih kupci traže |
 | **T-51** (TS-51.1) | NPOI je pod OSMF licencom s naknadom; nema zabilježene odluke | Pravno pitanje | **Odluka vlasnika:** plaćanje, build iz izvora ili zamjena biblioteke |
 
+**Namjerno ovako (testeru, da ne prijavi ponovo):**
+
+- **AUTH-06 „nova prijava ne opoziva stari kolačić“.** Prijava opoziva kolačić koji je *isti preglednik* poslao uz prijavu (kolačić ima `Path=/api/auth`, pa ga preglednik šalje i na `/login`); dokazuje `RefreshTokenTests`. Prijava s *drugog uređaja* ne opoziva ništa, jer je više uređaja istovremeno dozvoljeno (isti korisnik na računaru i telefonu). Test u kojem dvije prijave idu bez kolačića oponaša dva uređaja, pa dva živa kolačića nisu greška. Sve sesije osobe se opozivaju pri promjeni lozinke, reset lozinke mailom, deaktivaciji, anonimizaciji i krađi (ponovna upotreba potrošenog kolačića nakon 20 s).
+- **Šabloni e-mailova su na engleskom.** Poruke u aplikaciji su na bosanskom, ali server ne zna jezik primaoca (jezik je izbor preglednika, ne polje u nalogu). Prevod mailova traži polje „jezik“ u nalogu i prevedene šablone; to je nova funkcionalnost, ne ispravka.
+- **Migracija `RefreshTokenSessionBinding`** se primjenjuje pri startu aplikacije (ili `--migrate-only` kod `Migrate=false`); na svježe resetovanoj bazi nema posla.
+
 Isključeno odlukom vlasnika: **T-28 MFA**.
 
 ## 3. Djelimično (11 stavki)
