@@ -228,6 +228,9 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                     b.Property<string>("Address")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<bool>("AiIndexingEnabled")
+                        .HasColumnType("bit");
+
                     b.Property<string>("ContactInfo")
                         .HasColumnType("nvarchar(max)");
 
@@ -1169,6 +1172,13 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("PhoneNumberPrompted")
                         .HasColumnType("bit");
+
+                    b.Property<string>("PreferredLanguage")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(5)
+                        .HasColumnType("nvarchar(5)")
+                        .HasDefaultValue("en");
 
                     b.Property<string>("ProfilePictureUrl")
                         .HasColumnType("nvarchar(max)");

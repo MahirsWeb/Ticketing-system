@@ -219,15 +219,15 @@ public class RefreshTokenTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Signing_out_of_one_browser_does_not_end_the_sign_ins_of_the_others()
+    public async Task A_new_sign_in_on_another_device_ends_the_earlier_one_and_is_not_taken_for_a_theft()
     {
         var person = await PersonAsync();
         var laptop = RefreshCookie(await Login(person));
         var phone = RefreshCookie(await Login(person)); // a different device: no cookie of the first is sent with it
 
-        await _world.Send(null, HttpMethod.Post, "/api/auth/logout", null, new Dictionary<string, string> { ["Cookie"] = $"tst_refresh={laptop}" });
-
-        Assert.Equal(HttpStatusCode.OK, (await Refresh(phone)).Status);
+        Assert.Equal(1, await LiveCookiesOf(person)); // one sign-in per person: the laptop's was ended by the phone's
+        Assert.Equal(HttpStatusCode.Unauthorized, (await Refresh(laptop)).Status);
+        Assert.Equal(HttpStatusCode.OK, (await Refresh(phone)).Status); // the laptop being refused did not take the phone's session down with it
     }
 
     [SqlFact]

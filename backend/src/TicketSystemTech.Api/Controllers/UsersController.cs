@@ -137,6 +137,11 @@ public class UsersController : ControllerBase
     public async Task<IActionResult> SetMyPhone(SetPhoneNumberRequest request) =>
         this.ToResult(await _profile.SetMyPhoneAsync(request.PhoneNumber));
 
+    /// <summary>The language the person chose in the application, so that the e-mails to them are written in it. Any signed-in person.</summary>
+    [HttpPut("me/language")]
+    public async Task<IActionResult> SetMyLanguage(SetLanguageRequest request) =>
+        this.ToResult(await _profile.SetMyLanguageAsync(request.Language));
+
     [HttpPost("me/skip-phone-prompt")]
     [Authorize(Roles = nameof(UserRole.Client))]
     public async Task<IActionResult> SkipPhonePrompt() =>

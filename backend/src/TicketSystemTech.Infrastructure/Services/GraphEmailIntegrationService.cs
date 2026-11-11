@@ -250,20 +250,7 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
         return marked;
     }
 
-    public async Task MarkConvertedAsync(Guid departmentId, string messageId, Guid ticketId, CancellationToken ct = default)
-    {
-        var mark = await _db.EmailTicketMarks.FirstOrDefaultAsync(m => m.DepartmentId == departmentId && m.MessageId == messageId, ct);
-        if (mark is null)
-        {
-            mark = new EmailTicketMark { DepartmentId = departmentId, MessageId = messageId };
-            _db.EmailTicketMarks.Add(mark);
-        }
-        mark.IsMarked = true;
-        mark.ConvertedTicketId = ticketId;
-        await _db.SaveChangesAsync(ct);
-    }
-
-    public async Task ImportAttachmentsToTicketAsync(Guid departmentId, Guid uploadedByUserId, string messageId, Guid ticketId, CancellationToken ct = default)
+    public async Task ImportAttachmentsAndMarkConvertedAsync(Guid departmentId, Guid uploadedByUserId, string messageId, Guid ticketId, CancellationToken ct = default)
     {
         var conn = await GetValidConnectionAsync(departmentId, ct);
         var url = $"{GraphBase}/me/messages/{Uri.EscapeDataString(messageId)}/attachments";
@@ -300,6 +287,17 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
                 UploadedByUserId = uploadedByUserId
             });
         }
+
+        // The mark goes into the same save as the files.
+        var mark = await _db.EmailTicketMarks.FirstOrDefaultAsync(m => m.DepartmentId == departmentId && m.MessageId == messageId, ct);
+        if (mark is null)
+        {
+            mark = new EmailTicketMark { DepartmentId = departmentId, MessageId = messageId };
+            _db.EmailTicketMarks.Add(mark);
+        }
+        mark.IsMarked = true;
+        mark.MarkedByUserId = uploadedByUserId;
+        mark.ConvertedTicketId = ticketId;
 
         try
         {

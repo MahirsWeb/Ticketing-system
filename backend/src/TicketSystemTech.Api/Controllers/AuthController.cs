@@ -67,8 +67,7 @@ public class AuthController : ControllerBase
         // A full sign-in (not "you must set a password first") gets a refresh cookie for this browser.
         if (outcome.Succeeded && outcome.Value?.AccessToken is not null)
         {
-            // A new sign-in replaces the one this browser still holds: the old cookie is revoked rather than left alive beside it.
-            await _auth.RevokeRefreshTokenAsync(Request.Cookies[RefreshCookieName]);
+            // A new sign-in replaces every earlier one of this person (one sign-in per person), the one this browser still holds included.
             var (refreshToken, expiresAt) = await _auth.IssueRefreshTokenAsync(outcome.Value.User!.Id);
             SetRefreshCookie(refreshToken, expiresAt);
         }

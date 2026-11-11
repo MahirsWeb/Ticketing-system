@@ -26,6 +26,9 @@ public interface IUserProfileService
     Task<Outcome<object>> SetMyPhoneAsync(string? phoneNumber);
 
     Task<Outcome<Done>> SkipPhonePromptAsync();
+
+    /// <summary>Remembers the language the person chose in the application, so that the e-mails to them are written in it.</summary>
+    Task<Outcome<Done>> SetMyLanguageAsync(string? language);
 }
 
 public sealed class UserProfileService : IUserProfileService
@@ -92,6 +95,18 @@ public sealed class UserProfileService : IUserProfileService
 
         user.PhoneNumberPrompted = true;
         await _userManager.UpdateAsync(user);
+        return Outcome<Done>.Ok(Done.Value);
+    }
+
+    public async Task<Outcome<Done>> SetMyLanguageAsync(string? language)
+    {
+        if (_currentUser.UserId is null) return Outcome<Done>.Unauthorized();
+        var chosen = TicketSystemTech.Api.Emails.EmailLanguage.Normalize(language);
+        // The screen says it on every load; nothing is written when it is already so.
+        var current = await _userManager.Users.Where(u => u.Id == _currentUser.UserId.Value).Select(u => u.PreferredLanguage).FirstOrDefaultAsync();
+        if (current is null) return Outcome<Done>.Unauthorized();
+        if (current != chosen)
+            await _userManager.Users.Where(u => u.Id == _currentUser.UserId.Value).ExecuteUpdateAsync(s => s.SetProperty(u => u.PreferredLanguage, chosen));
         return Outcome<Done>.Ok(Done.Value);
     }
 }

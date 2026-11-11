@@ -14,10 +14,11 @@ public record UpdateCompanyRequest(
     [Required] string Name,
     string? Address,
     string? ContactInfo,
-    bool IsActive
+    bool IsActive,
+    bool? AiIndexingEnabled = null // null: leave as it is
 );
 
-public record CompanyItemFull(Guid Id, string Name, string? Address, string? ContactInfo, bool IsActive);
+public record CompanyItemFull(Guid Id, string Name, string? Address, string? ContactInfo, bool IsActive, bool AiIndexingEnabled = true);
 
 public record SlaPlanItem(Guid Id, string Name, int ResolutionTimeHours);
 

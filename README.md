@@ -263,7 +263,7 @@ Posljedice koje treba znati:
 | `Storage:UploadsPath` | Ne | Folder za priloge tiketa i dokumente baze znanja (default `App_Data/uploads` pored aplikacije). Ne servira se javno; za produkciju postavi putanju **van** foldera koji se redeploya. Prilozi se otvaraju kroz potpisane linkove koji ističu za 4 sata. |
 | `SeedAdmin:Email` / `Password` | ✅ Email da, lozinka ne | Email za prvi Admin nalog koji se automatski pravi. Ako ostaviš `Password` prazno, generiše se nasumična privremena lozinka. |
 | `SeedAdmin:PrintGeneratedPassword` | Ne (default `false`) | Ako je `true`, generisana lozinka se **jednom** ispiše u terminal (nikad u log). Inače se ne prikazuje, a nova se dobija komandom `--reset-admin-password`. |
-| `Startup:Migrate` | Ne (default `true`) | Da li backend pri pokretanju sam primjenjuje migracije i jednokratne popravke baze. Postavi na `false` ako migracije radiš kao zaseban korak (`dotnet TicketSystemTech.Api.dll --migrate-only` — primijeni migracije, seeduje prvog admina i izađe); backend tada odbija da krene na neažuriranoj bazi. Više instanci koje krenu istovremeno čekaju jedna drugu (SQL Server zaključak), pa se migracije ne izvršavaju paralelno. |
+| `Startup:Migrate` | Ne (default `true`; u `docker-compose.example.yml` je `false` uz zaseban `migrate` servis) | Da li backend pri pokretanju sam primjenjuje migracije i jednokratne popravke baze. Postavi na `false` ako migracije radiš kao zaseban korak (`dotnet TicketSystemTech.Api.dll --migrate-only` — primijeni migracije, seeduje prvog admina i izađe); backend tada odbija da krene na neažuriranoj bazi. Više instanci koje krenu istovremeno čekaju jedna drugu (SQL Server zaključak), pa se migracije ne izvršavaju paralelno. |
 | `Sla:Mode` | Ne (default `CalendarHours`) | Kako se računa rok tiketa iz SLA plana. `CalendarHours` = sati teku non-stop (plan od 24 h = rok za 24 h). `BusinessHours` = broje se samo radni sati. Rok koji osoblje ručno unese uvijek ima prednost. |
 | `Sla:TimeZoneId`, `Sla:WorkdayStart`, `Sla:WorkdayEnd` | Ne | Samo za `BusinessHours`: vremenska zona (default `Europe/Sarajevo`) i radno vrijeme (default `08:00`–`16:00`). |
 | `Sla:WorkDays`, `Sla:Holidays` | Ne | Samo za `BusinessHours`: radni dani (default ponedjeljak–petak) i neradni datumi (`yyyy-MM-dd`). Ako ih postaviš, **zamjenjuju** default; ne dodaju se na njega. |
@@ -344,8 +344,10 @@ AI je podešavanje, ne ugrađena stavka. `Ai:Provider` bira davaoca:
 **Šta napušta sistem kad je AI uključen i davalac je vani (Gemini):** tekst pitanja i dijelovi tiketa i dokumentacije
 koji su potrebni za odgovor, uz ograničenja: pitanje najviše 2.000 znakova, jedan izvor 6.000, cijeli kontekst 60.000, a
 odgovor ima gornju granicu. **Email adrese, brojevi telefona i lozinke ili tokeni napisani uz riječ koja ih imenuje** (`lozinka: …`, `password=…`, `token: …`, `Bearer …`) **se maskiraju** prije slanja (`Ai:RedactPersonalData`) i **već pri upisu u bazu znanja**, pa se ni tamo ne čuvaju
-(`[email]`, `[phone]`, `lozinka: [secret]`; chunkovi koji su ranije upisani maskiraju se pri pokretanju); imena
-i slobodan tekst iz tiketa ne. Ključ ide u zaglavlje, nikad u adresu. Besplatni nivo Google AI Studija može koristiti
+(`[email]`, `[phone]`, `lozinka: [secret]`; chunkovi koji su ranije upisani maskiraju se pri pokretanju). **Imena osoba na tiketu**
+(klijent, ko je tiket otvorio ili zatvorio, osoblje na njemu, autori bilješki) maskiraju se u `[name]` pri upisu u bazu znanja; imena koja niko
+nije naveo i slobodan tekst iz tiketa ne. **Firma može isključiti slanje svojih tiketa AI pružaocu** (polje u uređivanju firme, `AiIndexingEnabled`):
+tiketi te firme se ne indeksiraju, ništa se ne embeduje ni ne čuva, a isključivanje briše i ono što je već sačuvano. Ključ ide u zaglavlje, nikad u adresu. Pitanje AI-ju čeka najviše 12 s na embedding i 60 s na odgovor (jedan pokušaj ponavljanja); ako AI ne odgovori, ekran to kaže drukčije nego kad AI nije podešen. Besplatni nivo Google AI Studija može koristiti
 poslani tekst za poboljšanje modela; za pravu upotrebu treba plaćeni nivo ili Vertex AI uz ugovor o obradi podataka, ili
 lokalni model, od kojeg ništa ne izlazi. Odluku o tome donosi vlasnik instalacije.
 
@@ -398,6 +400,10 @@ aplikacija **odbija da krene** i nabroji sve što fali, dok ne podesiš:
    pokrenuta s certifikatom je šifrovana od prvog dana. Ko svjesno ne želi certifikat: `DataProtection:AllowUnprotectedKeys` = `true`.
 
 Ostalo što vrijedi znati:
+
+- **Jezik e-mailova.** E-mailovi se sastavljaju na serveru, pa je jezik primaoca zapisan na nalogu (`PreferredLanguage`, `en` ili `bs`): frontend ga javlja
+  (`PUT /api/users/me/language`) pri prijavi i kad osoba promijeni jezik, a svi šabloni i naslovi (13 poruka o tiketima, zadacima i nalozima) postoje na
+  oba jezika. Novi nalog počinje na jeziku administratora koji ga pravi (pozivnica je napisana njime). Sve ostalo je engleski.
 
 - **Iza reverse proxyja** navedi njegovu adresu u `ForwardedHeaders:KnownProxies` (ili mrežu u `KnownNetworks`); inače sve
   prijave izgledaju kao da dolaze s proxyja i dijele jedno ograničenje. Ni proxy na istom računaru nije povjeren dok se ne navede.
@@ -686,9 +692,10 @@ se ignoriše). Bez ikakvog SQL Servera ovi testovi se **preskaču** (prikažu se
   - Kolačić je vezan za *security stamp*: svaka promjena lozinke (regeneracija privremene, postavljanje nove, reset, naredba
     `--reset-admin-password`) poništava sve ranije izdate kolačiće, **ali samo njih**: sesija prijavljena poslije promjene ostaje.
     Reset lozinke mailom, deaktivacija i anonimizacija poništavaju odmah sve kolačiće osobe (ponovna aktivacija ne vraća stari).
-    Zaključavanje naloga zbog pogrešnih lozinki blokira **nove** prijave, ali ne izbacuje osobu koja je već prijavljena. Nova
-    prijava poništava kolačić koji je **taj preglednik** još držao; prijava na drugom uređaju ne dira prvi (više uređaja je
-    namjerno dozvoljeno), a odjava poništava i nasljednike kolačića (obnova koja je bila u toku ne ostavlja živu sesiju).
+    Zaključavanje naloga zbog pogrešnih lozinki blokira **nove** prijave, ali ne izbacuje osobu koja je već prijavljena. **Jedna
+    prijava po osobi:** nova prijava (bilo gdje) poništava sve ranije kolačiće te osobe; uređaj koji je ostao iza dobija običan `401`
+    pri sljedećoj obnovi (kolačić je poništen, nije potrošen rotacijom, pa se to ne računa kao krađa) i vraća se na prijavu.
+    Odjava poništava i nasljednike kolačića (obnova koja je bila u toku ne ostavlja živu sesiju).
   - Sesija ima **apsolutni rok** `Jwt:SessionMaxDays` (30): koliko god se obnavljala, nakon toga treba ponovo upisati lozinku.
     `Jwt:RefreshTokenDays` (14) je rok neaktivnosti; `Jwt:AccessTokenMinutes` je trajanje access tokena.
   - `POST /api/auth/logout` poništava token i briše kolačić; frontend čeka odgovor (ako ne uspije, osoba ostaje prijavljena i

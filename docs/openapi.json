@@ -171,6 +171,9 @@
             "nullable": true,
             "type": "string"
           },
+          "aiIndexingEnabled": {
+            "type": "boolean"
+          },
           "contactInfo": {
             "nullable": true,
             "type": "string"
@@ -965,6 +968,16 @@
         },
         "type": "object"
       },
+      "SetLanguageRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "language": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "SetMarkedRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1541,6 +1554,10 @@
           "address": {
             "nullable": true,
             "type": "string"
+          },
+          "aiIndexingEnabled": {
+            "nullable": true,
+            "type": "boolean"
           },
           "contactInfo": {
             "nullable": true,
@@ -5936,6 +5953,37 @@
                 }
               }
             },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/api/users/me/language": {
+      "put": {
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetLanguageRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetLanguageRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetLanguageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
             "description": "OK"
           }
         },

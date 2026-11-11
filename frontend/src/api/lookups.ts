@@ -17,9 +17,9 @@ export const lookupsApi = {
   getCompany: (id: string) => apiClient.get<CompanyItemFull>(`/api/companies/${id}`).then((r) => r.data),
   createCompany: (name: string, address?: string, contactInfo?: string) =>
     refreshed(apiClient.post<LookupItem>('/api/companies', { name, address, contactInfo }).then((r) => r.data)),
-  updateCompany: (id: string, name: string, address: string | undefined, contactInfo: string | undefined, isActive: boolean) =>
+  updateCompany: (id: string, name: string, address: string | undefined, contactInfo: string | undefined, isActive: boolean, aiIndexingEnabled?: boolean) =>
     refreshed(
-      apiClient.put<CompanyItemFull>(`/api/companies/${id}`, { name, address, contactInfo, isActive }).then((r) => {
+      apiClient.put<CompanyItemFull>(`/api/companies/${id}`, { name, address, contactInfo, isActive, aiIndexingEnabled }).then((r) => {
         // The company that is open takes what the server sent back at once; nothing is put into memory for one that is not.
         queryClient.setQueryData(lookupKeys.company(r.data.id), (open: CompanyItemFull | undefined) => (open ? r.data : undefined));
         return r.data;

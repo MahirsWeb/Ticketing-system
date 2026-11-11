@@ -26,3 +26,26 @@ bez njega se preskaču, pa ih CI posao s Linuxom i SQL Serverom pokreće umjesto
 - **`eslint-disable` komentar** uvijek nosi obrazloženje (`-- razlog`).
 - **Zavisnosti** se ažuriraju kroz Dependabot pull requeste; veliku promjenu verzije ne spajajte naslijepo.
 - **Odluke** koje su važne za budućnost (hosting, model podataka, AI, ključevi) zapišite kao ADR u `docs/adr/`.
+
+## Zaštita grane `main` (postavka na GitHubu, ne u kodu)
+
+Repozitorij ima CI (`.github/workflows/ci.yml`) i Dependabot, ali **zaštitu grane ne može nametnuti kod u repozitoriju**: postavlja je vlasnik
+repozitorija, jednom. Pravilo koje se traži: spajanje na `main` samo preko pull requesta s najmanje jednim odobrenjem i zelenim provjerama
+**Backend (Windows)**, **Backend (Linux, with SQL Server)**, **Frontend** i **Docker image** (imena poslova iz `ci.yml`).
+
+```bash
+# jednom, kao vlasnik repozitorija (gh CLI, `gh auth login`); zamijenite OWNER/REPO
+gh api -X PUT repos/OWNER/REPO/branches/main/protection --input - <<'JSON'
+{
+  "required_status_checks": { "strict": true, "contexts": ["Backend (Windows)", "Backend (Linux, with SQL Server)", "Frontend", "Docker image"] },
+  "enforce_admins": true,
+  "required_pull_request_reviews": { "required_approving_review_count": 1 },
+  "restrictions": null
+}
+JSON
+gh api repos/OWNER/REPO/branches/main/protection   # provjera: 200 sa required_status_checks i required_pull_request_reviews
+```
+
+Dok je jedini autor jedna osoba, odobrenje daje druga osoba s pristupom (npr. tester koji već ima dozvolu na repozitoriju); bez druge osobe
+pravilo o odobrenju ne može da se ispuni, pa se tada ostavlja samo zahtjev za zelene provjere (`required_pull_request_reviews: null`).
+

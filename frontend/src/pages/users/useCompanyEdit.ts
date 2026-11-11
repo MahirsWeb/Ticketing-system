@@ -15,6 +15,7 @@ export function useCompanyEdit(company: CompanyItemFull, onClose: () => void) {
   const [address, setAddress] = useState(company.address ?? '');
   const [contactInfo, setContactInfo] = useState(company.contactInfo ?? '');
   const [isActive, setIsActive] = useState(company.isActive);
+  const [aiIndexing, setAiIndexing] = useState(company.aiIndexingEnabled ?? true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -24,6 +25,7 @@ export function useCompanyEdit(company: CompanyItemFull, onClose: () => void) {
     setAddress(c.address ?? '');
     setContactInfo(c.contactInfo ?? '');
     setIsActive(c.isActive);
+    setAiIndexing(c.aiIndexingEnabled ?? true);
     setError(null);
   }
 
@@ -33,7 +35,7 @@ export function useCompanyEdit(company: CompanyItemFull, onClose: () => void) {
     setSaving(true);
     setError(null);
     try {
-      const updated = await lookupsApi.updateCompany(company.id, cleanName, address.trim() || undefined, contactInfo.trim() || undefined, isActive);
+      const updated = await lookupsApi.updateCompany(company.id, cleanName, address.trim() || undefined, contactInfo.trim() || undefined, isActive, aiIndexing);
       show(updated);
       onClose();
     } catch (err) {
@@ -60,8 +62,8 @@ export function useCompanyEdit(company: CompanyItemFull, onClose: () => void) {
   }
 
   return {
-    values: { name, address, contactInfo, isActive },
-    set: { name: setName, address: setAddress, contactInfo: setContactInfo, isActive: setIsActive },
+    values: { name, address, contactInfo, isActive, aiIndexing },
+    set: { name: setName, address: setAddress, contactInfo: setContactInfo, isActive: setIsActive, aiIndexing: setAiIndexing },
     error,
     saving,
     confirming,

@@ -36,7 +36,7 @@ public sealed class CompanyService : ICompanyService
         if (!includeInactive || !isAdmin) query = query.Where(c => c.IsActive);
 
         var items = await query.OrderBy(c => c.Name)
-            .Select(c => new CompanyItemFull(c.Id, c.Name, c.Address, c.ContactInfo, c.IsActive)).ToListAsync(ct);
+            .Select(c => new CompanyItemFull(c.Id, c.Name, c.Address, c.ContactInfo, c.IsActive, c.AiIndexingEnabled)).ToListAsync(ct);
         return items;
     }
 
@@ -44,7 +44,7 @@ public sealed class CompanyService : ICompanyService
     {
         var c = await _db.Companies.FindAsync(new object[] { id }, ct);
         if (c is null) return Outcome<CompanyItemFull>.NotFound();
-        return Outcome<CompanyItemFull>.Ok(new CompanyItemFull(c.Id, c.Name, c.Address, c.ContactInfo, c.IsActive));
+        return Outcome<CompanyItemFull>.Ok(new CompanyItemFull(c.Id, c.Name, c.Address, c.ContactInfo, c.IsActive, c.AiIndexingEnabled));
     }
 
     // A company name is how staff pick the firm when opening a ticket on someone's behalf and how reports group the work;
@@ -80,7 +80,14 @@ public sealed class CompanyService : ICompanyService
         c.Address = request.Address;
         c.ContactInfo = request.ContactInfo;
         c.IsActive = request.IsActive;
+        if (request.AiIndexingEnabled is { } aiIndexing)
+        {
+            // Turning it off takes back what was already kept: the chunks (text and vectors) of this company's tickets go with the permission.
+            if (!aiIndexing && c.AiIndexingEnabled)
+                await _db.KnowledgeBaseChunks.Where(k => k.TicketId != null && k.Ticket!.CompanyId == id).ExecuteDeleteAsync();
+            c.AiIndexingEnabled = aiIndexing;
+        }
         await _db.SaveChangesAsync();
-        return Outcome<CompanyItemFull>.Ok(new CompanyItemFull(c.Id, c.Name, c.Address, c.ContactInfo, c.IsActive));
+        return Outcome<CompanyItemFull>.Ok(new CompanyItemFull(c.Id, c.Name, c.Address, c.ContactInfo, c.IsActive, c.AiIndexingEnabled));
     }
 }

@@ -9,6 +9,23 @@ public class AiGuardrailsTests
 {
     // ---------------- personal data is masked before text goes to an outside provider ----------------
 
+    [Fact]
+    public void The_names_of_the_people_a_text_is_about_are_masked_whole_word_in_any_case()
+    {
+        var names = new[] { "Edin Kovač", "Ivana Gavrić-Marić" };
+        Assert.Equal("[name] je javio da [name] nije stigla. Marićka ostaje, kao i Edinburgh.",
+            PiiRedactor.RedactNames("Edin je javio da gavrić nije stigla. Marićka ostaje, kao i Edinburgh.", names));
+        Assert.Equal("[name] [name] [name]", PiiRedactor.RedactNames("KOVAČ Edin Ivana", names));
+    }
+
+    [Fact]
+    public void A_text_with_no_names_listed_or_with_parts_too_short_to_mask_is_left_alone()
+    {
+        Assert.Equal("Ana i Al su zvali.", PiiRedactor.RedactNames("Ana i Al su zvali.", new[] { "Al Je" }));
+        Assert.Equal("Edin je zvao.", PiiRedactor.RedactNames("Edin je zvao.", Array.Empty<string>()));
+        Assert.Equal(string.Empty, PiiRedactor.RedactNames(null, new[] { "Edin" }));
+    }
+
     [Theory]
     [InlineData("Pišite mi na ana.horvat@firma.ba hvala", "Pišite mi na [email] hvala")]
     [InlineData("kontakt: Ana_H+tiketi@sub.firma.co.uk.", "kontakt: [email].")]

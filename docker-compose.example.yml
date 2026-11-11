@@ -6,7 +6,43 @@
 # nginx and IIS examples (they also set the security headers, which the API cannot set for pages it does not serve).
 # For a real installation use your own SQL Server (Standard for more than a few hundred people) and drop the "db" service.
 
+# What the API and the one-off "migrate" step have in common (one definition, so they cannot drift apart).
+x-app-environment: &app-environment
+  # TrustServerCertificate=True is acceptable here only because "db" is in the same private Docker network. For a database on
+  # another server use Encrypt=True;TrustServerCertificate=False and a real certificate on the SQL Server.
+  ConnectionStrings__DefaultConnection: "Server=db;Database=TicketSystemTech;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True"
+  Jwt__Secret: ${JWT_SECRET}                    # 32+ random characters; changing it signs everybody out
+  Pii__HashKey: ${PII_HASH_KEY}                 # 32+ random characters, a DIFFERENT value; never change it once there is data
+  SeedAdmin__Email: ${ADMIN_EMAIL}
+  Frontend__BaseUrl: ${PUBLIC_URL}              # where people open the application, e.g. https://tickets.firma.ba
+  AllowedHosts: ${PUBLIC_HOST}                  # the host name only, e.g. tickets.firma.ba (the API is reached by this name)
+  Cors__AllowedOrigins__0: ${PUBLIC_URL}
+  DataProtection__CertificatePath: /certs/keyring.pfx
+  DataProtection__CertificatePassword: ${KEYRING_PASSWORD}
+  # Optional: e-mail (without these nothing is sent) and AI (without these there is no AI).
+  # Smtp__Host: smtp.firma.ba
+  # Smtp__FromAddress: tickets@firma.ba
+  # Ai__Provider: OpenAiCompatible
+  # Ai__Endpoint: http://ollama:11434/v1
+
 services:
+  # The database is brought up to date as a step of its own, before the API starts: it applies the migrations and the one-time repairs of the
+  # data, creates the first administrator, and exits. The API below never changes the schema (Startup__Migrate=false): it only checks that the
+  # database is current and refuses to start otherwise. Run `docker compose run --rm migrate` again after an upgrade (or just `up`: it runs first).
+  migrate:
+    build: ./backend
+    image: ticketsystemtech-api
+    restart: "no"
+    command: ["--migrate-only"]
+    environment:
+      <<: *app-environment
+    volumes:
+      - tickets-data:/data
+      - ./certs:/certs:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
   api:
     build: ./backend
     image: ticketsystemtech-api
@@ -19,22 +55,8 @@ services:
     ports:
       - "8080:8080"                      # put a reverse proxy with TLS in front of this
     environment:
-      # TrustServerCertificate=True is acceptable here only because "db" is in the same private Docker network. For a database on
-      # another server use Encrypt=True;TrustServerCertificate=False and a real certificate on the SQL Server.
-      ConnectionStrings__DefaultConnection: "Server=db;Database=TicketSystemTech;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True"
-      Jwt__Secret: ${JWT_SECRET}                    # 32+ random characters; changing it signs everybody out
-      Pii__HashKey: ${PII_HASH_KEY}                 # 32+ random characters, a DIFFERENT value; never change it once there is data
-      SeedAdmin__Email: ${ADMIN_EMAIL}
-      Frontend__BaseUrl: ${PUBLIC_URL}              # where people open the application, e.g. https://tickets.firma.ba
-      AllowedHosts: ${PUBLIC_HOST}                  # the host name only, e.g. tickets.firma.ba (the API is reached by this name)
-      Cors__AllowedOrigins__0: ${PUBLIC_URL}
-      DataProtection__CertificatePath: /certs/keyring.pfx
-      DataProtection__CertificatePassword: ${KEYRING_PASSWORD}
-      # Optional: e-mail (without these nothing is sent) and AI (without these there is no AI).
-      # Smtp__Host: smtp.firma.ba
-      # Smtp__FromAddress: tickets@firma.ba
-      # Ai__Provider: OpenAiCompatible
-      # Ai__Endpoint: http://ollama:11434/v1
+      <<: *app-environment
+      Startup__Migrate: "false"          # migrations are the "migrate" service's job
     volumes:
       - tickets-data:/data                          # attachments and log files
       - tickets-avatars:/app/wwwroot/avatars        # profile pictures
@@ -42,6 +64,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest

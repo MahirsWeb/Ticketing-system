@@ -213,7 +213,7 @@ describe('the company page', () => {
       await user.click(screen.getByRole('button', { name: 'Save' }));
 
       expect(await screen.findByRole('heading', { name: 'Acme novi' })).toBeInTheDocument();
-      expect(server.sent('PUT', /companies\/c1$/).map((r) => r.body)).toEqual([{ name: 'Acme novi', contactInfo: '033 123 456', isActive: true }]);
+      expect(server.sent('PUT', /companies\/c1$/).map((r) => r.body)).toEqual([{ name: 'Acme novi', contactInfo: '033 123 456', isActive: true, aiIndexingEnabled: true }]);
       expect(screen.getByText('033 123 456')).toBeInTheDocument();
       expect(editToggle()).toHaveTextContent('Edit company details');
     });
@@ -546,7 +546,22 @@ describe('the company page', () => {
       await user.click(screen.getByRole('button', { name: 'Save' }));
 
       await screen.findByText('033 999');
-      expect(server.sent('PUT', /companies\/c1$/)[0].body).toEqual({ name: 'Acme d.o.o.', contactInfo: '033 999', isActive: true });
+      expect(server.sent('PUT', /companies\/c1$/)[0].body).toEqual({ name: 'Acme d.o.o.', contactInfo: '033 999', isActive: true, aiIndexingEnabled: true });
+    });
+
+    it('sends that the company does not want its tickets sent to the AI provider when that box is cleared', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await screen.findByText('Mia Marić');
+      await openEditor(user);
+      const box = screen.getByRole('checkbox', { name: /sent to the AI provider/i });
+      expect(box).toBeChecked();
+      await user.click(box);
+
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+
+      await screen.findByText('Acme d.o.o.');
+      expect(server.sent('PUT', /companies\/c1$/)[0].body).toMatchObject({ aiIndexingEnabled: false });
     });
 
     it('keeps the editing out of reach of the keyboard and of a screen reader while it is closed', async () => {

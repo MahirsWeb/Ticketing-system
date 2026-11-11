@@ -32,8 +32,8 @@ public interface IEmailIntegrationService
 
     Task<bool> SetMarkedAsync(Guid departmentId, Guid markedByUserId, string messageId, bool marked, CancellationToken ct = default);
 
-    /// <summary>Downloads the message's attachments from the mailbox and saves them as attachments on the given ticket.</summary>
-    Task ImportAttachmentsToTicketAsync(Guid departmentId, Guid uploadedByUserId, string messageId, Guid ticketId, CancellationToken ct = default);
-
-    Task MarkConvertedAsync(Guid departmentId, string messageId, Guid ticketId, CancellationToken ct = default);
+    /// <summary>Downloads the message's attachments from the mailbox, saves them as attachments on the given ticket and marks the message as
+    /// converted to it: all in ONE save, so that a failure leaves neither half behind (no files on the ticket for a message that is not marked, and
+    /// no "converted" mark on a ticket that never got its files).</summary>
+    Task ImportAttachmentsAndMarkConvertedAsync(Guid departmentId, Guid uploadedByUserId, string messageId, Guid ticketId, CancellationToken ct = default);
 }

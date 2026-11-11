@@ -38,4 +38,8 @@ public class ApplicationUser : IdentityUser<Guid>
 
     /// <summary>Optional avatar uploaded by the user (or an admin on their behalf). Null shows a default placeholder.</summary>
     public string? ProfilePictureUrl { get; set; }
+
+    /// <summary>The language the person chose in the application ("en" or "bs"). E-mails are composed on the server, where the browser's choice is not
+    /// known, so it is kept here and the mails to this person are written in it.</summary>
+    public string PreferredLanguage { get; set; } = "en";
 }

@@ -53,8 +53,8 @@ public sealed class BranchService : IBranchService
         _db.Audit(_currentUser.UserId, "DepartmentCreated", nameof(Department), entity.Id, $"Branch '{entity.Name}'");
 
         // The welcome mail is filed in the same save as the branch itself: a branch that exists has its mail promised, and a failed save leaves neither.
-        var creatorEmail = await _db.Users.Where(u => u.Id == _currentUser.UserId).Select(u => u.Email).FirstOrDefaultAsync();
-        var welcome = AccountMessages.BranchWelcome(entity.Name, creatorEmail ?? "your administrator");
+        var creator = await _db.Users.Where(u => u.Id == _currentUser.UserId).Select(u => new { u.Email, u.PreferredLanguage }).FirstOrDefaultAsync();
+        var welcome = AccountMessages.BranchWelcome(entity.Name, creator?.Email ?? "your administrator", creator?.PreferredLanguage);
         _db.StageEmail(entity.Email, welcome.Subject, welcome.Html);
         await _db.SaveChangesAsync();
 

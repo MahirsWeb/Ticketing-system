@@ -18,6 +18,7 @@ public static partial class PiiRedactor
     public const string EmailMask = "[email]";
     public const string PhoneMask = "[phone]";
     public const string SecretMask = "[secret]";
+    public const string NameMask = "[name]";
 
     [GeneratedRegex(@"[\w.+\-]+@[\w\-]+(?:\.[\w\-]+)+", RegexOptions.CultureInvariant)]
     private static partial Regex Email();
@@ -49,5 +50,29 @@ public static partial class PiiRedactor
         result = Phone().Replace(result, PhoneMask);
         result = BearerOrJwt().Replace(result, SecretMask);
         return LabelledSecret().Replace(result, m => m.Groups["label"].Value + m.Groups["link"].Value + SecretMask);
+    }
+
+    /// <summary>
+    /// Masks the names of the people a text is about (the client, the staff on the ticket, the authors of the notes): each part of a name of at least
+    /// three letters, as a whole word, in any case. Names are not found by a pattern, so the caller says whose they are; a name that nobody listed is
+    /// left alone. A part that is also an ordinary word ("Ana", "Mara") is masked wherever it stands: over-masking costs a little context, not privacy.
+    /// </summary>
+    private static readonly char[] NameSeparators = { ' ', '-' };
+
+    public static string RedactNames(string? text, IEnumerable<string?> fullNames)
+    {
+        if (string.IsNullOrEmpty(text)) return text ?? string.Empty;
+        var parts = fullNames
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .SelectMany(n => n!.Split(NameSeparators, StringSplitOptions.RemoveEmptyEntries))
+            .Select(p => p.Trim(',', '.', ';'))
+            .Where(p => p.Length >= 3)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(p => p.Length)
+            .ToList();
+        if (parts.Count == 0) return text;
+
+        var pattern = @"(?<![\p{L}\p{N}])(?:" + string.Join("|", parts.Select(Regex.Escape)) + @")(?![\p{L}\p{N}])";
+        return Regex.Replace(text, pattern, NameMask, RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
     }
 }

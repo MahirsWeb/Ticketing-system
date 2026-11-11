@@ -232,15 +232,15 @@ public class RetestDefectTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Different_keys_or_no_key_are_different_messages()
+    public async Task Different_keys_are_different_messages_even_with_the_same_text_and_a_repeat_without_a_key_is_not_a_new_one()
     {
         var ticket = await NewTicketAsync(TicketStatus.InProgress);
 
         await PostNoteAsync(_world.EmpA1, ticket, "same text", "retest-msg-a");
-        await PostNoteAsync(_world.EmpA1, ticket, "same text", "retest-msg-b");
-        await PostNoteAsync(_world.EmpA1, ticket, "same text", null);
+        await PostNoteAsync(_world.EmpA1, ticket, "same text", "retest-msg-b"); // a person who means it twice says so with two keys
+        await PostNoteAsync(_world.EmpA1, ticket, "same text", null);           // the same text again, with no key, a moment later: the same message sent twice
 
-        Assert.Equal(3, await _world.Db(db => db.TicketMessages.CountAsync(m => m.TicketId == ticket && m.Type == MessageType.InternalNote)));
+        Assert.Equal(2, await _world.Db(db => db.TicketMessages.CountAsync(m => m.TicketId == ticket && m.Type == MessageType.InternalNote)));
     }
 
     [SqlFact]
@@ -263,6 +263,23 @@ public class RetestDefectTests : IAsyncLifetime
             new { type = "InternalNote", bodyHtml = "<p>x</p>" }, Key("not valid because of spaces"));
 
         Assert.Equal(400, response.Code);
+    }
+
+    [SqlFact]
+    public async Task The_same_note_sent_twice_without_a_key_is_one_note_but_a_different_one_is_not_swallowed()
+    {
+        var ticket = await NewTicketAsync(TicketStatus.InProgress);
+        var note = new { type = "InternalNote", bodyHtml = "<p>restartovan servis, provjeriti sutra</p>" };
+
+        var first = await _world.Send(_world.EmpA1, HttpMethod.Post, $"/api/tickets/{ticket}/messages", note);
+        var again = await _world.Send(_world.EmpA1, HttpMethod.Post, $"/api/tickets/{ticket}/messages", note);
+        var other = await _world.Send(_world.EmpA1, HttpMethod.Post, $"/api/tickets/{ticket}/messages", new { type = "InternalNote", bodyHtml = "<p>nešto sasvim drugo</p>" });
+
+        Assert.Equal(200, first.Code);
+        Assert.Equal(200, again.Code);
+        Assert.Equal(200, other.Code);
+        Assert.Equal(System.Text.Json.JsonDocument.Parse(first.Text).RootElement.GetProperty("id").GetString(), System.Text.Json.JsonDocument.Parse(again.Text).RootElement.GetProperty("id").GetString());
+        Assert.Equal(2, await _world.Db(db => db.TicketMessages.CountAsync(m => m.TicketId == ticket && m.Type == MessageType.InternalNote)));
     }
 
     // ======================= TS-DEP-04.3 / 04.1: vectors of another model =======================

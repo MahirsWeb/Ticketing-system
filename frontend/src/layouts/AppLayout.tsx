@@ -9,6 +9,7 @@ import { useLanguage } from '../i18n/LanguageContext';
 import type { TranslationKey } from '../i18n/translations';
 import { useTicketCounts } from '../api/ticketQueries';
 import { authApi } from '../api/auth';
+import { usersApi } from '../api/users';
 import clsx from 'clsx';
 
 function useNavByRole(): Record<string, { to: string; label: string; ticketsDropdown?: boolean }[]> {
@@ -147,10 +148,18 @@ export default function AppLayout() {
   const signOut = useAuthStore((s) => s.signOut);
   const navigate = useNavigate();
   const location = useLocation();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const navByRole = useNavByRole();
   const [signingOut, setSigningOut] = useState(false);
   const [signOutFailed, setSignOutFailed] = useState(false);
+
+  // E-mails are composed on the server, which does not know the language the browser shows: it is told, when the person signs in and
+  // whenever they change it. A failure is not worth showing (the next load tells it again), so it is dropped.
+  const userId = user?.id;
+  useEffect(() => {
+    if (!userId) return;
+    usersApi.setMyLanguage(language).catch(() => undefined);
+  }, [userId, language]);
 
   if (!user) return null;
   const nav = navByRole[user.role] ?? [];

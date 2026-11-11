@@ -132,7 +132,7 @@ public sealed class AuthService : IAuthService
             // At most one such e-mail a day per person: otherwise anybody can lock the account again and again and fill its owner's mailbox.
             if (await _userManager.IsLockedOutAsync(user) && _lockoutNotices.TryAcquire(user.Id, UtcNow, TimeSpan.FromHours(24)))
             {
-                var mail = AccountMessages.AccountLocked(user.FirstName);
+                var mail = AccountMessages.AccountLocked(user.FirstName, user.PreferredLanguage);
                 _emailQueue.Enqueue(user.Email!, mail.Subject, mail.Html);
             }
 
@@ -218,7 +218,7 @@ public sealed class AuthService : IAuthService
         {
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(account);
             var link = $"{_frontendOptions.BaseUrl}/verify-email?userId={account.Id}&token={Uri.EscapeDataString(token)}";
-            var mail = AccountMessages.VerifyEmail(account.FirstName, link);
+            var mail = AccountMessages.VerifyEmail(account.FirstName, link, account.PreferredLanguage);
             // Filed and saved on the spot: the outbox row is the promise that the mail will be sent, and the worker delivers it.
             _db.StageEmail(account.Email!, mail.Subject, mail.Html);
             await _db.SaveChangesAsync();
@@ -254,7 +254,7 @@ public sealed class AuthService : IAuthService
             var link = $"{_frontendOptions.BaseUrl}/reset-password?userId={user.Id}&token={Uri.EscapeDataString(token)}";
             // Queued rather than awaited: only existing accounts get an email, so waiting for the send made the response time
             // reveal whether the address is registered.
-            var mail = AccountMessages.PasswordReset(user.FirstName, link);
+            var mail = AccountMessages.PasswordReset(user.FirstName, link, user.PreferredLanguage);
             _emailQueue.Enqueue(user.Email!, mail.Subject, mail.Html);
         }
 
@@ -309,12 +309,16 @@ public sealed class AuthService : IAuthService
     private static string HashRefreshToken(string raw) =>
         Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(raw)));
 
+    /// <summary>Starts the person's session after a sign-in: ends every earlier one (one sign-in per person) and issues a new cookie.</summary>
     public async Task<(string RefreshToken, DateTime ExpiresAtUtc)> IssueRefreshTokenAsync(Guid userId)
     {
         var raw = NewRawRefreshToken();
         var now = UtcNow;
         var expires = now.AddDays(Math.Max(_jwt.RefreshTokenDays, 1));
         var stamp = await _db.Users.Where(u => u.Id == userId).Select(u => u.SecurityStamp).FirstOrDefaultAsync();
+        // One sign-in per person: a new sign-in ends every earlier one, wherever it was made. The device that is left behind is refused at its next renewal
+        // (plain 401: the cookie was revoked, not spent by a rotation, so this is not taken for a theft) and lands on the sign-in page.
+        await _db.RevokeRefreshTokensAsync(userId, now);
         _db.RefreshTokens.Add(new RefreshToken
         {
             UserId = userId,

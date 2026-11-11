@@ -67,6 +67,9 @@ public sealed class Notifier : INotifier
 
     private static string FullName(ApplicationUser user) => $"{user.FirstName} {user.LastName}";
 
+    /// <summary>The subject in the language the recipient chose (the e-mail itself is written in it by the template).</summary>
+    private static string Pick(ApplicationUser to, string english, string bosnian) => EmailLanguage.Pick(to.PreferredLanguage, english, bosnian);
+
     private static IEnumerable<Delivery> Deliveries(NotificationEvent @event)
     {
         switch (@event)
@@ -75,8 +78,8 @@ public sealed class Notifier : INotifier
                 foreach (var member in e.Staff)
                     yield return new Delivery(member, NotificationType.NewTicket, e.Ticket.Id,
                         $"New ticket #{e.Ticket.TicketNumber}: {e.Ticket.Title}",
-                        $"New ticket #{e.Ticket.TicketNumber} submitted — {e.CompanyName}",
-                        EmailTemplates.NewTicketSubmitted(member.FirstName, e.Ticket.TicketNumber, e.Ticket.Title, FullName(e.Client), e.CompanyName),
+                        Pick(member, $"New ticket #{e.Ticket.TicketNumber} submitted — {e.CompanyName}", $"Novi tiket #{e.Ticket.TicketNumber} — {e.CompanyName}"),
+                        EmailTemplates.NewTicketSubmitted(member.FirstName, e.Ticket.TicketNumber, e.Ticket.Title, FullName(e.Client), e.CompanyName, member.PreferredLanguage),
                         PushEvents.NewTicket, new { e.Ticket.Id, e.Ticket.TicketNumber, e.Ticket.Title });
                 break;
 
@@ -84,8 +87,8 @@ public sealed class Notifier : INotifier
                 yield return AssignedTo(e.Ticket, e.Assignee);
                 yield return new Delivery(e.Client, NotificationType.TicketOpened, e.Ticket.Id,
                     $"Your ticket #{e.Ticket.TicketNumber} has been opened",
-                    $"Your ticket #{e.Ticket.TicketNumber} has been opened",
-                    EmailTemplates.TicketOpened(e.Client.FirstName, e.Ticket.TicketNumber),
+                    Pick(e.Client, $"Your ticket #{e.Ticket.TicketNumber} has been opened", $"Vaš tiket #{e.Ticket.TicketNumber} je otvoren"),
+                    EmailTemplates.TicketOpened(e.Client.FirstName, e.Ticket.TicketNumber, e.Client.PreferredLanguage),
                     PushEvents.TicketOpened, new { e.Ticket.Id, e.Ticket.TicketNumber, e.Ticket.Title });
                 break;
 
@@ -97,16 +100,16 @@ public sealed class Notifier : INotifier
                 foreach (var member in e.Staff)
                     yield return new Delivery(member, NotificationType.TicketTransferred, e.Ticket.Id,
                         $"Ticket #{e.Ticket.TicketNumber} transferred to {e.ToBranch}",
-                        $"Ticket #{e.Ticket.TicketNumber} transferred to your branch",
-                        EmailTemplates.TicketTransferred(member.FirstName, e.Ticket.TicketNumber, e.Ticket.Title, e.FromBranch, e.ToBranch, FullName(e.By)),
+                        Pick(member, $"Ticket #{e.Ticket.TicketNumber} transferred to your branch", $"Tiket #{e.Ticket.TicketNumber} je premješten u vašu poslovnicu"),
+                        EmailTemplates.TicketTransferred(member.FirstName, e.Ticket.TicketNumber, e.Ticket.Title, e.FromBranch, e.ToBranch, FullName(e.By), member.PreferredLanguage),
                         PushEvents.TicketTransferred, new { e.Ticket.Id, e.Ticket.TicketNumber, e.Ticket.Title, Branch = e.ToBranch });
                 break;
 
             case TicketClosedEvent e:
                 yield return new Delivery(e.Client, NotificationType.TicketClosed, e.Ticket.Id,
                     $"Ticket #{e.Ticket.TicketNumber} has been resolved",
-                    $"Your ticket #{e.Ticket.TicketNumber} has been resolved",
-                    EmailTemplates.TicketClosed(e.Client.FirstName, e.Ticket.TicketNumber, FullName(e.By)),
+                    Pick(e.Client, $"Your ticket #{e.Ticket.TicketNumber} has been resolved", $"Vaš tiket #{e.Ticket.TicketNumber} je riješen"),
+                    EmailTemplates.TicketClosed(e.Client.FirstName, e.Ticket.TicketNumber, FullName(e.By), e.Client.PreferredLanguage),
                     PushEvents.TicketClosed, new { e.Ticket.Id, e.Ticket.TicketNumber });
                 break;
 
@@ -114,16 +117,16 @@ public sealed class Notifier : INotifier
                 foreach (var recipient in e.Recipients)
                     yield return new Delivery(recipient, NotificationType.NewResponse, e.Ticket.Id,
                         $"New reply on ticket #{e.Ticket.TicketNumber}",
-                        $"New reply on ticket #{e.Ticket.TicketNumber}",
-                        EmailTemplates.NewResponse(recipient.FirstName, e.Ticket.TicketNumber),
+                        Pick(recipient, $"New reply on ticket #{e.Ticket.TicketNumber}", $"Novi odgovor na tiketu #{e.Ticket.TicketNumber}"),
+                        EmailTemplates.NewResponse(recipient.FirstName, e.Ticket.TicketNumber, recipient.PreferredLanguage),
                         PushEvents.NewResponse, new { e.Ticket.Id, e.Ticket.TicketNumber });
                 break;
 
             case TaskAssignedEvent e:
                 yield return new Delivery(e.Assignee, NotificationType.TaskAssigned, null,
                     $"{FullName(e.By)} assigned you a task: \"{e.Task.Title}\"",
-                    "A task has been assigned to you",
-                    EmailTemplates.WorkTaskAssigned(e.Assignee.FirstName, e.Task.Title, FullName(e.By)),
+                    Pick(e.Assignee, "A task has been assigned to you", "Dodijeljen vam je zadatak"),
+                    EmailTemplates.WorkTaskAssigned(e.Assignee.FirstName, e.Task.Title, FullName(e.By), e.Assignee.PreferredLanguage),
                     PushEvents.TaskAssigned, new { e.Task.Id, e.Task.Title });
                 break;
 
@@ -131,8 +134,8 @@ public sealed class Notifier : INotifier
                 foreach (var assignee in e.Assignees)
                     yield return new Delivery(assignee, NotificationType.TicketOverdue, e.TicketId,
                         $"Ticket #{e.TicketNumber} is overdue",
-                        $"Ticket #{e.TicketNumber} is overdue",
-                        EmailTemplates.TicketOverdue(assignee.FirstName, e.TicketNumber, e.Title, e.Reason),
+                        Pick(assignee, $"Ticket #{e.TicketNumber} is overdue", $"Tiket #{e.TicketNumber} kasni"),
+                        EmailTemplates.TicketOverdue(assignee.FirstName, e.TicketNumber, e.Title, e.Reason, assignee.PreferredLanguage),
                         PushEvents.TicketOverdue, new { Id = e.TicketId, e.TicketNumber, e.Title });
                 break;
 
@@ -145,8 +148,8 @@ public sealed class Notifier : INotifier
     private static Delivery AssignedTo(Ticket ticket, ApplicationUser assignee) =>
         new(assignee, NotificationType.TicketAssigned, ticket.Id,
             $"Ticket #{ticket.TicketNumber} assigned to you",
-            $"Ticket #{ticket.TicketNumber} assigned to you",
-            EmailTemplates.TicketAssigned(assignee.FirstName, ticket.TicketNumber, ticket.Title),
+            Pick(assignee, $"Ticket #{ticket.TicketNumber} assigned to you", $"Tiket #{ticket.TicketNumber} vam je dodijeljen"),
+            EmailTemplates.TicketAssigned(assignee.FirstName, ticket.TicketNumber, ticket.Title, assignee.PreferredLanguage),
             PushEvents.TicketAssigned, new { ticket.Id, ticket.TicketNumber, ticket.Title });
 
     public IReadOnlyList<Notification> InApp(NotificationEvent @event) =>

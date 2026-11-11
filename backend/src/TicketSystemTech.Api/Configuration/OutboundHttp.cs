@@ -16,12 +16,12 @@ public static class OutboundHttp
 {
     public static IServiceCollection AddOutboundHttpClients(this IServiceCollection services)
     {
-        // Chat completion: an LLM answer can legitimately take tens of seconds. Generating text is safe to repeat, so one
-        // retry covers a transient 429/5xx.
+        // Chat completion: an LLM answer can legitimately take tens of seconds, but not minutes: at most a minute in all (a call of 30 s and one
+        // retry). Generating text is safe to repeat, so the retry covers a transient 429/5xx.
         services.AddHttpClient<IChatCompletionService, AiChatCompletionService>(c => c.Timeout = TimeSpan.FromMinutes(2))
             .AddStandardResilienceHandler(o =>
             {
-                Limits(o, attempt: TimeSpan.FromSeconds(45), total: TimeSpan.FromSeconds(100));
+                Limits(o, attempt: TimeSpan.FromSeconds(30), total: TimeSpan.FromSeconds(60));
                 o.Retry.MaxRetryAttempts = 1;
             });
 
@@ -30,7 +30,8 @@ public static class OutboundHttp
         services.AddHttpClient<IEmbeddingService, AiEmbeddingService>(c => c.Timeout = TimeSpan.FromMinutes(2))
             .AddStandardResilienceHandler(o =>
             {
-                Limits(o, attempt: TimeSpan.FromSeconds(30), total: TimeSpan.FromSeconds(40));
+                // The question a person has just asked waits for this call, so a provider that does not answer must not hold the screen for long.
+                Limits(o, attempt: TimeSpan.FromSeconds(10), total: TimeSpan.FromSeconds(12));
                 NoAutomaticRetry(o);
                 BreakerIgnoresRateLimits(o);
             });

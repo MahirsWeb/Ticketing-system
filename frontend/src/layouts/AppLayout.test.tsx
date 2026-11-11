@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import AppLayout from './AppLayout';
 import { ticketsApi } from '../api/tickets';
 import { authApi } from '../api/auth';
+import { usersApi } from '../api/users';
 import { LanguageProvider } from '../i18n/LanguageContext';
 import { useAuthStore } from '../store/authStore';
 import { renderWithQuery } from '../test/renderWithQuery';
@@ -14,6 +15,7 @@ vi.mock('../api/tickets', () => ({
   ticketsApi: { counts: vi.fn().mockResolvedValue({ total: 4, mine: 1, opened: 2, closed: 1, new: 1 }) },
 }));
 vi.mock('../api/auth', () => ({ authApi: { logout: vi.fn() } }));
+vi.mock('../api/users', () => ({ usersApi: { setMyLanguage: vi.fn().mockResolvedValue({}), setMyPhone: vi.fn(), skipPhonePrompt: vi.fn() } }));
 vi.mock('../api/notifications', () => ({ notificationsApi: { list: vi.fn().mockResolvedValue([]), markRead: vi.fn() } }));
 vi.mock('../lib/notificationsHub', () => ({
   getNotificationsHub: () => ({ on: vi.fn(), off: vi.fn(), onreconnected: vi.fn() }),
@@ -125,5 +127,29 @@ describe('signing out', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/sign out failed/i);
     expect(useAuthStore.getState().accessToken).toBe('t');
     expect(screen.getByRole('button', { name: /sign out/i })).toBeEnabled(); // and they can try again
+  });
+});
+
+// TS-47.1: e-mails are written on the server, in the language the person chose; the server is told, as the person signs in and when they change it.
+describe('telling the server which language the person uses', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.mocked(usersApi.setMyLanguage).mockClear();
+    useAuthStore.setState({ accessToken: 't', user: employee });
+  });
+
+  it('reports the language on load and again when it is changed', async () => {
+    renderLayout();
+    await waitFor(() => expect(usersApi.setMyLanguage).toHaveBeenCalledWith('en'));
+
+    await userEvent.click(screen.getAllByRole('button', { name: /bosanski|bs/i })[0]);
+
+    await waitFor(() => expect(usersApi.setMyLanguage).toHaveBeenLastCalledWith('bs'));
+  });
+
+  it('is not bothered by the server being unable to take it', async () => {
+    vi.mocked(usersApi.setMyLanguage).mockRejectedValueOnce(new Error('offline'));
+    renderLayout();
+    expect(await screen.findByText('the tasks')).toBeInTheDocument();
   });
 });

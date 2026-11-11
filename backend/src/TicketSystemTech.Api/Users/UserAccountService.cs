@@ -148,7 +148,7 @@ public sealed class UserAccountService : IUserAccountService
             Details = $"Role of target: {user.Role}"
         });
         // The mail that carries the password is filed in the same save as the record of who asked for it.
-        var mail = AccountMessages.NewTemporaryPassword(user.FirstName, user.Email!, tempPassword, _tempPasswordOptions.ValidityMinutes, $"{_frontendOptions.BaseUrl}/login");
+        var mail = AccountMessages.NewTemporaryPassword(user.FirstName, user.Email!, tempPassword, _tempPasswordOptions.ValidityMinutes, $"{_frontendOptions.BaseUrl}/login", user.PreferredLanguage);
         _db.StageEmail(user.Email!, mail.Subject, mail.Html);
         await _db.SaveChangesAsync();
 
@@ -265,9 +265,12 @@ public sealed class UserAccountService : IUserAccountService
 
         var tempPassword = _tempPasswordGenerator.Generate();
         var expiresAt = UtcNow.AddMinutes(_tempPasswordOptions.ValidityMinutes);
+        // The person has not chosen a language yet: the account starts in the one of whoever makes it, and the invitation is written in it.
+        var creatorLanguage = await _db.Users.Where(u => u.Id == _currentUser.UserId).Select(u => u.PreferredLanguage).FirstOrDefaultAsync() ?? "en";
 
         var user = new ApplicationUser
         {
+            PreferredLanguage = creatorLanguage,
             UserName = email,
             Email = email,
             FirstName = firstName,
@@ -288,7 +291,7 @@ public sealed class UserAccountService : IUserAccountService
             return Outcome<CreatedUserResponse>.Invalid(string.Join(" ", result.Errors.Select(e => e.Description)));
 
         _db.Audit(_currentUser.UserId, "UserCreated", nameof(ApplicationUser), user.Id, $"Role: {role}");
-        var invitation = AccountMessages.Invite(firstName, email, tempPassword, _tempPasswordOptions.ValidityMinutes, $"{_frontendOptions.BaseUrl}/login");
+        var invitation = AccountMessages.Invite(firstName, email, tempPassword, _tempPasswordOptions.ValidityMinutes, $"{_frontendOptions.BaseUrl}/login", creatorLanguage);
         _db.StageEmail(email, invitation.Subject, invitation.Html);
         await _db.SaveChangesAsync();
 

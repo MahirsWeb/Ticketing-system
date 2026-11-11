@@ -30,11 +30,16 @@ public sealed class TicketMessageService : ITicketMessageService
     private readonly IHtmlSanitizerService _html;
     private readonly ITicketQueries _queries;
     private readonly ITicketIdempotency _idempotency;
+    private readonly TimeProvider _time;
+
+    /// <summary>How long the same text from the same person on the same ticket counts as the same message sent twice, when the request carries no Idempotency-Key.</summary>
+    public static readonly TimeSpan RepeatWindow = TimeSpan.FromSeconds(10);
 
     public TicketMessageService(
         AppDbContext db, ICurrentUserService currentUser, INotifier notifier,
-        IKnowledgeBaseIndexQueue indexQueue, IHtmlSanitizerService html, ITicketQueries queries, ITicketIdempotency idempotency)
+        IKnowledgeBaseIndexQueue indexQueue, IHtmlSanitizerService html, ITicketQueries queries, ITicketIdempotency idempotency, TimeProvider time)
     {
+        _time = time;
         _db = db;
         _currentUser = currentUser;
         _notifier = notifier;
@@ -68,12 +73,25 @@ public sealed class TicketMessageService : ITicketMessageService
         if (idempotencyKey is not null && await _idempotency.FindPreviousAsync(authorId, idempotencyKey, TicketIdempotency.MessageScope) is { } earlierId)
             return Outcome<TicketMessageDto>.Ok(await _queries.BuildMessageAsync(earlierId));
 
+        var body = _html.Sanitize(request.BodyHtml);
+
+        // A client that sends no Idempotency-Key (a script, an older screen, a double click that outran the button) is still protected against the plain
+        // case: the very same text from the same person on the same ticket within a few seconds is the same message, not a second one.
+        if (idempotencyKey is null)
+        {
+            var since = _time.GetUtcNow().UtcDateTime - RepeatWindow;
+            var repeated = await _db.TicketMessages.AsNoTracking()
+                .Where(m => m.TicketId == id && m.AuthorId == authorId && m.Type == request.Type && m.BodyHtml == body && m.CreatedAt >= since)
+                .OrderByDescending(m => m.CreatedAt).Select(m => (Guid?)m.Id).FirstOrDefaultAsync();
+            if (repeated is { } same) return Outcome<TicketMessageDto>.Ok(await _queries.BuildMessageAsync(same));
+        }
+
         var message = new TicketMessage
         {
             TicketId = id,
             AuthorId = authorId,
             Type = request.Type,
-            BodyHtml = _html.Sanitize(request.BodyHtml)
+            BodyHtml = body
         };
         _db.TicketMessages.Add(message);
 

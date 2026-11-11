@@ -138,8 +138,7 @@ public sealed class MailboxService : IMailboxService
         if (convertedTo == ticketId) return Outcome<Done>.Ok(Done.Value);
         if (convertedTo.HasValue) return Outcome<Done>.Conflict("This e-mail already became another ticket.");
 
-        await _emailService.ImportAttachmentsToTicketAsync(departmentId, _currentUser.UserId!.Value, messageId, ticketId);
-        await _emailService.MarkConvertedAsync(departmentId, messageId, ticketId);
+        await _emailService.ImportAttachmentsAndMarkConvertedAsync(departmentId, _currentUser.UserId!.Value, messageId, ticketId);
         return Outcome<Done>.Ok(Done.Value);
     }
 }

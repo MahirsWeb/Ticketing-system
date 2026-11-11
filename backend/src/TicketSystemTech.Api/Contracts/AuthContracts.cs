@@ -52,6 +52,8 @@ public record ResetPasswordRequest(
     [Required] string ConfirmNewPassword
 );
 
+public record SetLanguageRequest(string? Language);
+
 public record SetPhoneNumberRequest(
     [Required, Phone] string PhoneNumber
 );

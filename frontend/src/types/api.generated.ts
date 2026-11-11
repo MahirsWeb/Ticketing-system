@@ -3175,6 +3175,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/users/me/language": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/*+json": components["schemas"]["SetLanguageRequest"];
+                    "application/json": components["schemas"]["SetLanguageRequest"];
+                    "text/json": components["schemas"]["SetLanguageRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users/me/phone": {
         parameters: {
             query?: never;
@@ -3967,6 +4006,7 @@ export interface components {
         };
         CompanyItemFull: {
             address?: string | null;
+            aiIndexingEnabled?: boolean;
             contactInfo?: string | null;
             /** Format: uuid */
             id?: string;
@@ -4259,6 +4299,9 @@ export interface components {
             /** Format: uuid */
             userId?: string;
         };
+        SetLanguageRequest: {
+            language?: string | null;
+        };
         SetMarkedRequest: {
             marked?: boolean;
         };
@@ -4466,6 +4509,7 @@ export interface components {
         };
         UpdateCompanyRequest: {
             address?: string | null;
+            aiIndexingEnabled?: boolean | null;
             contactInfo?: string | null;
             isActive?: boolean;
             name?: string;

@@ -83,6 +83,52 @@ public class KnowledgeBaseRedactionTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task The_names_of_the_people_on_the_ticket_are_not_kept_in_the_chunk()
+    {
+        var (client, employee) = await _world.Db(async db => (
+            await db.Users.Where(u => u.Id == _world.CliX.Id).Select(u => u.FirstName + " " + u.LastName).SingleAsync(),
+            await db.Users.Where(u => u.Id == _world.EmpA1.Id).Select(u => u.FirstName + " " + u.LastName).SingleAsync()));
+        var clientFirst = client.Split(' ')[0];
+        var employeeFirst = employee.Split(' ')[0];
+        var id = await ClosedTicketWithNoteAsync($"Klijent {clientFirst} je javio problem, a kolega {employeeFirst} je pomjerio backup job van radnog vremena, pa je sve radilo.");
+
+        using var scope = _world.Factory.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<IKnowledgeBaseIndexer>().IndexTicketAsync(id);
+        var content = await _world.Db(db => db.KnowledgeBaseChunks.Where(c => c.TicketId == id).Select(c => c.Content).SingleAsync());
+
+        Assert.DoesNotContain(clientFirst, content, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(employeeFirst, content, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("[name]", content);
+        Assert.Contains("pomjerio backup job", content);
+    }
+
+    [SqlFact]
+    public async Task A_company_that_does_not_want_its_tickets_sent_to_an_AI_provider_gets_no_chunk_and_loses_the_ones_it_had()
+    {
+        var kept = await ClosedTicketWithNoteAsync(Typed);
+        using (var scope = _world.Factory.Services.CreateScope())
+            Assert.True(await scope.ServiceProvider.GetRequiredService<IKnowledgeBaseIndexer>().IndexTicketAsync(kept));
+        Assert.Equal(1, await _world.Db(db => db.KnowledgeBaseChunks.CountAsync(c => c.TicketId == kept)));
+
+        try
+        {
+            var name = await _world.Db(db => db.Companies.Where(c => c.Id == _world.CompanyId).Select(c => c.Name).SingleAsync());
+            var off = await _world.Send(_world.Admin, HttpMethod.Put, $"/api/companies/{_world.CompanyId}", new { name, isActive = true, aiIndexingEnabled = false });
+            Assert.Equal(System.Net.HttpStatusCode.OK, off.Status);
+            Assert.Equal(0, await _world.Db(db => db.KnowledgeBaseChunks.CountAsync(c => c.TicketId == kept))); // taken back with the permission
+
+            var later = await ClosedTicketWithNoteAsync(Typed);
+            using var scope = _world.Factory.Services.CreateScope();
+            Assert.False(await scope.ServiceProvider.GetRequiredService<IKnowledgeBaseIndexer>().IndexTicketAsync(later));
+            Assert.Equal(0, await _world.Db(db => db.KnowledgeBaseChunks.CountAsync(c => c.TicketId == later)));
+        }
+        finally
+        {
+            await _world.Db(db => db.Companies.Where(c => c.Id == _world.CompanyId).ExecuteUpdateAsync(s => s.SetProperty(c => c.AiIndexingEnabled, true)));
+        }
+    }
+
+    [SqlFact]
     public async Task Chunks_that_were_stored_before_are_made_safe_once_and_then_left_alone()
     {
         const string plain = "Dovoljno dugačka interna bilješka da bi tiket bio dio baze znanja, bez ičega osjetljivog u njoj samoj, samo tekst.";

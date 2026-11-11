@@ -41,6 +41,10 @@ export function CompanyEditPanel({ edit, open }: { edit: CompanyEdit; open: bool
                 <input type="checkbox" checked={values.isActive} onChange={(e) => set.isActive(e.target.checked)} />
                 {t('common_active')}
               </label>
+              <label className="flex items-center gap-2 text-sm text-slate-700 md:col-span-2">
+                <input type="checkbox" checked={values.aiIndexing} onChange={(e) => set.aiIndexing(e.target.checked)} />
+                {t('compedit_aiIndexing')}
+              </label>
               <div className="md:col-span-3">
                 <ErrorText>{edit.error}</ErrorText>
                 <div className="flex gap-2">

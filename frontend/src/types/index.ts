@@ -58,6 +58,8 @@ export interface CompanyItemFull {
   address: string | null;
   contactInfo: string | null;
   isActive: boolean;
+  /** False: the text of this company's tickets is never sent to an outside AI provider (no knowledge-base chunk is kept). Absent = true. */
+  aiIndexingEnabled?: boolean;
 }
 
 export interface SubBranchItemFull {

@@ -81,5 +81,8 @@ export const usersApi = {
 
   setMyPhone: (phoneNumber: string) => apiClient.patch('/api/users/me/phone', { phoneNumber }).then((r) => r.data),
 
+  /** Tells the server which language the person chose, so that the e-mails to them are written in it. */
+  setMyLanguage: (language: string) => apiClient.put('/api/users/me/language', { language }).then((r) => r.data),
+
   skipPhonePrompt: () => apiClient.post('/api/users/me/skip-phone-prompt').then((r) => r.data),
 };

@@ -25,14 +25,28 @@ public class KnowledgeBaseIndexer : IKnowledgeBaseIndexer
 
     public async Task<bool> IndexTicketAsync(Guid ticketId, CancellationToken ct = default)
     {
-        var ticket = await _db.Tickets.AsNoTracking().FirstOrDefaultAsync(t => t.Id == ticketId, ct);
+        var ticket = await _db.Tickets.AsNoTracking().Include(t => t.Company).FirstOrDefaultAsync(t => t.Id == ticketId, ct);
         if (ticket is null) return false;
+
+        // A company that does not want its tickets to go to an outside AI provider has no chunk at all: nothing is embedded or kept.
+        if (ticket.Company is { AiIndexingEnabled: false })
+        {
+            if (await _db.KnowledgeBaseChunks.Where(c => c.TicketId == ticketId).ExecuteDeleteAsync(ct) > 0) _vectorIndex.Invalidate();
+            return false;
+        }
 
         var internalNotes = await _db.TicketMessages.AsNoTracking()
             .Where(m => m.TicketId == ticketId && m.Type == MessageType.InternalNote)
             .OrderBy(m => m.CreatedAt)
             .Select(m => m.BodyHtml)
             .ToListAsync(ct);
+
+        // The people the text is about: the client, whoever opened or closed the ticket, whoever is on it, whoever wrote a note.
+        var authorIds = await _db.TicketMessages.AsNoTracking().Where(m => m.TicketId == ticketId).Select(m => m.AuthorId).Distinct().ToListAsync(ct);
+        var assigneeIds = await _db.TicketAssignees.AsNoTracking().Where(a => a.TicketId == ticketId).Select(a => a.UserId).ToListAsync(ct);
+        var personIds = authorIds.Concat(assigneeIds).Append(ticket.ClientId)
+            .Concat(new[] { ticket.OpenedByUserId, ticket.ClosedByUserId }.OfType<Guid>()).Distinct().ToList();
+        var names = await _db.Users.AsNoTracking().Where(u => personIds.Contains(u.Id)).Select(u => u.FirstName + " " + u.LastName).ToListAsync(ct);
 
         // Search only ever returns tickets with enough internal documentation (same measure the query uses: the
         // summed length of the notes' stored HTML). Embedding the rest would cost an external API call, send the
@@ -49,7 +63,7 @@ public class KnowledgeBaseIndexer : IKnowledgeBaseIndexer
 
         // What is stored is what the search shows and what goes to the AI provider, so it is made safe here, once: an e-mail
         // address, a telephone number or a "password: ..." that somebody typed into a note must not be kept in the knowledge base.
-        var content = PiiRedactor.Redact(sb.ToString().Trim());
+        var content = PiiRedactor.RedactNames(PiiRedactor.Redact(sb.ToString().Trim()), names);
         if (content.Length == 0) return false;
 
         var chunk = await _db.KnowledgeBaseChunks.FirstOrDefaultAsync(c => c.TicketId == ticketId, ct);
