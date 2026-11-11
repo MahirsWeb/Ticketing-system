@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
-import { RequireAuth, RequireRole } from './RequireRole';
+import { RequireAuth, RequireRole, SLOW_RESTORE_MS } from './RequireRole';
 import { useAuthStore } from '../store/authStore';
 import type { UserSummary } from '../types';
 
@@ -74,5 +74,26 @@ describe('RequireRole', () => {
     useAuthStore.setState({ accessToken: 't', user: employee });
     renderAt('/settings');
     expect(screen.getByText('start page')).toBeInTheDocument();
+  });
+});
+
+describe('RequireAuth while the session is being restored', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    useAuthStore.setState({ accessToken: null, user: null, signedOutOnPurpose: false, initializing: true });
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('shows only the loader at first, then says why it is taking long and offers the sign-in page (FE-01)', () => {
+    renderAt('/tickets');
+    expect(screen.queryByText(/slow to answer/i)).not.toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(SLOW_RESTORE_MS + 100);
+    });
+    expect(screen.getByText(/slow to answer/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /go to sign in/i }));
+    expect(screen.getByText(/sign-in page, came from: \/tickets/)).toBeInTheDocument();
   });
 });
