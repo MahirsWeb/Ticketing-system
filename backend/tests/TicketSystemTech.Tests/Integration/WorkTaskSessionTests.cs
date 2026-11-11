@@ -487,11 +487,57 @@ public class WorkTaskSessionTests : IAsyncLifetime
     {
         var leaver = await _world.CreateActorAsync("taskleaver2", UserRole.Employee, _world.BranchA, null);
         var done = await NewTaskAsync(leaver, assignedBy: _world.EmpA1, status: WorkTaskStatus.Done);
-        var selfMade = await NewTaskAsync(leaver); // made by the person and given to themselves: nobody to hand it back to
+        var selfMade = await NewTaskAsync(leaver, status: WorkTaskStatus.InProgress); // made by the person for themselves: nobody to hand it back to
 
         Assert.Equal(200, (await _world.Send(_world.Admin, HttpMethod.Patch, $"/api/users/{leaver.Id}/active", new { isActive = false })).Code);
 
         var rows = await _world.Db(db => db.WorkTasks.AsNoTracking().Where(t => t.Id == done || t.Id == selfMade).ToListAsync());
         Assert.All(rows, t => Assert.Equal(leaver.Id, t.AssignedToUserId));
+
+        // It stays on the person, but no longer as work "in progress": it is shown as not started, with a record, for a colleague to reassign.
+        Assert.Equal(WorkTaskStatus.Pending, rows.Single(t => t.Id == selfMade).Status);
+        Assert.Equal(WorkTaskStatus.Done, rows.Single(t => t.Id == done).Status);
+        Assert.True(await _world.Db(db => db.AuditLogs.AnyAsync(a => a.EntityId == selfMade && a.Action == "WorkTaskLeftWithoutOwner")));
+    }
+
+    [SqlFact]
+    public async Task Moving_a_person_between_sub_branches_of_the_same_branch_leaves_their_tasks_alone()
+    {
+        var mover = await _world.CreateActorAsync("taskmover", UserRole.Employee, _world.BranchA, null);
+        var task = await NewTaskAsync(mover, assignedBy: _world.EmpA1, status: WorkTaskStatus.InProgress);
+
+        // Same role, same branch, only the sub-branch changes (here: to none, which is a change of the sub-branch field).
+        var user = await _world.Db(db => db.Users.AsNoTracking().SingleAsync(u => u.Id == mover.Id));
+        var sub = await _world.Db(async db =>
+        {
+            var created = new SubBranch { DepartmentId = _world.BranchA, Name = "Moving-" + Guid.NewGuid().ToString("N")[..6] };
+            db.SubBranches.Add(created);
+            await db.SaveChangesAsync();
+            return created.Id;
+        });
+        try
+        {
+            var moved = await _world.Send(_world.Admin, HttpMethod.Put, $"/api/users/{mover.Id}", new
+            {
+                firstName = user.FirstName,
+                lastName = user.LastName,
+                role = "Employee",
+                departmentId = _world.BranchA,
+                subBranchId = sub
+            });
+            Assert.Equal(200, moved.Code);
+
+            var row = await _world.Db(db => db.WorkTasks.AsNoTracking().SingleAsync(t => t.Id == task));
+            Assert.Equal(mover.Id, row.AssignedToUserId); // not handed back: the branch is what tasks belong to
+        }
+        finally
+        {
+            // A branch with a sub-branch makes every later ticket and account of that branch ask for one: put things back.
+            await _world.Db(async db =>
+            {
+                await db.Users.Where(u => u.Id == mover.Id).ExecuteUpdateAsync(x => x.SetProperty(u => u.SubBranchId, (Guid?)null));
+                return await db.SubBranches.Where(x => x.Id == sub).ExecuteDeleteAsync();
+            });
+        }
     }
 }

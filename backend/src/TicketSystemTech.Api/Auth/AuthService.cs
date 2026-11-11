@@ -336,33 +336,67 @@ public sealed class AuthService : IAuthService
         return (raw, expires);
     }
 
+    /// <summary>What a rotation handed out, kept for the length of the grace window so that a second request that presents the SAME spent cookie
+    /// is given the SAME successor (not a second, independent one).</summary>
+    private sealed record Successor(string Raw, string Hash, DateTime ExpiresAtUtc);
+
+    private static string SuccessorKey(string spentHash) => "refresh-successor:" + spentHash;
+
+    // Presentations of one cookie are taken one at a time in this process, so that of two that arrive together the first rotates it and the second
+    // finds the answer the first left. (The conditional UPDATE below still protects a second instance, which this does not reach.)
+    private static readonly SemaphoreSlim[] Gates = Enumerable.Range(0, 64).Select(_ => new SemaphoreSlim(1, 1)).ToArray();
+
     public async Task<Outcome<RefreshResult>> RefreshAsync(string? rawRefreshToken)
+    {
+        if (string.IsNullOrWhiteSpace(rawRefreshToken))
+            return Outcome<RefreshResult>.Status(StatusCodes.Status401Unauthorized, new { message = RefreshRejected });
+
+        var hash = HashRefreshToken(rawRefreshToken);
+        var gate = Gates[(int)((uint)hash.GetHashCode() % (uint)Gates.Length)];
+        await gate.WaitAsync();
+        try
+        {
+            return await RefreshCoreAsync(hash);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private async Task<Outcome<RefreshResult>> RefreshCoreAsync(string hash)
     {
         Outcome<RefreshResult> Reject() =>
             Outcome<RefreshResult>.Status(StatusCodes.Status401Unauthorized, new { message = RefreshRejected });
 
-        if (string.IsNullOrWhiteSpace(rawRefreshToken)) return Reject();
-
         var now = UtcNow;
-        var hash = HashRefreshToken(rawRefreshToken);
         var stored = await _db.RefreshTokens.FirstOrDefaultAsync(t => t.TokenHash == hash);
         if (stored is null) return Reject();
 
-        // A token that was already rotated away is being presented again. Within a few seconds of the rotation that is two tabs
-        // (or two requests) that raced on the same expired token: honest, and common — a browser restored with five tabs does
-        // exactly this. Later than that it is either a thief or an old copy being replayed: trust in the session is gone, so every live
-        // token of the person is revoked and they sign in again.
-        var raced = false;
+        // A token that was already rotated away is being presented again. Within a few seconds of the rotation that is two tabs (or two requests)
+        // that raced on the same expired token: honest, and common (a browser restored with five tabs does exactly this). They are all given the
+        // successor the first one got, so no second chain is made, and only while that successor is still alive: a sign-out, or the revoking of
+        // the whole family, closes the window at once. Later than that it is a thief or an old copy being replayed: trust in the session is gone,
+        // so every live token of the person is revoked and they sign in again.
         if (stored.RevokedAtUtc is not null)
         {
             var grace = TimeSpan.FromSeconds(Math.Max(_jwt.RefreshReuseGraceSeconds, 0));
-            raced = stored.ReplacedByTokenHash is not null && now - stored.RevokedAtUtc.Value <= grace;
-            if (!raced)
+            if (stored.ReplacedByTokenHash is null || now - stored.RevokedAtUtc.Value > grace)
             {
-                await RevokeFamilyAsync(stored.UserId);
-                await _db.SaveChangesAsync();
-                return Reject();
+                if (stored.ReplacedByTokenHash is not null) // spent by a rotation, and presented again too late: the theft signal
+                {
+                    await RevokeFamilyAsync(stored.UserId);
+                    await _db.SaveChangesAsync();
+                }
+                return Reject(); // signed out (nothing replaced it) or expired: refused, and nobody else is touched
             }
+
+            if (!_cache.TryGetValue(SuccessorKey(hash), out Successor? successor) || successor is null) return Reject();
+            var alive = await _db.RefreshTokens.AnyAsync(t => t.TokenHash == successor.Hash && t.RevokedAtUtc == null && t.ExpiresAtUtc > now);
+            if (!alive) return Reject();
+
+            var again = await WelcomeAsync(stored);
+            return again is null ? Reject() : Outcome<RefreshResult>.Ok(await AnswerAsync(again, successor.Raw, successor.ExpiresAtUtc));
         }
 
         if (stored.ExpiresAtUtc <= now) return Reject();
@@ -371,41 +405,26 @@ public sealed class AuthService : IAuthService
         var sessionEnds = stored.SessionStartedAtUtc.AddDays(Math.Max(_jwt.SessionMaxDays, 1));
         if (sessionEnds <= now) return Reject();
 
-        var user = await _userManager.FindByIdAsync(stored.UserId.ToString());
-        // The account must still be welcome, and the token minted from it as it is now (role, branch and security stamp can all
-        // have changed since sign-in). A pending temporary password means the person never finished setting their own.
-        // A locked account is NOT refused here: lockout exists to stop new sign-ins with guessed passwords, and anybody who knows an
-        // address can trigger it, so it must not be able to throw out a person who is already signed in.
-        if (user is null || !user.IsActive || user.MustChangePassword)
+        var user = await WelcomeAsync(stored);
+        if (user is null)
         {
-            if (!raced) { stored.RevokedAtUtc = now; await _db.SaveChangesAsync(); }
-            return Reject();
-        }
-
-        // The password was changed (or the stamp was rotated for any other reason) after this session began: a cookie that
-        // predates it must not survive. This is what makes "I think someone is in my account" fixable by changing the password.
-        if (stored.SecurityStamp is null || stored.SecurityStamp != user.SecurityStamp)
-        {
-            await RevokeFamilyAsync(stored.UserId);
+            stored.RevokedAtUtc = now;
             await _db.SaveChangesAsync();
             return Reject();
         }
 
-        // Rotate: the presented token is spent, a fresh one takes its place, and the two are linked so a later replay of the
-        // old one is recognised as the theft signal above. The claim is one conditional UPDATE, so of two requests that present
-        // the same live token exactly one wins it; the other is treated as the race it is.
+        // Rotate: the presented token is spent, a fresh one takes its place, and the two are linked so a later replay of the old one is recognised
+        // as the theft signal above. The claim is one conditional UPDATE: of two requests that present the same live token (in two instances of
+        // the application) exactly one wins it, and the other is refused without anybody being revoked.
         var rawNext = NewRawRefreshToken();
         var nextHash = HashRefreshToken(rawNext);
         var expires = now.AddDays(Math.Max(_jwt.RefreshTokenDays, 1));
         if (expires > sessionEnds) expires = sessionEnds;
 
-        if (!raced)
-        {
-            var claimed = await _db.RefreshTokens
-                .Where(t => t.Id == stored.Id && t.RevokedAtUtc == null)
-                .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAtUtc, now).SetProperty(t => t.ReplacedByTokenHash, nextHash));
-            raced = claimed == 0;
-        }
+        var claimed = await _db.RefreshTokens
+            .Where(t => t.Id == stored.Id && t.RevokedAtUtc == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAtUtc, now).SetProperty(t => t.ReplacedByTokenHash, nextHash));
+        if (claimed == 0) return Reject();
 
         _db.RefreshTokens.Add(new RefreshToken
         {
@@ -415,30 +434,63 @@ public sealed class AuthService : IAuthService
             SecurityStamp = user.SecurityStamp,
             SessionStartedAtUtc = stored.SessionStartedAtUtc
         });
-
-        var (accessToken, accessExpires) = _tokenService.GenerateAccessToken(
-            user.Id, user.Email!, user.FirstName, user.LastName, user.Role, user.CompanyId, user.DepartmentId, user.SecurityStamp ?? string.Empty);
         await _db.SaveChangesAsync();
 
-        var response = new LoginResponse(false, accessToken, accessExpires, await ToSummaryAsync(user));
-        return Outcome<RefreshResult>.Ok(new RefreshResult(response, rawNext, expires));
+        var grace2 = TimeSpan.FromSeconds(Math.Max(_jwt.RefreshReuseGraceSeconds, 0));
+        if (grace2 > TimeSpan.Zero) _cache.Set(SuccessorKey(hash), new Successor(rawNext, nextHash, expires), grace2);
+
+        return Outcome<RefreshResult>.Ok(await AnswerAsync(user, rawNext, expires));
+    }
+
+    /// <summary>The person a refresh token belongs to, if they are still welcome: active, with no temporary password pending, and with the security
+    /// stamp the token was made under. A token under an OLD stamp (the password was changed since) is revoked together with the other tokens of
+    /// that person made under an old stamp, and only those: a session signed in after the change is not touched. A locked account is not refused:
+    /// lockout stops new sign-ins with guessed passwords, and anybody who knows an address can cause it, so it must not throw out somebody who is
+    /// already in.</summary>
+    private async Task<ApplicationUser?> WelcomeAsync(RefreshToken stored)
+    {
+        var user = await _userManager.FindByIdAsync(stored.UserId.ToString());
+        if (user is null || !user.IsActive || user.MustChangePassword) return null;
+
+        if (stored.SecurityStamp is null || stored.SecurityStamp != user.SecurityStamp)
+        {
+            var stamp = user.SecurityStamp;
+            await _db.RefreshTokens
+                .Where(t => t.UserId == user.Id && t.RevokedAtUtc == null && (t.SecurityStamp == null || t.SecurityStamp != stamp))
+                .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAtUtc, UtcNow));
+            return null;
+        }
+
+        return user;
+    }
+
+    private async Task<RefreshResult> AnswerAsync(ApplicationUser user, string rawRefreshToken, DateTime refreshExpiresAtUtc)
+    {
+        var (accessToken, accessExpires) = _tokenService.GenerateAccessToken(
+            user.Id, user.Email!, user.FirstName, user.LastName, user.Role, user.CompanyId, user.DepartmentId, user.SecurityStamp ?? string.Empty);
+        return new RefreshResult(new LoginResponse(false, accessToken, accessExpires, await ToSummaryAsync(user)), rawRefreshToken, refreshExpiresAtUtc);
     }
 
     public async Task RevokeRefreshTokenAsync(string? rawRefreshToken)
     {
         if (string.IsNullOrWhiteSpace(rawRefreshToken)) return;
-        var hash = HashRefreshToken(rawRefreshToken);
-        var stored = await _db.RefreshTokens.FirstOrDefaultAsync(t => t.TokenHash == hash && t.RevokedAtUtc == null);
+        var stored = await _db.RefreshTokens.FirstOrDefaultAsync(t => t.TokenHash == HashRefreshToken(rawRefreshToken));
         if (stored is null) return;
-        stored.RevokedAtUtc = UtcNow;
+
+        // The token and whatever it was replaced by: a renewal that was under way (or answered a second tab in the grace window) while the person
+        // signed out must not leave a live successor behind.
+        var now = UtcNow;
+        for (var step = 0; stored is not null && step < 20; step++)
+        {
+            stored.RevokedAtUtc ??= now;
+            var next = stored.ReplacedByTokenHash;
+            stored = next is null ? null : await _db.RefreshTokens.FirstOrDefaultAsync(t => t.TokenHash == next);
+        }
         await _db.SaveChangesAsync();
     }
 
     /// <summary>Revokes every still-live refresh token of one person (a theft signal, and reused on a password reset). Returns the count.</summary>
-    private Task<int> RevokeFamilyAsync(Guid userId) =>
-        _db.RefreshTokens
-            .Where(t => t.UserId == userId && t.RevokedAtUtc == null)
-            .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAtUtc, UtcNow));
+    private Task<int> RevokeFamilyAsync(Guid userId) => _db.RevokeRefreshTokensAsync(userId, UtcNow);
 
     private async Task<UserSummary> ToSummaryAsync(ApplicationUser user)
     {

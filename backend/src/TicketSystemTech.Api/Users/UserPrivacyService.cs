@@ -47,6 +47,7 @@ public sealed class UserPrivacyService : IUserPrivacyService
     private readonly ICurrentUserService _currentUser;
     private readonly IMemoryCache _cache;
     private readonly IFileStorage _fileStorage;
+    private readonly IPiiProtector _piiProtector;
     private readonly ITicketAssignmentService _assignments;
     private readonly INotifier _notifier;
     private readonly TimeProvider _time;
@@ -54,13 +55,14 @@ public sealed class UserPrivacyService : IUserPrivacyService
 
     public UserPrivacyService(
         UserManager<ApplicationUser> userManager, AppDbContext db, ICurrentUserService currentUser, IMemoryCache cache,
-        IFileStorage fileStorage, ITicketAssignmentService assignments, INotifier notifier, TimeProvider time)
+        IFileStorage fileStorage, IPiiProtector piiProtector, ITicketAssignmentService assignments, INotifier notifier, TimeProvider time)
     {
         _userManager = userManager;
         _db = db;
         _currentUser = currentUser;
         _cache = cache;
         _fileStorage = fileStorage;
+        _piiProtector = piiProtector;
         _assignments = assignments;
         _notifier = notifier;
         _time = time;
@@ -73,6 +75,8 @@ public sealed class UserPrivacyService : IUserPrivacyService
 
         var company = user.CompanyId is { } companyId ? await _db.Companies.AsNoTracking().Where(c => c.Id == companyId).Select(c => c.Name).FirstOrDefaultAsync(ct) : null;
         var branch = user.DepartmentId is { } branchId ? await _db.Departments.AsNoTracking().Where(d => d.Id == branchId).Select(d => d.Name).FirstOrDefaultAsync(ct) : null;
+
+        var outbox = await ExportOutboxAsync(user.Email, ct);
 
         var export = new
         {
@@ -127,7 +131,9 @@ public sealed class UserPrivacyService : IUserPrivacyService
             actionsRecordedAboutThePerson = await _db.AuditLogs.AsNoTracking()
                 .Where(a => a.EntityType == nameof(ApplicationUser) && a.EntityId == id && a.UserId != id).OrderBy(a => a.CreatedAt)
                 .Select(a => new { a.Action, a.CreatedAt, a.Details }).ToListAsync(ct),
-            emailsAddressedToThePerson = await ExportOutboxAsync(user.Email, ct)
+            emailsAddressedToThePerson = outbox.Emails,
+            // Rows of the outbox that could not be read (written under a key that is gone) and so could not be matched to this person.
+            outboxRowsThatCouldNotBeRead = outbox.Unreadable
         };
 
         // Recorded before the file is handed over, so a request that is given up on before this line neither delivers the data nor leaves a record.
@@ -137,20 +143,55 @@ public sealed class UserPrivacyService : IUserPrivacyService
         return Outcome<UserExport>.Ok(new UserExport(export, $"user-{user.Id}.json"));
     }
 
-    /// <summary>
-    /// The e-mails the system has sent, or tried to send, to this person's address. The address is stored encrypted, so it cannot be
-    /// matched in the database and the (short-lived: they are removed after a week or a month) rows are read and compared here. The text of
-    /// a message is not part of this: it is removed once the mail is out, and a message that never went out is only listed.
-    /// </summary>
-    private async Task<List<object>> ExportOutboxAsync(string? address, CancellationToken ct)
+    private sealed class OutboxRow
     {
-        if (string.IsNullOrWhiteSpace(address)) return new List<object>();
-        var rows = await _db.EmailOutbox.AsNoTracking().OrderBy(o => o.CreatedAt)
-            .Select(o => new { o.ToEmail, o.Subject, o.Status, o.Attempts, o.CreatedAt, o.CompletedAtUtc }).ToListAsync(ct);
-        return rows
-            .Where(o => string.Equals(o.ToEmail, address, StringComparison.OrdinalIgnoreCase))
-            .Select(o => (object)new { o.Subject, status = o.Status.ToString(), o.Attempts, o.CreatedAt, o.CompletedAtUtc })
-            .ToList();
+        public string ToEmail { get; set; } = "";
+        public string Subject { get; set; } = "";
+        public int Status { get; set; }
+        public int Attempts { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime? CompletedAtUtc { get; set; }
+    }
+
+    /// <summary>
+    /// The e-mails the system has sent, or tried to send, to this person's address. The address is stored encrypted, so it cannot be matched in the
+    /// database and the (short-lived: they are removed after a week or a month) rows are read and compared here. The text of a message is not part of
+    /// this. A row whose address cannot be read (written under a key that is gone) is counted and reported, one row at a time: it must not stop the
+    /// whole export, which is a legal duty.
+    /// </summary>
+    private async Task<(List<object> Emails, int Unreadable)> ExportOutboxAsync(string? address, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(address)) return (new List<object>(), 0);
+        var rows = await _db.Database
+            .SqlQuery<OutboxRow>($"SELECT [ToEmail], [Subject], [Status], [Attempts], [CreatedAt], [CompletedAtUtc] FROM [EmailOutbox] ORDER BY [CreatedAt]")
+            .ToListAsync(ct);
+
+        var emails = new List<object>();
+        var unreadable = 0;
+        foreach (var row in rows)
+        {
+            string? to;
+            try
+            {
+                to = _piiProtector.Decrypt(row.ToEmail);
+            }
+            catch (System.Security.Cryptography.CryptographicException)
+            {
+                unreadable++;
+                continue;
+            }
+
+            if (!string.Equals(to, address, StringComparison.OrdinalIgnoreCase)) continue;
+            emails.Add(new
+            {
+                row.Subject,
+                status = ((EmailOutboxStatus)row.Status).ToString(),
+                row.Attempts,
+                CreatedAt = DateTime.SpecifyKind(row.CreatedAt, DateTimeKind.Utc),
+                CompletedAtUtc = row.CompletedAtUtc is { } done ? DateTime.SpecifyKind(done, DateTimeKind.Utc) : (DateTime?)null
+            });
+        }
+        return (emails, unreadable);
     }
 
     public async Task<Outcome<Done>> AnonymizeAsync(Guid id)
@@ -183,6 +224,7 @@ public sealed class UserPrivacyService : IUserPrivacyService
         await _userManager.SetEmailAsync(user, placeholder);
         await _userManager.UpdateSecurityStampAsync(user);
         _cache.Remove(UserStatusCache.Key(user.Id));
+        await _db.RevokeRefreshTokensAsync(user.Id, UtcNow); // every sign-in of the person ends
 
         await _db.Notifications.Where(n => n.UserId == id).ExecuteDeleteAsync();
         await _db.SaveChangesAsync();

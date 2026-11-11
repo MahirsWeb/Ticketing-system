@@ -4,12 +4,13 @@ import type { KnowledgeBaseSearchResultDto } from '../../types';
 import { Button, Card, Input, Spinner } from '../../components/ui';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useLanguage } from '../../i18n/LanguageContext';
+import { translateServerMessage } from '../../i18n/serverMessages';
 
 /// Client-facing AI help panel. Deliberately separate from the staff KnowledgeBaseSearchPanel: different
 /// backend endpoint (never sees ticket internal notes — see /api/knowledge-base/ask-client), different
 /// tone, and no ticket-number/source exposure beyond official help documentation titles.
 export function ClientAiHelpPanel({ initialQuery = '' }: { initialQuery?: string }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [query, setQuery] = useState(initialQuery);
   const [answer, setAnswer] = useState<string | null>(null);
   const [sources, setSources] = useState<KnowledgeBaseSearchResultDto[]>([]);
@@ -29,7 +30,7 @@ export function ClientAiHelpPanel({ initialQuery = '' }: { initialQuery?: string
     setAsked(true);
     try {
       const res = await knowledgeBaseApi.askClient(query, controller.signal);
-      setAnswer(res.answer);
+      setAnswer(translateServerMessage(res.answer, language));
       setSources(res.sources);
       setAiAvailable(res.aiAvailable !== false);
     } catch (err: any) {

@@ -99,4 +99,20 @@ public class DataRekeyTests : IDisposable
         Assert.Contains("2 value(s)", refused.Message);
         Assert.Contains(stray.ToString(), refused.Message);
     }
+
+    [Fact]
+    public async Task A_key_that_starts_later_is_seen_before_a_new_one_is_made_and_the_key_in_force_is_the_newest_active_one()
+    {
+        var old = Protector.Protect("x");
+        var oldKey = DataRekey.KeyIdOf(old)!.Value;
+        Assert.Null(DataRekey.NextScheduledKey(Keys, TimeProvider.System));
+        Assert.Equal(oldKey, DataRekey.KeyInForce(Keys, TimeProvider.System));
+
+        var later = DateTimeOffset.UtcNow.AddDays(1);
+        Keys.CreateNewKey(later, later.AddDays(90)); // what Data Protection's own rotation does, ahead of time
+
+        Assert.Equal(later.UtcDateTime, DataRekey.NextScheduledKey(Keys, TimeProvider.System)!.Value.UtcDateTime, TimeSpan.FromSeconds(1));
+        Assert.Equal(oldKey, DataRekey.KeyInForce(Keys, TimeProvider.System)); // the one that is not active yet is not "in force"
+        await Task.CompletedTask;
+    }
 }

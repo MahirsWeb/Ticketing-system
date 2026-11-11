@@ -26,7 +26,7 @@ Environment.SetEnvironmentVariable("DOTNET_hostBuilder__reloadConfigOnChange", "
 // Commands that do their one job and exit, without starting the web host:
 //   --healthcheck                                   asks the application in this container if it is alive (Docker HEALTHCHECK)
 //   --create-key-certificate <file.pfx> <password>  makes the certificate that protects the key ring (see DataProtection in the README)
-//   --rekey-data [--revoke-old-keys]                writes encrypted data again under a new key and retires the old keys (README, DataProtection)
+//   --rekey-data / --revoke-old-keys                writes encrypted data again under a new key / retires the old keys (README, DataProtection)
 if (args.Contains("--healthcheck"))
 {
     Environment.ExitCode = await TicketSystemTech.Api.Startup.ContainerHealthProbe.RunAsync();
@@ -400,11 +400,12 @@ if (resetAt >= 0)
     return;
 }
 
-// `--rekey-data [--revoke-old-keys]` writes everything that is encrypted at rest again under a new key and, on request, retires the old
-// keys (see DataRekey). Run with the application stopped, after the key ring certificate is in place, and after a backup.
-if (args.Contains("--rekey-data"))
+// `--rekey-data` writes everything that is encrypted at rest again under a new key; `--revoke-old-keys` retires the old keys (see DataRekey). Run with the application stopped, after the key ring certificate is in place, and after a backup.
+if (args.Contains("--rekey-data") || args.Contains("--revoke-old-keys"))
 {
-    Environment.ExitCode = await TicketSystemTech.Api.Startup.DataRekey.RunAsync(app.Services, args.Contains("--revoke-old-keys"), Console.Out);
+    Environment.ExitCode = await TicketSystemTech.Api.Startup.DataRekey.RunAsync(
+        app.Services, builder.Configuration, rewrite: args.Contains("--rekey-data"), revokeOldKeys: args.Contains("--revoke-old-keys"),
+        allowUnprotected: args.Contains("--allow-unprotected-keys"), allowRunning: args.Contains("--allow-running"), Console.Out);
     await Log.CloseAndFlushAsync();
     return;
 }

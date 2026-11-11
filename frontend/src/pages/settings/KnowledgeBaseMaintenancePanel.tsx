@@ -6,10 +6,11 @@ import { Button, ErrorText } from '../../components/ui';
 import { ReindexStatusError } from './ReindexStatusError';
 import { Panel } from './settingsUi';
 import { useLanguage } from '../../i18n/LanguageContext';
+import { translateServerMessage } from '../../i18n/serverMessages';
 
 /** Embeds the tickets that still lack an entry, in the background; follows the run until it ends. */
 export function KnowledgeBaseMaintenancePanel() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const queryClient = useQueryClient();
   const run = useReindexStatus();
   const status = run.data;
@@ -35,7 +36,7 @@ export function KnowledgeBaseMaintenancePanel() {
         <p className={`mb-3 text-sm ${status.state === 'Failed' ? 'text-red-700' : status.state === 'Completed' ? 'text-green-700' : 'text-slate-700'}`}>
           {progress && <span className="font-semibold">{progress}</span>} {progress && '· '}
           {status.state === 'Running' ? t('kbmaint_running') : ''}
-          {status.message}
+          {status.message ? translateServerMessage(status.message, language) : null}
           {status.embedded > 0 && status.state !== 'Running' ? t('kbmaint_embedded', { count: status.embedded }) : ''}
         </p>
       )}

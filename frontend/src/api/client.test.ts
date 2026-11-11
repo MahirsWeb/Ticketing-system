@@ -83,12 +83,60 @@ describe('refreshAccessToken', () => {
     expect(useAuthStore.getState().accessToken).toBe('still-here');
   });
 
-  it('does not retry a refusal that waiting will not change (for example a blocked origin)', async () => {
-    post.mockRejectedValue(status(403));
+  it('does not retry a refusal that waiting will not change, and does not call the session over for it', async () => {
+    post.mockRejectedValue(status(418));
     const { refreshAccessToken, RefreshUnavailableError } = await load();
 
     await expect(refreshAccessToken()).rejects.toBeInstanceOf(RefreshUnavailableError);
     expect(post).toHaveBeenCalledTimes(1);
+  });
+
+  it('counts a 403 (the server will take no renewals from this page, for example a wrong list of allowed origins) as the end of the session, not as a person stuck for ever', async () => {
+    post.mockRejectedValue(status(403));
+    const { refreshAccessToken } = await load();
+
+    expect(await refreshAccessToken()).toBeNull();
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives up on a renewal that hangs, so that it cannot hold every tab and the sign-out button for ever', async () => {
+    post.mockResolvedValue({ data: { accessToken: 'fresh', user: { id: 'u1' } } });
+    const { refreshAccessToken } = await load();
+
+    await refreshAccessToken();
+
+    expect((post.mock.calls[0][2] as { timeout: number }).timeout).toBeGreaterThan(0);
+    expect((post.mock.calls[0][2] as { timeout: number }).timeout).toBeLessThanOrEqual(30_000);
+  });
+
+  it('throws away the answer of a renewal that was under way when the person signed out, so that it cannot bring the session back', async () => {
+    let answer!: (v: unknown) => void;
+    post.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    const { refreshAccessToken, useAuthStore } = await load();
+    useAuthStore.setState({ accessToken: 'in-use', user: { id: 'u1' } as never });
+
+    const renewing = refreshAccessToken();
+    useAuthStore.getState().signOut(); // the person pressed "Sign out" while the renewal was on its way
+    answer({ data: { accessToken: 'late', user: { id: 'u1' } } });
+
+    expect(await renewing).toBeNull();
+    expect(useAuthStore.getState().accessToken).toBeNull();
+  });
+
+  it('takes its turn on the lock that all the tabs of the site share', async () => {
+    const request = vi.fn((_name: string, work: () => Promise<unknown>) => work());
+    Object.defineProperty(navigator, 'locks', { value: { request }, configurable: true });
+    try {
+      post.mockResolvedValue({ data: { accessToken: 'fresh', user: { id: 'u1' } } });
+      const { refreshAccessToken } = await load();
+
+      await refreshAccessToken();
+
+      expect(request).toHaveBeenCalledTimes(1);
+      expect(request.mock.calls[0][0]).toBe('tst-refresh');
+    } finally {
+      Object.defineProperty(navigator, 'locks', { value: undefined, configurable: true });
+    }
   });
 });
 

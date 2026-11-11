@@ -111,8 +111,43 @@ const BS: Record<string, string> = {
   'Something went wrong on our side.': 'Nešto je pošlo po zlu s naše strane.',
   'The request is not valid.': 'Zahtjev nije ispravan.',
   'Invalid value.': 'Neispravna vrijednost.',
+
+  // ---- work sessions
+  'The end of a work session must be after its start.': 'Kraj radne sesije mora biti poslije njenog početka.',
+  'A work session cannot start in the future.': 'Radna sesija ne može početi u budućnosti.',
+  'A work session cannot end in the future.': 'Radna sesija ne može završiti u budućnosti.',
+  'A work session is still running on another ticket or task. End it first.': 'Radna sesija još traje na drugom tiketu ili zadatku. Prvo je završite.',
+  'This overlaps your work on another ticket or task.': 'Ovo se preklapa s vašim radom na drugom tiketu ili zadatku.',
+
+  // ---- Microsoft 365
+  'The saved mailbox connection can no longer be read. Disconnect the mailbox and connect it again.': 'Sačuvana veza s poštanskim sandučetom više se ne može pročitati. Odspojite sanduče i povežite ga ponovo.',
+  'Microsoft did not accept the sign-in (it may have expired or already been used). Please start connecting the mailbox again.': 'Microsoft nije prihvatio prijavu (možda je istekla ili je već iskorištena). Ponovo započnite povezivanje sandučeta.',
+  'Microsoft 365 could not be reached right now. Please try again in a minute.': 'Microsoft 365 trenutno nije dostupan. Pokušajte ponovo za minut.',
+  'Microsoft 365 is busy right now. Please try again in a minute.': 'Microsoft 365 je trenutno zauzet. Pokušajte ponovo za minut.',
+  'The mailbox connection has expired or was revoked. Disconnect the mailbox and connect it again.': 'Veza sa sandučetom je istekla ili je opozvana. Odspojite sanduče i povežite ga ponovo.',
+  'Microsoft 365 did not accept the request. If this keeps happening, reconnect the mailbox.': 'Microsoft 365 nije prihvatio zahtjev. Ako se ovo ponavlja, ponovo povežite sanduče.',
+
+  // ---- the knowledge base and the AI
+  'Looking for tickets that need an embedding…': 'Traže se tiketi kojima treba indeksiranje…',
+  'Reading the stored document…': 'Čitanje sačuvanog dokumenta…',
+  'Embedding the document…': 'Indeksiranje dokumenta…',
+  'Embedding tickets…': 'Indeksiranje tiketa…',
+  'Stopped because the application is shutting down. Run it again to continue.': 'Zaustavljeno jer se aplikacija gasi. Pokrenite ponovo da nastavite.',
+  'Check the AI settings (Ai:Provider, Ai:ApiKey / Ai:Endpoint, Ai:Enabled) and that the quota is not exhausted, then run the reindex again — it continues where it stopped.': 'Provjerite AI postavke (Ai:Provider, Ai:ApiKey / Ai:Endpoint, Ai:Enabled) i da kvota nije iscrpljena, pa ponovo pokrenite indeksiranje — nastavlja gdje je stalo.',
+  'No text could be extracted from the stored file.': 'Iz sačuvanog fajla nije bilo moguće izvući tekst.',
+  'Nothing relevant was found in the knowledge base yet for this question.': 'U bazi znanja još nema ničeg relevantnog za ovo pitanje.',
+  'The AI did not answer this time — showing the closest matching sources instead.': 'AI ovaj put nije odgovorio — prikazani su najbliži izvori.',
+  'AI is switched off or not configured on this installation — showing the closest matching sources instead.': 'AI je isključen ili nije podešen na ovoj instalaciji — prikazani su najbliži izvori.',
+  'No tickets found in this period to analyze.': 'U ovom periodu nema tiketa za analizu.',
+  'The AI did not answer this time. Please try again.': 'AI ovaj put nije odgovorio. Pokušajte ponovo.',
+  'AI is switched off or not configured on this installation.': 'AI je isključen ili nije podešen na ovoj instalaciji.',
+  'Žao nam je, nemamo dovoljno informacija u sistemu za vaš problem. Molimo kontaktirajte vašeg administratora.': 'Žao nam je, nemamo dovoljno informacija u sistemu za vaš problem. Molimo kontaktirajte vašeg administratora.',
+
+  // ---- accounts and mail
+  'The database check failed.': 'Provjera baze nije uspjela.',
 };
 
+const ROLE_BS: Record<string, string> = { Client: 'Klijent', Employee: 'Zaposlenik', Admin: 'Administrator' };
 const STATUS_BS: Record<string, string> = { New: 'novi', Open: 'otvoreni', InProgress: 'u toku', Resolved: 'riješeni', Closed: 'zatvoreni' };
 const status = (s: string) => STATUS_BS[s] ?? s;
 
@@ -134,6 +169,23 @@ const PATTERNS: [RegExp, (m: RegExpMatchArray) => string][] = [
       const noun = { 'help topic': 'Ova tema pomoći', category: 'Ova kategorija', 'SLA plan': 'Ovaj SLA plan' }[m[1] as 'help topic' | 'category' | 'SLA plan'];
       return `${noun} se koristi na tiketima: ${m[2]}, pa se ne može obrisati jer bi ti tiketi izgubili tu vrijednost iz svoje historije. Umjesto toga je deaktivirajte: tada nestaje s izbora, a sve što je već koristi ostaje kakvo jeste.`;
     }],
+  [/^A work session cannot last longer than (\d+) hours\. Split it into several sessions\.$/, (m) => `Radna sesija ne može trajati duže od ${m[1]} sati. Podijelite je na više sesija.`],
+  [/^Another work session on this (\w+) is still running\. End it first\.$/, (m) => `Druga radna sesija na ${m[1] === 'ticket' ? 'ovom tiketu' : m[1] === 'task' ? 'ovom zadatku' : 'ovoj stavci'} još traje. Prvo je završite.`],
+  [/^This overlaps another work session on the same (\w+)\.$/, (m) => `Ovo se preklapa s drugom radnom sesijom na ${m[1] === 'ticket' ? 'istom tiketu' : m[1] === 'task' ? 'istom zadatku' : 'istoj stavci'}.`],
+  [/^Reindex failed: (.*)$/, (m) => `Indeksiranje nije uspjelo: ${m[1]}`],
+  [/^Stopped after (\d+) failures in a row: the embedding provider returned nothing\. ?(.*)$/, (m) => `Zaustavljeno poslije ${m[1]} uzastopnih neuspjeha: davalac indeksiranja nije vratio ništa. ${translateServerMessage(m[2], 'bs')}`.trim()],
+  [/^Done \((\d+) document\(s\) rebuilt for the current model\)\.$/, (m) => `Gotovo (dokumenata ponovo izgrađeno za trenutni model: ${m[1]}).`],
+  [/^Done, but (\d+) item\(s\) could not be embedded\. Run it again to retry them\.$/, (m) => `Gotovo, ali stavki koje nije bilo moguće indeksirati: ${m[1]}. Pokrenite ponovo da ih pokušate opet.`],
+  // ---- lines of the notification list (kept as text in the database)
+  [/^New ticket #(\S+): (.*)$/s, (m) => `Novi tiket #${m[1]}: ${m[2]}`],
+  [/^Ticket #(\S+) assigned to you$/, (m) => `Tiket #${m[1]} vam je dodijeljen`],
+  [/^Your ticket #(\S+) has been opened$/, (m) => `Vaš tiket #${m[1]} je otvoren`],
+  [/^Ticket #(\S+) transferred to (.+)$/, (m) => `Tiket #${m[1]} prebačen u: ${m[2]}`],
+  [/^Ticket #(\S+) has been resolved$/, (m) => `Tiket #${m[1]} je riješen`],
+  [/^New reply on ticket #(\S+)$/, (m) => `Novi odgovor na tiketu #${m[1]}`],
+  [/^Ticket #(\S+) is overdue$/, (m) => `Tiket #${m[1]} je prekoračio rok`],
+  [/^(.+) assigned you a task: "(.*)"$/s, (m) => `Novi zadatak: "${m[2]}" (dodijelio/la: ${m[1]})`],
+  [/^(.+) successfully logged in via invite — role: (Client|Employee|Admin)\.$/, (m) => `Pozivnica prihvaćena: ${m[1]} — uloga: ${ROLE_BS[m[2]] ?? m[2]}.`],
   [/^User name '(.+)' is already taken\.$/, (m) => `Korisničko ime '${m[1]}' je već zauzeto.`],
   [/^Email '(.+)' is already taken\.$/, (m) => `Email '${m[1]}' je već zauzet.`],
   [/^Passwords must use at least (\d+) different characters\.$/, (m) => `Lozinka mora koristiti najmanje ${m[1]} različitih znakova.`],
@@ -157,4 +209,37 @@ export function translateServerMessage(message: string, language: Language): str
 /** Whether a message has a Bosnian rendering (used by the test that keeps the list complete). */
 export function hasServerTranslation(message: string): boolean {
   return translateServerMessage(message, 'bs') !== message;
+}
+
+const STATUS_WORD_BS: Record<string, string> = { New: 'Novo', Open: 'Otvoren', InProgress: 'U toku', Resolved: 'Riješen', Closed: 'Zatvoren' };
+const REASON_BS: Record<string, string> = {
+  'account deactivated': 'nalog deaktiviran',
+  'moved to a different role or branch': 'premješten u drugu ulogu ili poslovnicu',
+  'account anonymized': 'nalog anonimiziran',
+};
+
+/// The lines the server writes into a ticket's feed about what happened to it ("Ticket closed by Ana Anić."). They are kept as HTML text in the
+/// database, in English, and put into the language of the screen when they are shown. The names inside stay as they are.
+const EVENTS: [RegExp, (m: RegExpMatchArray) => string][] = [
+  [/^<p>(.+) added as an assignee by (.+)\.<\/p>$/s, (m) => `<p>Zaduženje dodano: ${m[1]} (dodao/la: ${m[2]}).</p>`],
+  [/^<p>Ticket opened by (.+) and assigned to (.+)\.<\/p>$/s, (m) => `<p>Tiket je otvoren (${m[1]}) i dodijeljen: ${m[2]}.</p>`],
+  [/^<p>Ticket transferred from <b>(.*)<\/b> to <b>(.*)<\/b> by (.+)\.<\/p>$/s, (m) => `<p>Tiket je prebačen iz <b>${m[1] === '(unrouted)' ? '(bez poslovnice)' : m[1]}</b> u <b>${m[2]}</b> (${m[3]}).</p>`],
+  [/^<p>Ticket closed by (.+)\.<\/p>$/s, (m) => `<p>Tiket je zatvoren (${m[1]}).</p>`],
+  [/^<p>Ticket reopened by (.+)\.<\/p>$/s, (m) => `<p>Tiket je ponovo otvoren (${m[1]}).</p>`],
+  [/^<p>Status changed from <b>(\w+)<\/b> to <b>(\w+)<\/b> by (.+)\.<\/p>$/s, (m) => `<p>Stanje promijenjeno iz <b>${STATUS_WORD_BS[m[1]] ?? m[1]}</b> u <b>${STATUS_WORD_BS[m[2]] ?? m[2]}</b> (${m[3]}).</p>`],
+  [/^<p>(.+) was unassigned from this ticket \((.+?)\)(; it currently has no assignee)?\.<\/p>$/s, (m) =>
+    `<p>Zaduženje skinuto: ${m[1]} (${REASON_BS[m[2]] ?? m[2]})${m[3] ? '; tiket trenutno nema zaduženog' : ''}.</p>`],
+];
+
+export function translateEventHtml(html: string, language: Language): string {
+  if (language !== 'bs') return html;
+  for (const [pattern, build] of EVENTS) {
+    const match = html.match(pattern);
+    if (match) return build(match);
+  }
+  return html;
+}
+
+export function hasEventTranslation(html: string): boolean {
+  return translateEventHtml(html, 'bs') !== html;
 }

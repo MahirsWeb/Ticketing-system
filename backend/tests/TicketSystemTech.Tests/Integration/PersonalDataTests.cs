@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using TicketSystemTech.Domain.Entities;
@@ -232,5 +233,29 @@ public class PersonalDataTests : IAsyncLifetime
         Assert.Equal(400, (await _world.Post(admin, $"/api/users/{admin.Id}/anonymize")).Code);
         Assert.Equal(404, (await _world.Post(_world.Admin, $"/api/users/{Guid.NewGuid()}/anonymize")).Code);
         Assert.Equal(404, (await _world.Get(_world.Admin, $"/api/users/{Guid.NewGuid()}/export")).Code);
+    }
+
+    [SqlFact]
+    public async Task One_outbox_row_that_can_not_be_read_does_not_stop_the_export_and_is_reported()
+    {
+        var client = await PersonAsync("gdprBroken", UserRole.Client);
+        Assert.Equal(200, (await _world.Post(_world.Admin, $"/api/users/{client.Id}/regenerate-temp-password")).Code); // so that there is a readable row for this person too
+
+        // A row written under a key that is gone: real ciphertext that this application's protector cannot open.
+        var foreign = _world.Factory.Services.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>().CreateProtector("another purpose").Protect("someone@lost.test");
+        await _world.Db(db => db.Database.ExecuteSqlInterpolatedAsync(
+            $"INSERT INTO [EmailOutbox] ([Id],[CreatedAt],[ToEmail],[Subject],[HtmlBody],[Status],[Attempts],[NextAttemptAtUtc]) VALUES ({Guid.NewGuid()}, SYSUTCDATETIME(), {foreign}, N'Unreadable', N'', 1, 1, '2000-01-01')"));
+        try
+        {
+            var export = await _world.Get(_world.Admin, $"/api/users/{client.Id}/export");
+
+            Assert.Equal(200, export.Code);
+            Assert.True(export.Json.GetProperty("outboxRowsThatCouldNotBeRead").GetInt32() >= 1);
+            Assert.NotEmpty(export.Json.GetProperty("emailsAddressedToThePerson").EnumerateArray()); // the readable ones are still there
+        }
+        finally
+        {
+            await _world.Db(db => db.Database.ExecuteSqlRawAsync("DELETE FROM [EmailOutbox] WHERE [Subject] = N'Unreadable'"));
+        }
     }
 }

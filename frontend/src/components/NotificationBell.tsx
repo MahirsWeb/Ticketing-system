@@ -6,12 +6,13 @@ import { notificationKeys, useNotifications } from '../api/notificationQueries';
 import { getNotificationsHub } from '../lib/notificationsHub';
 import { formatDistanceToNow } from 'date-fns';
 import { useLanguage } from '../i18n/LanguageContext';
+import { translateServerMessage } from '../i18n/serverMessages';
 import { useDateLocale } from '../i18n/dateLocale';
 
 const EVENTS = ['newTicket', 'ticketOpened', 'ticketAssigned', 'ticketClosed', 'newResponse', 'userActivatedViaInvite', 'ticketTransferred', 'ticketOverdue', 'taskAssigned', 'ticketUnassigned'];
 
 export function NotificationBell() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const locale = useDateLocale();
   const queryClient = useQueryClient();
   const list = useNotifications();
@@ -120,7 +121,7 @@ export function NotificationBell() {
                   n.isRead ? 'text-slate-600' : 'font-medium text-slate-800'
                 }`}
               >
-                <div>{n.message}</div>
+                <div>{translateServerMessage(n.message, language)}</div>
                 <div className="mt-0.5 text-xs text-slate-600">{formatDistanceToNow(new Date(n.createdAt), { addSuffix: true, locale })}</div>
               </button>
             ))}

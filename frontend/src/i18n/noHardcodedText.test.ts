@@ -25,7 +25,7 @@ function files(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
     if (statSync(path).isDirectory()) return ['test', 'build'].includes(name) ? [] : files(path);
-    return /\.tsx$/.test(name) && !/\.test\.tsx$/.test(name) ? [path] : [];
+    return /\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name) && !/\.d\.ts$|generated|contract\.check/.test(name) ? [path] : [];
   });
 }
 
@@ -33,7 +33,7 @@ const isWords = (text: string) => /[A-Za-z]{2,}/.test(text) && !/^[\w\-./:?=&%#$
 
 function untranslated(path: string): string[] {
   const text = readFileSync(path, 'utf8');
-  const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, path.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
   const found: string[] = [];
   const at = (node: ts.Node, what: string) => found.push(`${relative(SRC, path).replace(/\\/g, '/')}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1} ${what}`);
 
@@ -54,10 +54,24 @@ function untranslated(path: string): string[] {
     return false;
   };
 
+  const calls = /^(setError|setMessage|setNotice|setSendError|setStatus|setAvatarError|alert)$/;
+  const textual = /^(label|title|message|text|placeholder|description|heading|hint|tooltip|emptyText|confirmLabel)$/;
+
   const visit = (node: ts.Node) => {
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression.getText();
+      // A sentence handed straight to what shows an error or a notice, or as the fallback words of messageOf(err, 'fallback').
+      const given = calls.test(callee) ? node.arguments : callee === 'messageOf' ? node.arguments.slice(1) : [];
+      for (const argument of given)
+        if ((ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument)) && isWords(argument.text) && !ALLOWED.has(argument.text))
+          at(argument, `shown "${argument.text}"`);
+    } else if (ts.isPropertyAssignment(node) && textual.test(node.name.getText()) && (ts.isStringLiteral(node.initializer) || ts.isNoSubstitutionTemplateLiteral(node.initializer))) {
+      const words = node.initializer.text;
+      if (isWords(words) && !ALLOWED.has(words)) at(node.initializer, `${node.name.getText()}: "${words}"`);
+    }
     if (ts.isJsxText(node)) {
       const words = node.getText().replace(/\s+/g, ' ').trim();
-      if (words && isWords(words) && !ALLOWED.has(words)) at(node, `text "${words}"`);
+      if (words && /[A-Za-z]{2,}/.test(words) && !ALLOWED.has(words)) at(node, `text "${words}"`);
     } else if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && insideJsx(node) && !insideTranslationCall(node)) {
       const words = node.text;
       if (isWords(words) && !ALLOWED.has(words)) at(node, `literal "${words}"`);
@@ -78,6 +92,6 @@ describe('the screens', () => {
   });
 
   it('are really read (the check above is not passing because it looked at nothing)', () => {
-    expect(files(SRC).length).toBeGreaterThan(60);
+    expect(files(SRC).length).toBeGreaterThan(150);
   });
 });

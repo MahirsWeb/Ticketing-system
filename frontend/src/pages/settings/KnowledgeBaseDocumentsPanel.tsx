@@ -10,10 +10,11 @@ import { messageOf } from './settingsHelpers';
 import { ReindexStatusError } from './ReindexStatusError';
 import { ListRow, Panel } from './settingsUi';
 import { useLanguage } from '../../i18n/LanguageContext';
+import { translateServerMessage } from '../../i18n/serverMessages';
 
 /** The manuals and instructions the AI assistant answers from: uploaded, removed, and rebuilt from their stored originals. */
 export function KnowledgeBaseDocumentsPanel() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const queryClient = useQueryClient();
   const list = useKnowledgeBaseDocuments();
   const documents = list.data ?? [];
@@ -123,7 +124,7 @@ export function KnowledgeBaseDocumentsPanel() {
       {watching && reindex && reindex.state !== 'Idle' && (
         <p className={`mt-3 text-xs ${reindex.state === 'Failed' ? 'text-red-700' : reindex.state === 'Completed' ? 'text-green-700' : 'text-slate-600'}`}>
           {reindex.state === 'Running' && reindex.total > 0 ? `${reindex.processed} / ${reindex.total} · ` : ''}
-          {reindex.message}
+          {reindex.message ? translateServerMessage(reindex.message, language) : null}
         </p>
       )}
 

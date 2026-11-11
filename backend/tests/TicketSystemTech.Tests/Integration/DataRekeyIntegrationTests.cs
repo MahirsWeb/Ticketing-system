@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using TicketSystemTech.Api.Startup;
 using TicketSystemTech.Domain.Enums;
 
@@ -19,21 +20,47 @@ public class DataRekeyIntegrationTests
         var before = await _world.Db(db => DataRekey.KeysInUseAsync(db));
         Assert.NotEmpty(before); // there is something encrypted to begin with
 
-        var result = await DataRekey.RekeyAsync(_world.Factory.Services, revokeOldKeys: false);
+        var result = await DataRekey.RunCoreAsync(_world.Factory.Services, new ConfigurationBuilder().Build(), rewrite: true, revokeOldKeys: false,
+            allowUnprotected: true, allowRunning: false, TestContext.Current.CancellationToken);
 
         Assert.True(result.Values > 0);
         Assert.Equal(before.Values.Sum(), result.KeysBefore.Values.Sum());
         var after = Assert.Single(result.KeysAfter); // all of it, under one key ...
-        Assert.Equal(result.NewKeyId, after.Key);    // ... the new one
-        Assert.DoesNotContain(result.NewKeyId, before.Keys);
+        Assert.Equal(result.KeyKept, after.Key);    // ... the new one
+        Assert.DoesNotContain(result.KeyKept, before.Keys);
 
         // The stored values really are under the new key (read again, not trusted from the result), and the application reads them:
-        Assert.Equal(new[] { result.NewKeyId }, (await _world.Db(db => DataRekey.KeysInUseAsync(db))).Keys);
+        Assert.Equal(new[] { result.KeyKept }, (await _world.Db(db => DataRekey.KeysInUseAsync(db))).Keys);
         var login = await _world.Send(null, HttpMethod.Post, "/api/auth/login", new { email = person.Email, password = ApiWorld.Password });
         Assert.Equal(200, login.Code);
         Assert.Equal(person.Email, (await _world.Db(db => db.Users.AsNoTracking().Where(u => u.Id == person.Id).Select(u => u.Email).SingleAsync())));
 
-        // Nothing was retired without being asked.
+        // Nothing was retired without being asked, and the missing certificate was said out loud.
         Assert.Equal(0, result.Revoked);
+        Assert.Contains(result.Warnings, w => w.Contains("no certificate"));
+    }
+
+    [SqlFact]
+    public async Task Without_a_certificate_the_tool_refuses_unless_told_to_go_on_and_changes_nothing()
+    {
+        var before = await _world.Db(db => DataRekey.KeysInUseAsync(db));
+
+        var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => DataRekey.RunCoreAsync(_world.Factory.Services, new ConfigurationBuilder().Build(),
+            rewrite: true, revokeOldKeys: false, allowUnprotected: false, allowRunning: false, TestContext.Current.CancellationToken));
+
+        Assert.Contains("no certificate", refused.Message);
+        Assert.Equal(before, await _world.Db(db => DataRekey.KeysInUseAsync(db))); // nothing was rewritten
+    }
+
+    [SqlFact]
+    public async Task Asking_for_nothing_is_an_error_and_a_failure_is_reported_as_text_not_as_a_crash()
+    {
+        using var output = new StringWriter();
+
+        var code = await DataRekey.RunAsync(_world.Factory.Services, new ConfigurationBuilder().Build(), rewrite: false, revokeOldKeys: false,
+            allowUnprotected: false, allowRunning: false, output, TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, code);
+        Assert.Contains("Nothing to do", output.ToString());
     }
 }

@@ -43,13 +43,20 @@ function withCrossTabLock<T>(work: () => Promise<T>): Promise<T> {
   return locks ? locks.request('tst-refresh', work) : work();
 }
 
+/// A renewal that hangs would hold the lock every tab shares, and with it every other tab (and the sign-out button): the request gives up after this long
+/// and counts as one that could not be answered.
+const REFRESH_TIMEOUT_MS = 15_000;
+
 type Attempt = { kind: 'token'; token: string } | { kind: 'refused' } | { kind: 'retry' } | { kind: 'unavailable' };
 
 async function attemptRefresh(): Promise<Attempt> {
+  const epoch = useAuthStore.getState().epoch;
   try {
     const r = await withCrossTabLock(() =>
-      axios.post<LoginResponse>(`${API_BASE_URL}/api/auth/refresh`, null, { withCredentials: true })
+      axios.post<LoginResponse>(`${API_BASE_URL}/api/auth/refresh`, null, { withCredentials: true, timeout: REFRESH_TIMEOUT_MS })
     );
+    // The person signed out (or the session was ended) while this was on its way: its answer is not wanted, and must not bring the session back.
+    if (useAuthStore.getState().epoch !== epoch) return { kind: 'refused' };
     const data = r.data;
     if (data.accessToken && data.user) {
       useAuthStore.getState().setSession(data.accessToken, data.user);
@@ -58,9 +65,11 @@ async function attemptRefresh(): Promise<Attempt> {
     return { kind: 'refused' };
   } catch (err) {
     const status = (err as AxiosError).response?.status;
-    if (status === 401) return { kind: 'refused' }; // the only answer that means "this session is over"
+    // 401: the session is over. 403: the server will not take renewals from this page at all (for example a wrong Cors:AllowedOrigins behind a
+    // proxy), which no amount of waiting changes: a person kept signed in on a session that can never be renewed is stuck, so it counts as over too.
+    if (status === 401 || status === 403) return { kind: 'refused' };
     if (status === undefined || status === 429 || status === 408 || status >= 500) return { kind: 'retry' };
-    return { kind: 'unavailable' }; // some other refusal (for example a blocked origin): retrying will not change it
+    return { kind: 'unavailable' }; // some other refusal: retrying will not change it, and the session is not known to be over
   }
 }
 

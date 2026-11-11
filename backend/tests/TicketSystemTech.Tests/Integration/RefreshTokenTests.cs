@@ -147,35 +147,87 @@ public class RefreshTokenTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Unauthorized, (await Refresh("deadbeef")).Status);
     }
 
+    private Task<int> LiveCookiesOf(Actor person) =>
+        _world.Db(db => db.RefreshTokens.CountAsync(t => t.UserId == person.Id && t.RevokedAtUtc == null));
+
     [SqlFact]
-    public async Task A_spent_cookie_replayed_within_seconds_is_a_second_tab_not_a_thief()
+    public async Task A_spent_cookie_replayed_within_seconds_is_a_second_tab_and_is_given_the_same_successor()
     {
         var person = await PersonAsync();
         var first = RefreshCookie(await Login(person));
 
         var second = RefreshCookie(await Refresh(first));
-        var third = await Refresh(first); // the same cookie again, straight away: two tabs that woke up together
-        Assert.Equal(HttpStatusCode.OK, third.Status);
-        var thirdCookie = RefreshCookie(third);
-        Assert.NotNull(thirdCookie);
-        Assert.NotEqual(second, thirdCookie);
+        var again = await Refresh(first); // the same cookie again, straight away: two tabs that woke up together
+        Assert.Equal(HttpStatusCode.OK, again.Status);
 
-        // Nobody was thrown out: both cookies that came back are live.
+        Assert.Equal(second, RefreshCookie(again)); // the SAME successor, not a second chain of its own
+        Assert.Equal(1, await LiveCookiesOf(person));
         Assert.Equal(HttpStatusCode.OK, (await Refresh(second)).Status);
-        Assert.Equal(HttpStatusCode.OK, (await Refresh(thirdCookie)).Status);
     }
 
     [SqlFact]
-    public async Task Requests_that_present_the_same_cookie_at_once_all_succeed_and_the_session_survives()
+    public async Task However_often_the_spent_cookie_is_replayed_in_the_window_only_one_sign_in_is_alive()
+    {
+        var person = await PersonAsync();
+        var first = RefreshCookie(await Login(person));
+        var second = RefreshCookie(await Refresh(first));
+
+        for (var i = 0; i < 5; i++)
+            Assert.Equal(second, RefreshCookie(await Refresh(first)));
+
+        Assert.Equal(1, await LiveCookiesOf(person)); // five replays did not make five sessions
+    }
+
+    [SqlFact]
+    public async Task Requests_that_present_the_same_cookie_at_once_all_get_the_same_successor()
     {
         var person = await PersonAsync();
         var cookie = RefreshCookie(await Login(person));
 
         var all = await Task.WhenAll(Enumerable.Range(0, 5).Select(_ => Refresh(cookie)));
-        Assert.All(all, r => Assert.Equal(HttpStatusCode.OK, r.Status));
 
-        foreach (var r in all)
-            Assert.Equal(HttpStatusCode.OK, (await Refresh(RefreshCookie(r))).Status);
+        Assert.All(all, r => Assert.Equal(HttpStatusCode.OK, r.Status));
+        Assert.Single(all.Select(RefreshCookie).Distinct());
+        Assert.Equal(1, await LiveCookiesOf(person));
+    }
+
+    [SqlFact]
+    public async Task Signing_out_closes_the_window_a_spent_cookie_can_not_bring_the_session_back()
+    {
+        var person = await PersonAsync();
+        var first = RefreshCookie(await Login(person));
+        var second = RefreshCookie(await Refresh(first));
+
+        var logout = await _world.Send(null, HttpMethod.Post, "/api/auth/logout", null, new Dictionary<string, string> { ["Cookie"] = $"tst_refresh={second}" });
+        Assert.Equal(HttpStatusCode.OK, logout.Status);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await Refresh(first)).Status); // inside the window, but the person has signed out
+        Assert.Equal(0, await LiveCookiesOf(person));
+    }
+
+    [SqlFact]
+    public async Task Signing_out_with_a_cookie_that_was_just_rotated_away_ends_what_replaced_it_too()
+    {
+        var person = await PersonAsync();
+        var first = RefreshCookie(await Login(person));
+        var second = RefreshCookie(await Refresh(first)); // a renewal that was under way while the person signed out
+
+        await _world.Send(null, HttpMethod.Post, "/api/auth/logout", null, new Dictionary<string, string> { ["Cookie"] = $"tst_refresh={first}" });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await Refresh(second)).Status);
+        Assert.Equal(0, await LiveCookiesOf(person));
+    }
+
+    [SqlFact]
+    public async Task Signing_out_of_one_browser_does_not_end_the_sign_ins_of_the_others()
+    {
+        var person = await PersonAsync();
+        var laptop = RefreshCookie(await Login(person));
+        var phone = RefreshCookie(await Login(person)); // a different device: no cookie of the first is sent with it
+
+        await _world.Send(null, HttpMethod.Post, "/api/auth/logout", null, new Dictionary<string, string> { ["Cookie"] = $"tst_refresh={laptop}" });
+
+        Assert.Equal(HttpStatusCode.OK, (await Refresh(phone)).Status);
     }
 
     [SqlFact]
@@ -284,6 +336,121 @@ public class RefreshTokenTests : IAsyncLifetime
             var r = await Refresh(cookie);
             Assert.NotEqual(HttpStatusCode.TooManyRequests, r.Status);
             cookie = RefreshCookie(r) ?? cookie;
+        }
+    }
+
+    private Task<ApiResponse> LoginWith(Actor person, string password) =>
+        _world.Send(null, HttpMethod.Post, "/api/auth/login", new { email = person.Email, password });
+
+    [SqlFact]
+    public async Task A_forgotten_old_device_does_not_take_the_new_sign_in_down_with_it_after_a_password_change()
+    {
+        var person = await PersonAsync();
+        var oldLaptop = RefreshCookie(await Login(person));
+        var oldPhone = RefreshCookie(await Login(person));
+
+        var regenerated = await _world.Post(_world.Admin, $"/api/users/{person.Id}/regenerate-temp-password");
+        var temporary = JsonDocument.Parse(regenerated.Text).RootElement.GetProperty("temporaryPassword").GetString();
+        const string fresh = "Brand-New-Pass1!";
+        Assert.Equal(HttpStatusCode.OK, (await _world.Post(null, "/api/auth/set-new-password", new { email = person.Email, temporaryPassword = temporary, newPassword = fresh, confirmNewPassword = fresh })).Status);
+        var newLaptop = RefreshCookie(await LoginWith(person, fresh));
+        Assert.NotNull(newLaptop);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await Refresh(oldPhone)).Status);  // the forgotten device is refused ...
+        Assert.Equal(HttpStatusCode.Unauthorized, (await Refresh(oldLaptop)).Status);
+        Assert.Equal(HttpStatusCode.OK, (await Refresh(newLaptop)).Status);          // ... and the session signed in after the change is untouched
+    }
+
+    [SqlFact]
+    public async Task A_deactivated_account_that_is_switched_on_again_does_not_get_an_old_cookie_back()
+    {
+        var person = await PersonAsync();
+        var cookie = RefreshCookie(await Login(person));
+
+        Assert.Equal(HttpStatusCode.OK, (await _world.Send(_world.Admin, HttpMethod.Patch, $"/api/users/{person.Id}/active", new { isActive = false })).Status);
+        Assert.Equal(HttpStatusCode.OK, (await _world.Send(_world.Admin, HttpMethod.Patch, $"/api/users/{person.Id}/active", new { isActive = true })).Status);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await Refresh(cookie)).Status); // it was never shown while the account was off, and still does not work
+    }
+
+    [SqlFact]
+    public async Task A_password_reset_by_mail_ends_every_sign_in()
+    {
+        var person = await PersonAsync();
+        var cookie = RefreshCookie(await Login(person));
+
+        string token;
+        using (var scope = _world.Factory.Services.CreateScope())
+        {
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            token = await users.GeneratePasswordResetTokenAsync((await users.FindByIdAsync(person.Id.ToString()))!);
+        }
+        const string fresh = "Reset-By-Mail-1!";
+        var reset = await _world.Post(null, "/api/auth/reset-password", new { userId = person.Id, token, newPassword = fresh, confirmNewPassword = fresh });
+        Assert.Equal(HttpStatusCode.OK, reset.Status);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await Refresh(cookie)).Status);
+    }
+
+    [SqlFact]
+    public async Task A_new_password_from_the_administrators_command_line_tool_ends_every_sign_in()
+    {
+        var admin = await _world.CreateActorAsync("cliadmin" + Guid.NewGuid().ToString("N")[..5], UserRole.Admin, null, null);
+        _people.Add(admin);
+        var cookie = RefreshCookie(await Login(admin));
+        Assert.NotNull(cookie);
+
+        using var output = new StringWriter();
+        using (var scope = _world.Factory.Services.CreateScope())
+            Assert.Equal(0, await TicketSystemTech.Api.Startup.AdminPasswordReset.RunAsync(scope.ServiceProvider, admin.Email, output));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await Refresh(cookie)).Status);
+    }
+
+    [SqlFact]
+    public async Task Renewing_sessions_is_not_held_to_the_sign_in_limit_even_when_that_limit_is_tiny()
+    {
+        // A second copy of the application whose sign-in limit is 2 a minute and whose renewal limit is generous: if renewing shared the sign-in
+        // limit, the third call would be refused. (The shared test host has a limit of 1000, which cannot show the difference.)
+        var saved = new Dictionary<string, string?>
+        {
+            ["RateLimits__AuthPerMinute"] = Environment.GetEnvironmentVariable("RateLimits__AuthPerMinute"),
+            ["RateLimits__RefreshPerMinute"] = Environment.GetEnvironmentVariable("RateLimits__RefreshPerMinute"),
+        };
+        Environment.SetEnvironmentVariable("RateLimits__AuthPerMinute", "2");
+        Environment.SetEnvironmentVariable("RateLimits__RefreshPerMinute", "200");
+        try
+        {
+            var person = await PersonAsync();
+            await using var strict = new ApiFactory();
+            using var client = strict.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+            async Task<HttpResponseMessage> Post(string url, object? body, string? cookie = null)
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = new StringContent(JsonSerializer.Serialize(body ?? new { }), Encoding.UTF8, "application/json") };
+                if (cookie is not null) request.Headers.TryAddWithoutValidation("Cookie", $"tst_refresh={cookie}");
+                return await client.SendAsync(request);
+            }
+
+            var login = await Post("/api/auth/login", new { email = person.Email, password = ApiWorld.Password });
+            Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+            var cookie = Regex.Match(string.Join(",", login.Headers.GetValues("Set-Cookie")), "tst_refresh=([^;,]+)").Groups[1].Value;
+
+            for (var i = 0; i < 8; i++)
+            {
+                var renewed = await Post("/api/auth/refresh", null, cookie);
+                Assert.Equal(HttpStatusCode.OK, renewed.StatusCode); // never "too many requests"
+                cookie = Regex.Match(string.Join(",", renewed.Headers.GetValues("Set-Cookie")), "tst_refresh=([^;,]+)").Groups[1].Value;
+            }
+
+            // The strict limit really is 2 in this copy (the sign-in above used one): a sign-in endpoint is refused within the next few calls.
+            var codes = new List<HttpStatusCode>();
+            for (var i = 0; i < 3; i++) codes.Add((await Post("/api/auth/forgot-password", new { email = "a@b.test" })).StatusCode);
+            Assert.Contains(HttpStatusCode.TooManyRequests, codes);
+        }
+        finally
+        {
+            foreach (var (name, value) in saved) Environment.SetEnvironmentVariable(name, value);
         }
     }
 }

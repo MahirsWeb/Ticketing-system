@@ -157,8 +157,9 @@ public sealed class TicketLifecycleService : ITicketLifecycleService
             BodyHtml = $"<p>Ticket transferred from <b>{H(fromDepartment?.Name ?? "(unrouted)")}</b> to <b>{H(toDepartment.Name)}</b> by {FullName(transferredBy)}.</p>"
         });
         _db.Audit(_currentUser.UserId, "TicketTransferred", nameof(Ticket), ticket.Id, $"Branch {fromDepartment?.Id.ToString() ?? "-"} -> {toDepartment.Id}");
-        await _db.SaveChangesAsync();
 
+        // The notice to the branch that receives the ticket is staged before the one save: a transfer that was saved without its notice would leave
+        // the receiving branch unaware of a ticket that is now theirs.
         var destinationStaff = await _db.Users
             .Where(u => u.Role == UserRole.Employee && u.DepartmentId == toDepartment.Id && u.IsActive)
             .ToListAsync();

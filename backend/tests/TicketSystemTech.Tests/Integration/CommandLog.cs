@@ -17,6 +17,22 @@ public sealed class CommandLog : DbCommandInterceptor
 
     public int CountNaming(string table) => _texts.Count(t => t.Contains(table, StringComparison.Ordinal));
 
+    /// <summary>Whether ONE command (a batch of statements sent together, which is what one SaveChanges is) names all of these. Says that things were saved together.</summary>
+    public bool AnyCommandNamingAll(params string[] parts) => _texts.Any(t => parts.All(p => t.Contains(p, StringComparison.Ordinal)));
+
+    public override InterceptionResult<int> NonQueryExecuting(DbCommand command, CommandEventData eventData, InterceptionResult<int> result)
+    {
+        _texts.Enqueue(command.CommandText);
+        return base.NonQueryExecuting(command, eventData, result);
+    }
+
+    public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command, CommandEventData eventData, InterceptionResult<int> result,
+        CancellationToken cancellationToken = default)
+    {
+        _texts.Enqueue(command.CommandText);
+        return base.NonQueryExecutingAsync(command, eventData, result, cancellationToken);
+    }
+
     public override InterceptionResult<DbDataReader> ReaderExecuting(DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result)
     {
         _texts.Enqueue(command.CommandText);

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { reportsApi } from '../../api/reports';
 import { Button } from '../../components/ui';
 import { useLanguage } from '../../i18n/LanguageContext';
+import { translateServerMessage } from '../../i18n/serverMessages';
 
 export const MIN_AI_INSIGHTS_DAYS = 28;
 
@@ -10,7 +11,7 @@ export const MIN_AI_INSIGHTS_DAYS = 28;
  * belongs to the selection it was made for: choosing another period, branch or employee clears it.
  */
 export function AiInsights({ from, to, departmentId, agentId }: { from: Date; to: Date; departmentId?: string; agentId?: string }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [insight, setInsight] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +31,7 @@ export function AiInsights({ from, to, departmentId, agentId }: { from: Date; to
     setError(null);
     try {
       const res = await reportsApi.aiInsights(params);
-      setInsight(res.summary);
+      setInsight(translateServerMessage(res.summary, language));
     } catch (err: any) {
       setError(err?.response?.data?.message ?? t('dash_aiFail'));
     } finally {

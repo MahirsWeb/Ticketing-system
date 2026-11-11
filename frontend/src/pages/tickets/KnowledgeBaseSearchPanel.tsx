@@ -5,6 +5,7 @@ import type { KnowledgeBaseSearchResultDto } from '../../types';
 import { Button, Card, Input, Spinner, StatusBadge } from '../../components/ui';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useLanguage } from '../../i18n/LanguageContext';
+import { translateServerMessage } from '../../i18n/serverMessages';
 
 const SOURCES_PREVIEW_COUNT = 7;
 
@@ -38,7 +39,7 @@ function SourceRow({ r }: { r: KnowledgeBaseSearchResultDto }) {
 }
 
 export function KnowledgeBaseSearchPanel({ initialQuery = '', alwaysOpen = false }: { initialQuery?: string; alwaysOpen?: boolean }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const navigate = useNavigate();
   const [query, setQuery] = useState(initialQuery);
   const [askedQuery, setAskedQuery] = useState('');
@@ -66,7 +67,7 @@ export function KnowledgeBaseSearchPanel({ initialQuery = '', alwaysOpen = false
     setShowAllSources(false);
     try {
       const res = await knowledgeBaseApi.ask(query, controller.signal);
-      setAnswer(res.answer);
+      setAnswer(translateServerMessage(res.answer, language));
       setAiAvailable(res.aiAvailable !== false);
       setSources(res.sources);
       setSimilarCount(res.similarTicketCount);

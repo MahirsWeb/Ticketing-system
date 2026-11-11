@@ -40,7 +40,15 @@ public static class WorkTaskHandBack
                 .Where(u => candidateIds.Contains(u.Id) && u.IsActive && u.Role == UserRole.Employee && u.DepartmentId == task.DepartmentId)
                 .ToListAsync(ct);
             var next = candidateIds.Select(id => candidates.FirstOrDefault(c => c.Id == id)).FirstOrDefault(c => c is not null);
-            if (next is null) continue;
+            if (next is null)
+            {
+                // Nobody who handed it over can take it back (it was made by an administrator, or by the person for themselves). It stays on the
+                // person, but not as work "in progress": it is shown as not started, with a record, so that a colleague of the branch finds it
+                // in the list and can reassign it (every colleague of the branch may).
+                task.Status = WorkTaskStatus.Pending;
+                db.Audit(by, "WorkTaskLeftWithoutOwner", nameof(WorkTask), task.Id, $"Owner {personId} stopped working ({reason}); nobody who handed the task over can take it back");
+                continue;
+            }
 
             task.AssignedToUserId = next.Id;
             task.AssignedByUserId = by;

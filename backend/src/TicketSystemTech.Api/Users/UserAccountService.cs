@@ -195,6 +195,8 @@ public sealed class UserAccountService : IUserAccountService
         // the assignee of the tickets they were working there.
         var wasEmployee = user.Role == UserRole.Employee;
         var movedAway = wasEmployee && (request.Role != UserRole.Employee || user.DepartmentId != departmentId || user.SubBranchId != subBranchId);
+        // Tasks belong to a branch: they are handed back when the person leaves the branch or the role, not for a move between its sub-branches.
+        var leftBranchOrRole = wasEmployee && (request.Role != UserRole.Employee || user.DepartmentId != departmentId);
 
         _db.Audit(_currentUser.UserId, "UserUpdated", nameof(ApplicationUser), user.Id,
             $"Role: {user.Role} -> {request.Role}; branch: {user.DepartmentId?.ToString() ?? "-"} -> {departmentId?.ToString() ?? "-"}; " +
@@ -215,7 +217,8 @@ public sealed class UserAccountService : IUserAccountService
         {
             await _assignments.ReleaseLiveTicketsAsync(user.Id, "moved to a different role or branch", _currentUser.UserId);
             await _db.EndRunningTaskSessionsAsync(null, user.Id, UtcNow); // their task timers stop too, not just ticket work
-            handedBack = await _db.HandBackOpenTasksAsync(_notifier, user.Id, _currentUser.UserId, "owner moved to a different role or branch");
+            if (leftBranchOrRole)
+                handedBack = await _db.HandBackOpenTasksAsync(_notifier, user.Id, _currentUser.UserId, "owner moved to a different role or branch");
         }
         var saved = await _userManager.UpdateAsync(user);
         if (!saved.Succeeded) return Outcome<Done>.Invalid(string.Join(" ", saved.Errors.Select(e => e.Description)));
@@ -233,6 +236,9 @@ public sealed class UserAccountService : IUserAccountService
 
         _db.Audit(_currentUser.UserId, isActive ? "UserActivated" : "UserDeactivated", nameof(ApplicationUser), user.Id, $"Role of target: {user.Role}");
         user.IsActive = isActive;
+        // A deactivated person's sign-ins end for good: if the account is switched on again later, a cookie that was never shown in the meantime must
+        // not start working again.
+        if (!isActive) await _db.RevokeRefreshTokensAsync(user.Id, UtcNow);
 
         // Someone who can no longer work must not keep owning live tickets. Released first and saved together with the person (see
         // UpdateUser): a failure leaves the account as it was instead of inactive with its tickets still on it.

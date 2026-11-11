@@ -316,8 +316,11 @@ upiše kao red u tabelu `EmailOutbox`, a zaseban radnik u pozadini ga šalje pre
   poslovnice upisuju se u `EmailOutbox` istim `SaveChanges`-om kao promjena na koju se odnose: ili postoje oboje ili nijedno.
   Izuzetak su poruke koje idu kroz memorijski red (zaboravljena lozinka, obavijest o zaključavanju), jer odgovor ne smije otkriti
   postoji li nalog; tu se upis dešava odmah poslije.
+  Odgovor na tiket i premještaj tiketa su ovdje jedno snimanje: poruka/premještaj, red u listi i outbox red idu zajedno (test to
+  provjerava na SQL komandama).
 - **Stari redovi:** redovi napisani prije šifrovanja tijela obrađuju se pri pokretanju: završeni (poslani, preskočeni, neuspjeli)
-  gube tijelo, a čekajući se šifruju na mjestu pa se mail ipak šalje.
+  gube tijelo, a čekajući se šifruju na mjestu pa se mail ipak šalje. To radi korak koji pravi migracije: kod `Startup:Migrate=false`
+  pokreni jednom `--migrate-only` poslije nadogradnje, inače stari redovi s čistim tekstom čekaju (i, kad se pošalju, gube tijelo).
 - **Podešavanja se primjenjuju pri pokretanju.** Ponovno čitanje `appsettings.json` tokom rada je isključeno (`Program.cs`), a
   varijable okruženja se ionako čitaju pri pokretanju procesa; zato promjena bilo kojeg podešavanja (`Smtp`, `Ai`, ...) traži
   restart aplikacije.
@@ -379,16 +382,19 @@ aplikacija **odbija da krene** i nabroji sve što fali, dok ne podesiš:
    pokrene re-key**:
 
    ```bash
-   dotnet TicketSystemTech.Api.dll --rekey-data                      # novi ključ, sve šifrovano ponovo pod njim, provjera
-   dotnet TicketSystemTech.Api.dll --rekey-data --revoke-old-keys    # ... i stari ključevi se povlače
+   dotnet TicketSystemTech.Api.dll --rekey-data           # novi ključ, sve šifrovano ponovo pod njim, provjera
+   dotnet TicketSystemTech.Api.dll --revoke-old-keys      # poslije provjere: stari ključevi se povlače (ne pravi novi ključ, ne prepisuje ništa)
    ```
 
-   Pokreće se kad je certifikat već podešen, **sa zaustavljenom aplikacijom** i poslije backupa baze. Alat pravi novi ključ,
-   ponovo upisuje sve šifrovano (e-mail, korisničko ime i telefon naloga, adrese firmi, outbox, Outlook tokene), **čita iz baze pod
-   kojim je ključem šta i ne povlači ništa ako išta ostane pod starim**. Tek s `--revoke-old-keys` stari ključevi se povlače i ne
-   otvaraju ništa; to se ne može poništiti, a linkovi za reset lozinke i potvrdu e-maila poslani ranije prestaju da rade. Backupi
-   baze napravljeni prije re-keya ostaju čitljivi sa svojim starim ključevima. Nova instalacija pokrenuta s certifikatom je
-   šifrovana od prvog dana. Ko svjesno ne želi certifikat: `DataProtection:AllowUnprotectedKeys` = `true`.
+   Dvije odvojene naredbe, svaka se može sigurno ponoviti (obje zajedno rade jedna za drugom). Pokreće se kad je certifikat već
+   podešen, **sa zaustavljenom aplikacijom** i poslije backupa baze. `--rekey-data` pravi novi ključ, ponovo upisuje sve šifrovano
+   (e-mail, korisničko ime i telefon naloga, adrese firmi, outbox, Outlook tokene) i **čita iz baze pod kojim je ključem šta**;
+   `--revoke-old-keys` ne povlači ništa ako išta ostane pod starim. Alat **odbija** da radi: bez certifikata (novi ključ bi stajao
+   nešifrovan u bazi; `--allow-unprotected-keys` ga ipak pušta, uz upozorenje), dok postoji ključ koji tek počinje (Data Protection je
+   sama napravila sljedeći: pokreni poslije tog trenutka) i dok su na bazu spojeni drugi programi (aplikacija nije zaustavljena;
+   `--allow-running` ako to nije aplikacija). Povlačenje se ne može poništiti, a linkovi za reset lozinke i potvrdu e-maila poslani
+   ranije prestaju da rade. Backupi baze napravljeni prije re-keya ostaju čitljivi sa svojim starim ključevima. Nova instalacija
+   pokrenuta s certifikatom je šifrovana od prvog dana. Ko svjesno ne želi certifikat: `DataProtection:AllowUnprotectedKeys` = `true`.
 
 Ostalo što vrijedi znati:
 
@@ -672,18 +678,24 @@ se ignoriše). Bez ikakvog SQL Servera ovi testovi se **preskaču** (prikažu se
   doda kolačić i skripta dobije svjež access token. httpOnly kolačić sprečava krađu *kopije* kolačića, ne rad skripte u stranici;
   zaštita od XSS-a ostaje sanitizacija sadržaja i CSP.
   - `POST /api/auth/refresh` mijenja kolačić za novi access token i rotira sam kolačić. Ponovna upotreba već rotiranog kolačića
-    u prvih `Jwt:RefreshReuseGraceSeconds` (20) sekundi smatra se utrkom dvije kartice (svaka dobije svoj ispravan kolačić);
-    **kasnije** je znak krađe i poništava sve tokene te osobe. Rotacija je jedan uslovni `UPDATE`, pa dva istovremena zahtjeva
-    ne mogu potrošiti isti token; kartice istog preglednika se usklađuju preko Web Locks.
-  - Kolačić je vezan za *security stamp*: svaka promjena lozinke (regeneracija privremene, postavljanje nove, reset) poništava
-    sve ranije izdate kolačiće. Zaključavanje naloga zbog pogrešnih lozinki blokira **nove** prijave, ali ne izbacuje osobu koja
-    je već prijavljena. Nova prijava poništava kolačić koji je taj preglednik još držao.
+    u prvih `Jwt:RefreshReuseGraceSeconds` (20) sekundi smatra se utrkom dvije kartice: sve dobiju **isti** nasljednik (nijedan
+    novi, nezavisan lanac), i to samo dok je taj nasljednik živ, pa odjava ili opoziv porodice odmah zatvaraju prozor. **Kasnije** je
+    znak krađe i poništava sve tokene te osobe. Rotacija je jedan uslovni `UPDATE` (i jedan red po tokenu unutar procesa), a
+    kartice istog preglednika se usklađuju preko Web Locks. Prozor poznaje samo jedna instanca aplikacije (memorijski keš).
+  - Kolačić je vezan za *security stamp*: svaka promjena lozinke (regeneracija privremene, postavljanje nove, reset, naredba
+    `--reset-admin-password`) poništava sve ranije izdate kolačiće, **ali samo njih**: sesija prijavljena poslije promjene ostaje.
+    Reset lozinke mailom, deaktivacija i anonimizacija poništavaju odmah sve kolačiće osobe (ponovna aktivacija ne vraća stari).
+    Zaključavanje naloga zbog pogrešnih lozinki blokira **nove** prijave, ali ne izbacuje osobu koja je već prijavljena. Nova
+    prijava poništava kolačić koji je **taj preglednik** još držao; prijava na drugom uređaju ne dira prvi (više uređaja je
+    namjerno dozvoljeno), a odjava poništava i nasljednike kolačića (obnova koja je bila u toku ne ostavlja živu sesiju).
   - Sesija ima **apsolutni rok** `Jwt:SessionMaxDays` (30): koliko god se obnavljala, nakon toga treba ponovo upisati lozinku.
     `Jwt:RefreshTokenDays` (14) je rok neaktivnosti; `Jwt:AccessTokenMinutes` je trajanje access tokena.
   - `POST /api/auth/logout` poništava token i briše kolačić; frontend čeka odgovor (ako ne uspije, osoba ostaje prijavljena i
     dobija poruku da odjava nije uspjela). `/refresh` i `/logout` odbijaju zahtjev s tuđim `Origin`-om (403).
   - Obnova ima svoj blaži limit (`RateLimits:RefreshPerMinute`, 240 u minuti po adresi), odvojen od prijave; frontend odjavljuje
-    samo na `401`, a na `429`, `5xx` i grešku mreže pokušava ponovo.
+    samo na `401` i `403` (server ne prima obnove s te stranice, npr. pogrešan `Cors:AllowedOrigins` iza proxyja: kao da je
+    sesija gotova), a na `429`, `5xx` i grešku mreže pokušava ponovo. Obnova ima rok od 15 s (visoka obnova ne drži ostale kartice
+    ni dugme „Odjava“), a odgovor obnove koja je bila u toku kad je osoba kliknula „Odjava“ se odbacuje.
   - **`Secure` kolačić radi samo preko HTTPS-a.** Na HTTP instalaciji preglednik kolačić ne prihvata, pa se pri svakom ponovnom
     učitavanju stranice osoba mora ponovo prijaviti. Produkcija treba HTTPS.
   - Stari `localStorage['tst-auth']` iz ranije verzije aplikacija briše pri pokretanju.

@@ -259,4 +259,32 @@ public class NotificationDeliveryTests : IAsyncLifetime
         Assert.Equal((NotificationType.TaskAssigned, $"{_world.EmpA1.Key} Tester assigned you a task: \"{title}\""), (second.Type, second.Message));
         Assert.Equal(new[] { "A task has been assigned to you" }, (await MailsAsync(_world.EmpA2)).Select(m => m.Subject));
     }
+
+    // ======================= the change and its notice are one save =======================
+
+    [SqlFact]
+    public async Task A_reply_and_the_notice_to_the_other_side_are_saved_in_one_batch_so_neither_can_be_lost_without_the_other()
+    {
+        var ticket = await TicketAsync(TicketStatus.InProgress, _world.EmpA1);
+        _world.Factory.Commands.Clear();
+
+        var reply = await _world.Post(_world.EmpA1, $"/api/tickets/{ticket.Id}/messages", new { type = "Response", bodyHtml = "<p>Pogledali smo.</p>" });
+
+        Assert.Equal(200, reply.Code);
+        Assert.True(_world.Factory.Commands.AnyCommandNamingAll("INSERT INTO [TicketMessages]", "INSERT INTO [Notifications]", "INSERT INTO [EmailOutbox]"),
+            "the reply, the line in the list and the e-mail must go to the database together");
+    }
+
+    [SqlFact]
+    public async Task A_transfer_and_the_notice_to_the_branch_that_receives_the_ticket_are_saved_in_one_batch()
+    {
+        var ticket = await TicketAsync(TicketStatus.InProgress, _world.EmpA1);
+        _world.Factory.Commands.Clear();
+
+        var moved = await _world.Post(_world.Admin, $"/api/tickets/{ticket.Id}/transfer-branch", new { departmentId = _world.BranchB });
+
+        Assert.Equal(200, moved.Code);
+        Assert.True(_world.Factory.Commands.AnyCommandNamingAll("UPDATE [Tickets]", "INSERT INTO [Notifications]", "INSERT INTO [EmailOutbox]"),
+            "the move, the line in the list and the e-mail must go to the database together");
+    }
 }

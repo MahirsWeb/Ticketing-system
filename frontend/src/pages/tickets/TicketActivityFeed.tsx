@@ -10,6 +10,7 @@ import { newIdempotencyKey } from '../../lib/idempotency';
 import { clearDraft, draftKey, loadDraft, saveDraft } from '../../lib/drafts';
 import { isBlankHtml } from '../../lib/htmlText';
 import { useLanguage } from '../../i18n/LanguageContext';
+import { translateEventHtml } from '../../i18n/serverMessages';
 
 /// Unified chat-like feed: Response, Internal Note, and system lifecycle events (opened/assigned/transferred/closed)
 /// all shown together in one chronological stream, distinguished by bubble color — no more switching tabs to see everything.
@@ -26,7 +27,7 @@ export function TicketActivityFeed({
   canReplyInternal: boolean;
   onMessageAdded: (m: TicketMessageDto) => void;
 }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [replyType, setReplyType] = useState<MessageType>('Response');
   // Attachments belong to the mode they were added in, exactly like the text: a file added to an internal note (a screenshot of
   // an internal system, say) must not travel with the public reply when the person switches modes.
@@ -96,7 +97,7 @@ export function TicketActivityFeed({
             return (
               <div key={m.id} className="flex items-center justify-center gap-2 py-1 text-center text-xs text-slate-600">
                 <span className="h-px flex-1 bg-slate-100" />
-                <span className="whitespace-nowrap" dangerouslySetInnerHTML={{ __html: sanitizeHtml(m.bodyHtml) }} />
+                <span className="whitespace-nowrap" dangerouslySetInnerHTML={{ __html: sanitizeHtml(translateEventHtml(m.bodyHtml, language)) }} />
                 <span>· {format(new Date(m.createdAt), 'dd.MM.yyyy HH:mm')}</span>
                 <span className="h-px flex-1 bg-slate-100" />
               </div>

@@ -76,9 +76,10 @@ public sealed class TicketMessageService : ITicketMessageService
             BodyHtml = _html.Sanitize(request.BodyHtml)
         };
         _db.TicketMessages.Add(message);
-        var raced = await _idempotency.SaveAsync(authorId, idempotencyKey, message.Id, TicketIdempotency.MessageScope);
-        if (raced is { } winner) return Outcome<TicketMessageDto>.Ok(await _queries.BuildMessageAsync(winner));
 
+        // The notice (the list line and the e-mail) is staged BEFORE the one save, so that the reply and what tells the other side about it stand or
+        // fall together: a reply that was saved while its notice was lost would be answered by the same Idempotency-Key with "done" and no mail.
+        NewResponseEvent? reply = null;
         if (request.Type == MessageType.Response)
         {
             // A client's reply goes to everyone working on the ticket, not just the primary assignee; a staff reply goes to the client.
@@ -87,13 +88,15 @@ public sealed class TicketMessageService : ITicketMessageService
                 : new List<Guid> { ticket.ClientId };
 
             var recipients = await _db.Users.Where(u => recipientIds.Contains(u.Id) && u.IsActive).ToListAsync();
-            var reply = new NewResponseEvent(ticket, recipients);
+            reply = new NewResponseEvent(ticket, recipients);
             _db.Notifications.AddRange(_notifier.InApp(reply));
             _db.EmailOutbox.AddRange(_notifier.Emails(reply));
-            if (recipients.Count > 0) await _db.SaveChangesAsync();
-
-            await _notifier.DeliverAsync(reply);
         }
+
+        var raced = await _idempotency.SaveAsync(authorId, idempotencyKey, message.Id, TicketIdempotency.MessageScope);
+        if (raced is { } winner) return Outcome<TicketMessageDto>.Ok(await _queries.BuildMessageAsync(winner));
+
+        if (reply is not null) await _notifier.DeliverAsync(reply); // the push, after the save
 
         // Only worth embedding once the ticket is past triage (search never returns New/Open tickets), and the
         // embedding call is an external dependency: its failure must not fail a message that is already saved.
