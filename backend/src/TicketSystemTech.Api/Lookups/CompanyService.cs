@@ -22,13 +22,11 @@ public sealed class CompanyService : ICompanyService
 {
     private readonly AppDbContext _db;
     private readonly ICurrentUserService _currentUser;
-    private readonly IVectorIndex _vectorIndex;
 
-    public CompanyService(AppDbContext db, ICurrentUserService currentUser, IVectorIndex vectorIndex)
+    public CompanyService(AppDbContext db, ICurrentUserService currentUser)
     {
         _db = db;
         _currentUser = currentUser;
-        _vectorIndex = vectorIndex;
     }
 
     public async Task<List<CompanyItemFull>> ListAsync(bool includeInactive, CancellationToken ct)
@@ -86,10 +84,7 @@ public sealed class CompanyService : ICompanyService
         {
             // Turning it off takes back what was already kept: the chunks (text and vectors) of this company's tickets go with the permission.
             if (!aiIndexing && c.AiIndexingEnabled)
-            {
                 await _db.KnowledgeBaseChunks.Where(k => k.TicketId != null && k.Ticket!.CompanyId == id).ExecuteDeleteAsync();
-                _vectorIndex.Invalidate(); // the copy of the vectors in memory must not go on offering what was just taken back
-            }
             c.AiIndexingEnabled = aiIndexing;
         }
         await _db.SaveChangesAsync();
