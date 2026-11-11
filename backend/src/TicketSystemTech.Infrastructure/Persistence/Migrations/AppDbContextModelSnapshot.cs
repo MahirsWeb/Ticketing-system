@@ -613,6 +613,13 @@ namespace TicketSystemTech.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("RevokedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("SecurityStamp")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("SessionStartedAtUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("TokenHash")
                         .IsRequired()
                         .HasMaxLength(64)

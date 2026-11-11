@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { lookupsApi } from '../../api/lookups';
 import { messageOf } from '../../lib/messageOf';
 import type { CompanyItemFull } from '../../types';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /**
  * Editing the details of a company: what is written in the fields, and the saving. What is sent has no spaces around it, and an address or a
@@ -9,6 +10,7 @@ import type { CompanyItemFull } from '../../types';
  * (as the server has it), and when the editing is cancelled they show what the company has.
  */
 export function useCompanyEdit(company: CompanyItemFull, onClose: () => void) {
+  const { t } = useLanguage();
   const [name, setName] = useState(company.name);
   const [address, setAddress] = useState(company.address ?? '');
   const [contactInfo, setContactInfo] = useState(company.contactInfo ?? '');
@@ -35,7 +37,7 @@ export function useCompanyEdit(company: CompanyItemFull, onClose: () => void) {
       show(updated);
       onClose();
     } catch (err) {
-      setError(messageOf(err, 'Could not save changes.'));
+      setError(messageOf(err, t('compedit_saveFail')));
     } finally {
       setSaving(false);
       // The question is answered either way: if it did not work the reason is in the form, which the question would be covering.

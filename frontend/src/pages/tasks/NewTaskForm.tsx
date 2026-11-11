@@ -68,7 +68,7 @@ export function NewTaskForm({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <Card className="p-5">
-      <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-600">New task</h2>
+      <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-600">{t('task_newTitle')}</h2>
       <form onSubmit={handleCreate} className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Field>
           <Label>{t('task_title')}</Label>
@@ -77,19 +77,19 @@ export function NewTaskForm({ isAdmin }: { isAdmin: boolean }) {
         <Field>
           <Label>{t('form_assignTo')}</Label>
           <Select value={assignedToUserId} onChange={(e) => edit(setAssignedToUserId)(e.target.value)}>
-            <option value="">Choose a colleague{isAdmin ? '' : ' (or yourself)'}…</option>
+            <option value="">{isAdmin ? t('task_chooseColleague') : t('task_chooseColleagueSelf')}</option>
             {colleaguesByBranch.map(([branchName, group]) => (
               <optgroup key={branchName} label={branchName}>
                 {group.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.firstName} {c.lastName}
-                    {c.id === user?.id ? ' — me' : ''}
+                    {c.id === user?.id ? t('task_meSuffix') : ''}
                   </option>
                 ))}
               </optgroup>
             ))}
           </Select>
-          {inNoBranch && <p className="mt-1 text-xs text-slate-600">You are not in a branch, so there are no colleagues to choose from.</p>}
+          {inNoBranch && <p className="mt-1 text-xs text-slate-600">{t('task_noBranch')}</p>}
           {colleagues.isError && <ErrorText>{t('task_colleaguesFail')}</ErrorText>}
         </Field>
         <Field className="md:col-span-2">

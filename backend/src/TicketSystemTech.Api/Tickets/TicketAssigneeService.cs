@@ -75,6 +75,7 @@ public sealed class TicketAssigneeService : ITicketAssigneeService
 
         var added = new TicketAssignedEvent(ticket, user);
         _db.Notifications.AddRange(_notifier.InApp(added));
+        _db.EmailOutbox.AddRange(_notifier.Emails(added));
         _db.Audit(_currentUser.UserId, "TicketAssigneeAdded", nameof(Ticket), ticket.Id, $"Added {user.Id}");
         try
         {

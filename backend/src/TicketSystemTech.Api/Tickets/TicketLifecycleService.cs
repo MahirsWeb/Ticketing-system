@@ -113,6 +113,7 @@ public sealed class TicketLifecycleService : ITicketLifecycleService
 
         var opened = new TicketOpenedEvent(ticket, client, assignee);
         _db.Notifications.AddRange(_notifier.InApp(opened));
+        _db.EmailOutbox.AddRange(_notifier.Emails(opened));
         _db.Audit(_currentUser.UserId, "TicketOpened", nameof(Ticket), ticket.Id, $"Assigned to {assignee.Id}; branch {ticket.DepartmentId}");
         await _db.SaveChangesAsync();
 
@@ -164,6 +165,7 @@ public sealed class TicketLifecycleService : ITicketLifecycleService
 
         var transferred = new TicketTransferredEvent(ticket, fromDepartment?.Name ?? "(unrouted)", toDepartment.Name, transferredBy, destinationStaff);
         _db.Notifications.AddRange(_notifier.InApp(transferred));
+        _db.EmailOutbox.AddRange(_notifier.Emails(transferred));
         await _db.SaveChangesAsync();
 
         await _notifier.DeliverAsync(transferred);
@@ -202,6 +204,7 @@ public sealed class TicketLifecycleService : ITicketLifecycleService
 
         var closedEvent = new TicketClosedEvent(ticket, client, closedBy);
         _db.Notifications.AddRange(_notifier.InApp(closedEvent));
+        _db.EmailOutbox.AddRange(_notifier.Emails(closedEvent));
         _db.Audit(_currentUser.UserId, "TicketClosed", nameof(Ticket), ticket.Id, $"Ticket #{ticket.TicketNumber}");
         await _db.SaveChangesAsync();
 

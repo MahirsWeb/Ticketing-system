@@ -17,7 +17,7 @@ export function SubBranchesInline({ departmentId }: { departmentId: string }) {
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const actions = useLookupActions<SubBranchItemFull>({
-    noun: 'sub-branch',
+    noun: t('noun_subBranch'),
     setActive: (item, isActive) => lookupsApi.updateSubBranch(item.id, item.name, isActive),
   });
 
@@ -38,10 +38,7 @@ export function SubBranchesInline({ departmentId }: { departmentId: string }) {
 
   return (
     <div className="mt-1 mb-2 rounded-lg border border-slate-100 bg-slate-50/60 p-3">
-      <p className="mb-2 text-xs text-slate-600">
-        Optional finer units within this branch, sharing its email but tracked separately for statistics and
-        ticket assignment. If any exist, staff and tickets in this branch must pick one.
-      </p>
+      <p className="mb-2 text-xs text-slate-600">{t('sub_intro')}</p>
       <form onSubmit={handleCreate} className="mb-2 flex gap-2">
         <Input
           placeholder={t('sub_namePlaceholder')}
@@ -54,7 +51,7 @@ export function SubBranchesInline({ departmentId }: { departmentId: string }) {
           className="max-w-xs text-xs"
         />
         <Button type="submit" variant="secondary" className="text-xs" disabled={!name.trim()}>
-          Add
+          {t('common_add')}
         </Button>
       </form>
       <ErrorText>{error ?? actions.changeError}</ErrorText>
@@ -70,15 +67,14 @@ export function SubBranchesInline({ departmentId }: { departmentId: string }) {
             </div>
           </ListRow>
         ))}
-        {items.length === 0 && <p className="py-2 text-xs text-slate-600">No sub-branches — this branch is used as a single unit.</p>}
+        {items.length === 0 && <p className="py-2 text-xs text-slate-600">{t('sub_empty')}</p>}
       </div>
 
       <LookupDialogs
         actions={actions}
         deactivate={{
           title: () => t('sub_deactivateTitle'),
-          message: (item) =>
-            `Tickets and staff already assigned to "${item.name}" keep that assignment and are completely unaffected — this does not change any existing tickets or statistics. It just removes "${item.name}" from the picker when opening a new ticket or assigning staff. If this is the branch's only active sub-branch, the branch will behave as if it has none until you reactivate it.`,
+          message: (item) => t('sub_deactivateMsg', { name: item.name }),
         }}
       />
     </div>

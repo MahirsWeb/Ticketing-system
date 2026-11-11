@@ -24,13 +24,11 @@ public interface IBranchService
 public sealed class BranchService : IBranchService
 {
     private readonly AppDbContext _db;
-    private readonly IEmailSender _emailSender;
     private readonly ICurrentUserService _currentUser;
 
-    public BranchService(AppDbContext db, IEmailSender emailSender, ICurrentUserService currentUser)
+    public BranchService(AppDbContext db, ICurrentUserService currentUser)
     {
         _db = db;
-        _emailSender = emailSender;
         _currentUser = currentUser;
     }
 
@@ -53,11 +51,12 @@ public sealed class BranchService : IBranchService
         var entity = new Department { Name = request.Name, Email = request.Email };
         _db.Departments.Add(entity);
         _db.Audit(_currentUser.UserId, "DepartmentCreated", nameof(Department), entity.Id, $"Branch '{entity.Name}'");
-        await _db.SaveChangesAsync();
 
+        // The welcome mail is filed in the same save as the branch itself: a branch that exists has its mail promised, and a failed save leaves neither.
         var creatorEmail = await _db.Users.Where(u => u.Id == _currentUser.UserId).Select(u => u.Email).FirstOrDefaultAsync();
         var welcome = AccountMessages.BranchWelcome(entity.Name, creatorEmail ?? "your administrator");
-        await _emailSender.SendAsync(entity.Email, welcome.Subject, welcome.Html);
+        _db.StageEmail(entity.Email, welcome.Subject, welcome.Html);
+        await _db.SaveChangesAsync();
 
         return Outcome<DepartmentItemFull>.Ok(new DepartmentItemFull(entity.Id, entity.Name, entity.Email, entity.IsActive));
     }

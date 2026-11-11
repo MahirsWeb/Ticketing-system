@@ -36,7 +36,7 @@ export default function DashboardPage() {
   const { data: departments = [] } = useDepartments({ enabled: isAdmin });
   // Staff see their own branch's people; an administrator sees everybody.
   const { data: employees = [] } = useEmployees({ departmentId: isAdmin ? undefined : user?.departmentId ?? undefined });
-  const people = useMemo(() => groupEmployeesByBranch(employees, departmentId), [employees, departmentId]);
+  const people = useMemo(() => groupEmployeesByBranch(employees, departmentId, t('common_noBranch')), [employees, departmentId, t]);
 
   const params = { from: from.toISOString(), to: to.toISOString(), departmentId: departmentId || undefined, agentId: agentId || undefined };
   const summaryQuery = useReportSummary(params);

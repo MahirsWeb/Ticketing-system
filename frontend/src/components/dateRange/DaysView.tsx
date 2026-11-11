@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
 import { addMonths, format, isAfter, isBefore, isSameDay, isSameMonth, subMonths } from 'date-fns';
 import { HEADING_BUTTON, PickerHeader } from './PickerHeader';
-import { WEEKDAY_LABELS, isFutureDay, monthGrid } from './rangeModel';
+import { WEEKDAY_KEYS, isFutureDay, monthGrid } from './rangeModel';
 import { useLanguage } from '../../i18n/LanguageContext';
+import { useDateLocale } from '../../i18n/dateLocale';
 
 /** The days of a month, with the range that is being chosen marked. A day that has not come yet cannot be chosen. */
 export function DaysView({
@@ -23,19 +24,20 @@ export function DaysView({
   onHover: (day: Date) => void;
 }) {
   const { t } = useLanguage();
+  const locale = useDateLocale();
   const days = useMemo(() => monthGrid(month), [month]);
 
   return (
     <>
       <PickerHeader previous={{ label: t('dateRange_prevMonth'), onClick: () => onMonth(subMonths(month, 1)) }} next={{ label: t('dateRange_nextMonth'), onClick: () => onMonth(addMonths(month, 1)) }}>
         <button type="button" onClick={onTitle} className={HEADING_BUTTON}>
-          {format(month, 'MMMM yyyy')}
+          {format(month, 'MMMM yyyy', { locale })}
         </button>
       </PickerHeader>
       <div className="grid grid-cols-7 gap-0.5 text-center text-[11px] font-semibold text-slate-600">
-        {WEEKDAY_LABELS.map((d) => (
+        {WEEKDAY_KEYS.map((d) => (
           <div key={d} className="py-1">
-            {d}
+            {t(d)}
           </div>
         ))}
       </div>
@@ -52,7 +54,7 @@ export function DaysView({
               key={day.toISOString()}
               type="button"
               disabled={isFuture}
-              aria-label={format(day, 'd MMMM yyyy')}
+              aria-label={format(day, 'd MMMM yyyy', { locale })}
               aria-pressed={isStart || isEnd}
               onMouseEnter={() => onHover(day)}
               onFocus={() => onHover(day)}

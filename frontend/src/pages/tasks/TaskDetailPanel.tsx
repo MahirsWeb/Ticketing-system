@@ -176,7 +176,7 @@ export function TaskDetailPanel({
         <ul className="mt-1 space-y-1 text-xs text-slate-600">
           {task.history.map((h, i) => (
             <li key={i}>
-              <span className="font-medium text-slate-800">{h.assignedByName}</span> assigned to{' '}
+              <span className="font-medium text-slate-800">{h.assignedByName}</span> {t('task_historyAssignedTo')}{' '}
               <span className="font-medium text-slate-800">{h.assignedToName}</span> —{' '}
               {format(new Date(h.assignedAtUtc), 'dd.MM.yyyy HH:mm')}
             </li>

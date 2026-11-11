@@ -8,8 +8,13 @@ import type { TicketDetailDto } from '../../types';
 vi.mock('../../api/tickets', () => ({ ticketsApi: { addMessage: vi.fn(), uploadAttachments: vi.fn() } }));
 // The real editor (TipTap) needs a browser; what matters here is what the feed does with the text.
 vi.mock('../../components/RichTextEditor', () => ({
-  RichTextEditor: ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
-    <textarea aria-label="editor" value={value} onChange={(e) => onChange(e.target.value)} />
+  RichTextEditor: ({ value, onChange, onFilesSelected }: { value: string; onChange: (v: string) => void; onFilesSelected?: (f: File[]) => void }) => (
+    <>
+      <textarea aria-label="editor" value={value} onChange={(e) => onChange(e.target.value)} />
+      <button type="button" onClick={() => onFilesSelected?.([new File(['x'], 'screenshot.png')])}>
+        pick a file
+      </button>
+    </>
   ),
 }));
 
@@ -144,5 +149,38 @@ describe('the reply box of a ticket', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Response' }));
     expect(screen.getByLabelText('editor')).toHaveValue('For the client');
+  });
+
+  describe('attachments belong to the mode they were added in', () => {
+    it('does not send a file added to an internal note along with the public reply', async () => {
+      const uploadAttachments = vi.mocked(ticketsApi.uploadAttachments);
+      uploadAttachments.mockReset();
+      addMessage.mockResolvedValueOnce(sent(1));
+      renderFeed({ response: true, internal: true });
+
+      await userEvent.click(screen.getByRole('button', { name: 'Internal note' }));
+      await userEvent.click(screen.getByRole('button', { name: 'pick a file' }));
+      expect(screen.getByText(/screenshot\.png/)).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Response' }));
+      expect(screen.queryByText(/screenshot\.png/)).not.toBeInTheDocument(); // not shown beside the public reply...
+      await userEvent.type(screen.getByLabelText('editor'), 'Hello client');
+      await userEvent.click(screen.getByRole('button', { name: 'Send reply' }));
+
+      expect(addMessage).toHaveBeenCalledTimes(1);
+      expect(uploadAttachments).not.toHaveBeenCalled(); // ...and not sent with it
+
+      await userEvent.click(screen.getByRole('button', { name: 'Internal note' }));
+      expect(screen.getByText(/screenshot\.png/)).toBeInTheDocument(); // still waiting with the note it was added to
+    });
+
+    it('gives the remove button a name that says which file it removes', async () => {
+      renderFeed();
+      await userEvent.click(screen.getByRole('button', { name: 'pick a file' }));
+
+      await userEvent.click(screen.getByRole('button', { name: 'Remove screenshot.png' }));
+
+      expect(screen.queryByText(/screenshot\.png/)).not.toBeInTheDocument();
+    });
   });
 });

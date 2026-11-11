@@ -1,6 +1,6 @@
 import { addYears, format, subYears } from 'date-fns';
 import { HEADING_BUTTON, PickerHeader } from './PickerHeader';
-import { MONTH_LABELS, YEAR_BLOCK_SIZE, yearBlockStart } from './rangeModel';
+import { MONTH_KEYS, YEAR_BLOCK_SIZE, yearBlockStart } from './rangeModel';
 import { useLanguage } from '../../i18n/LanguageContext';
 
 const CELL = 'rounded-md py-2 text-xs';
@@ -18,9 +18,9 @@ export function MonthsView({ month, onYear, onTitle, onPick }: { month: Date; on
         </button>
       </PickerHeader>
       <div className="grid grid-cols-3 gap-1">
-        {MONTH_LABELS.map((label, index) => (
+        {MONTH_KEYS.map((label, index) => (
           <button key={label} type="button" onClick={() => onPick(new Date(month.getFullYear(), index, 1))} className={[CELL, index === month.getMonth() ? CHOSEN : OTHER].join(' ')}>
-            {label}
+            {t(label)}
           </button>
         ))}
       </div>

@@ -52,4 +52,30 @@ public class LegacyUploadsTests
             File.Delete(path);
         }
     }
+
+    [SqlFact]
+    public async Task Slash_tricks_in_the_path_do_not_reach_the_old_uploads_folder_either()
+    {
+        var webRoot = _world.Factory.Services.GetRequiredService<IWebHostEnvironment>().WebRootPath;
+        var folder = Path.Combine(webRoot, "uploads");
+        Directory.CreateDirectory(folder);
+        var name = $"legacy-{Guid.NewGuid():N}.txt";
+        var path = Path.Combine(folder, name);
+        await File.WriteAllTextAsync(path, "an old attachment");
+        try
+        {
+            // A request for "//uploads/<file>" (an empty first segment) once slipped past a check on the path's prefix and was served.
+            // Absolute addresses are used because a relative "//uploads/..." would be read as a host name.
+            foreach (var tricky in new[] { "//uploads/", "///uploads/", "/uploads//", "/./uploads/", "/avatars/../uploads/" })
+            {
+                var response = await _world.Get(null, $"http://localhost{tricky}{name}");
+                Assert.NotEqual(200, response.Code);
+                Assert.DoesNotContain("an old attachment", response.Text);
+            }
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
 }

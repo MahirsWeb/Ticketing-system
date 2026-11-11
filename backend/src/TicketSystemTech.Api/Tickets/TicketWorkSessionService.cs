@@ -82,9 +82,10 @@ public sealed class TicketWorkSessionService : ITicketWorkSessionService
             ?? WorkSessionRules.ValidateAgainstOtherWork(started, ended, await _db.OtherWorkOfAsync(session.UserId, id, null));
         if (error is not null) return Outcome<TicketDetailDto>.Invalid(error);
 
+        var (wasStarted, wasEnded) = (session.StartedAtUtc, session.EndedAtUtc);
         session.StartedAtUtc = started;
         session.EndedAtUtc = ended;
-        AuditWorkSession("WorkSessionChanged", id, session);
+        AuditWorkSession("WorkSessionChanged", id, session, (wasStarted, wasEnded));
         await _db.SaveChangesAsync();
 
         return Outcome<TicketDetailDto>.Ok(await _queries.BuildDetailAsync(id));
@@ -121,13 +122,16 @@ public sealed class TicketWorkSessionService : ITicketWorkSessionService
             .Select(s => new WorkSessionRules.Span(s.Id, s.StartedAtUtc, s.EndedAtUtc))
             .ToListAsync();
 
-    private void AuditWorkSession(string action, Guid ticketId, TicketWorkSession session) =>
+    /// <summary>A change records what the session was as well as what it is now; an addition or a deletion records the session itself.</summary>
+    private void AuditWorkSession(string action, Guid ticketId, TicketWorkSession session, (DateTime Started, DateTime? Ended)? was = null) =>
         _db.AuditLogs.Add(new AuditLog
         {
             UserId = _currentUser.UserId,
             Action = action,
             EntityType = nameof(Ticket),
             EntityId = ticketId,
-            Details = $"session {session.Id} of user {session.UserId}: {session.StartedAtUtc:O} - {session.EndedAtUtc?.ToString("O") ?? "running"}"
+            Details = was is { } before
+                ? WorkSessionAuditText.Changed(session.Id, session.UserId, before.Started, before.Ended, session.StartedAtUtc, session.EndedAtUtc)
+                : WorkSessionAuditText.Of(session.Id, session.UserId, session.StartedAtUtc, session.EndedAtUtc)
         });
 }

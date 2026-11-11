@@ -28,13 +28,7 @@ export function KnowledgeBaseMaintenancePanel() {
   return (
     <Panel className="max-w-lg">
       <h2 className="text-sm font-bold text-slate-800">{t('kbmaint_title')}</h2>
-      <p className="mt-0.5 mb-4 text-xs text-slate-600">
-        AI search only picks up a ticket once it's been indexed — normally that happens automatically the moment a
-        ticket is closed through the app. Tickets inserted directly (e.g. bulk-imported demo data) skip that step, so
-        they won't show up in AI search or chat until you reindex. This embeds the tickets that still lack an entry —
-        only ones with enough internal notes to ever be a search result — in the background, so you can leave this page.
-        Safe to run any time, and it continues where it stopped.
-      </p>
+      <p className="mt-0.5 mb-4 text-xs text-slate-600">{t('kbmaint_intro')}</p>
       <ErrorText>{error}</ErrorText>
       <ReindexStatusError run={run} />
       {status && status.state !== 'Idle' && (
@@ -42,7 +36,7 @@ export function KnowledgeBaseMaintenancePanel() {
           {progress && <span className="font-semibold">{progress}</span>} {progress && '· '}
           {status.state === 'Running' ? t('kbmaint_running') : ''}
           {status.message}
-          {status.embedded > 0 && status.state !== 'Running' ? ` (${status.embedded} embedded)` : ''}
+          {status.embedded > 0 && status.state !== 'Running' ? t('kbmaint_embedded', { count: status.embedded }) : ''}
         </p>
       )}
       <Button onClick={handleReindex} disabled={running}>

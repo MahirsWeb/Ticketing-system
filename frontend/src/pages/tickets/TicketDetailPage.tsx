@@ -7,6 +7,7 @@ import { ticketKeys, useTicket } from '../../api/ticketQueries';
 import type { TicketDetailDto } from '../../types';
 import { Card, ErrorText, PriorityBadge, Spinner, StatusBadge } from '../../components/ui';
 import { useLanguage } from '../../i18n/LanguageContext';
+import type { TranslationKey } from '../../i18n/translations';
 import { SafeHtml } from '../../components/SafeHtml';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useAuthStore } from '../../store/authStore';
@@ -106,7 +107,7 @@ export default function TicketDetailPage() {
       {ticket.status !== 'New' && (
         <Card className="p-5">
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <InfoRow label={t('detail_source')} value={ticket.source} />
+            <InfoRow label={t('detail_source')} value={t(`source_${ticket.source}` as TranslationKey)} />
             <InfoRow label={t('detail_helpTopic')} value={ticket.helpTopicName} />
             <InfoRow label={t('detail_branch')} value={ticket.departmentName} />
             <InfoRow label={t('detail_subBranch')} value={ticket.subBranchName} />

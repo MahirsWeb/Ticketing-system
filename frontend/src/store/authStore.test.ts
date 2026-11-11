@@ -63,4 +63,14 @@ describe('an expired session', () => {
     useAuthStore.getState().logout(); // a 401 for a request made without a session
     expect(useAuthStore.getState().sessionExpired).toBe(false);
   });
+
+  it('removes the session the previous version left in localStorage, once, when the app starts', async () => {
+    localStorage.setItem('tst-auth', JSON.stringify({ state: { accessToken: 'old.jwt', user: { email: 'ana@example.test' } } }));
+    const { vi } = await import('vitest');
+    vi.resetModules();
+
+    await import('./authStore');
+
+    expect(localStorage.getItem('tst-auth')).toBeNull();
+  });
 });

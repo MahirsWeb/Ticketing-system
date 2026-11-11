@@ -20,7 +20,9 @@
 ## Kako radi
 
 - **Zaključavanje:** radnik uzima poruke uslovnim `UPDATE`-om (lease, `Email:Outbox:LeaseSeconds`). Ako radnik pukne, poruka se po
-  isteku ponovo nudi. U normalnom radu dvije instance ne uzimaju istu poruku istovremeno (samo jedan `UPDATE` promijeni red).
+  isteku ponovo nudi. Dvije instance u normalnom radu ne uzimaju istu poruku istovremeno (samo jedan `UPDATE` promijeni red). Rezervacija se računa od
+  trenutka kad je poruka uzeta, a jedno slanje koje traje duže od `LeaseSeconds` (npr. SMTP koji visi) nadživi svoju rezervaciju, pa se
+  poruka tad može poslati ponovo; rezervacija zato mora biti duža od SMTP timeouta.
   **Isporuka je „barem jednom": ** ako proces padne nakon što je SMTP prihvatio poruku a prije nego je ishod zapisan, poruka će
   po isteku lease-a biti poslana ponovo. To je cijena toga da se nijedna poruka ne izgubi; apsolutna garancija „nikad dvaput" ne
   postoji (niti je moguća bez transakcija s provajderom). Primalac zato može u rijetkom slučaju dobiti istu poruku dvaput.

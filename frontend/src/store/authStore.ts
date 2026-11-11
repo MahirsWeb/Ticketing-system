@@ -22,6 +22,14 @@ interface AuthState {
   signOut: () => void;
 }
 
+// The previous version kept the whole session (an access token and the person's e-mail) in localStorage. Nothing reads or writes
+// it any more, so it is removed once at start-up rather than left behind for any script on the page to read.
+try {
+  localStorage.removeItem('tst-auth');
+} catch {
+  /* storage unavailable (private mode, blocked): nothing to remove */
+}
+
 export const useAuthStore = create<AuthState>()((set, get) => ({
   accessToken: null,
   user: null,

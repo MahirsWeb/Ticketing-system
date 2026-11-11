@@ -21,7 +21,7 @@ export function WorkTimeEditor({ ticket, onChanged }: { ticket: TicketDetailDto;
     <div className="rounded-lg border border-slate-100 bg-slate-50/60 p-3">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
         <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">{t('worktime_title')}</div>
-        {ticket.workSessions.length > 0 && <div className="text-xs font-medium text-slate-600">Total: {formatDuration(total)}</div>}
+        {ticket.workSessions.length > 0 && <div className="text-xs font-medium text-slate-600">{t('worktime_total', { duration: formatDuration(total) })}</div>}
       </div>
 
       <WorkSessionList sessions={ticket.workSessions} now={now} saving={form.saving} onEnd={form.endNow} onEdit={form.beginEdit} onDelete={form.setToDelete} />
@@ -37,7 +37,7 @@ export function WorkTimeEditor({ ticket, onChanged }: { ticket: TicketDetailDto;
       {toDelete && (
         <ConfirmDialog
           title={t('worktime_deleteTitle')}
-          message={`${toDelete.userName}, ${format(new Date(toDelete.startedAtUtc), 'dd.MM.yyyy HH:mm')}. This cannot be undone.`}
+          message={t('worktime_deleteMsg', { name: toDelete.userName, when: format(new Date(toDelete.startedAtUtc), 'dd.MM.yyyy HH:mm') })}
           confirmLabel={t('common_delete')}
           danger
           onConfirm={() => form.deleteConfirmed(toDelete)}

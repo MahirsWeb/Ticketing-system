@@ -19,9 +19,9 @@ export function BranchBreakdownCard({ items }: { items: BranchBreakdownEntryDto[
             <div className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm">
               <span className="font-medium text-slate-800">{b.departmentName}</span>
               <span className="flex gap-3 text-xs text-slate-600">
-                <span>{b.totalNew} new</span>
-                <span className="text-amber-700">{b.totalOpen} open</span>
-                <span className="text-green-700">{b.totalClosed} closed</span>
+                <span>{t('dash_countNew', { count: b.totalNew })}</span>
+                <span className="text-amber-700">{t('dash_countOpen', { count: b.totalOpen })}</span>
+                <span className="text-green-700">{t('dash_countClosed', { count: b.totalClosed })}</span>
               </span>
             </div>
           )}

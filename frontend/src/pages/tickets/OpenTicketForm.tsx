@@ -85,7 +85,7 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
 
   return (
     <Card className="p-5">
-      <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-600">Open ticket</h2>
+      <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-600">{t('ticket_openTitle')}</h2>
       <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
         <SelectField label={t('form_ticketSource')} value={source} onChange={(v) => setSource(v as TicketSource)} options={SOURCES.map((s) => ({ value: s, label: t(`source_${s}` as TranslationKey) }))} />
         <SelectField label={t('detail_helpTopic')} value={helpTopicId} onChange={setHelpTopicId} options={lists.helpTopics.map((t) => ({ value: t.id, label: t.name }))} />
@@ -97,7 +97,7 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
           label={t('detail_slaPlan')}
           value={slaPlanId}
           onChange={setSlaPlanId}
-          options={lists.slaPlans.map((s) => ({ value: s.id, label: `${s.name} (${s.resolutionTimeHours}h resolution)` }))}
+          options={lists.slaPlans.map((s) => ({ value: s.id, label: `${s.name} (${t('sla_hoursResolution', { hours: s.resolutionTimeHours })})` }))}
         />
         <SelectField label={t('table_priority')} value={priority} onChange={(v) => setPriority(v as TicketPriority)} options={PRIORITIES.map((p) => ({ value: p, label: t(`priority_${p}` as TranslationKey) }))} />
         <DueDateField value={dueDate} onChange={setDueDate} />
@@ -111,7 +111,7 @@ export function OpenTicketForm({ ticket, onOpened }: { ticket: TicketDetailDto; 
               </option>
             ))}
           </Select>
-          {employees.isError && <ErrorText>The list of agents could not be loaded.</ErrorText>}
+          {employees.isError && <ErrorText>{t('ticket_agentsFail')}</ErrorText>}
         </Field>
         <SelectField
           label={t('form_category')}

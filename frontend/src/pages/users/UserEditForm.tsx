@@ -131,7 +131,7 @@ export function UserEditForm({ user, onSaved, onCancel }: { user: UserListItemDt
             {saving ? t('common_saving') : t('common_save')}
           </Button>
           <Button type="button" variant="secondary" onClick={onCancel}>
-            Cancel
+            {t('common_cancel')}
           </Button>
         </div>
       </div>

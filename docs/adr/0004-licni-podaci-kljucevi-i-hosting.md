@@ -30,14 +30,19 @@ lozinka admina završavala u logovima koje platforma čuva. Drugi krug je to pon
 
 ## Šta nije urađeno
 
-- **Ključevi napravljeni bez certifikata ostaju nešifrovani trajno.** Data Protection svakih 90 dana pravi *novi* ključ, ali
+- **Ključevi napravljeni bez certifikata ostaju nešifrovani dok se ne pokrene re-key.** Data Protection svakih 90 dana pravi *novi* ključ, ali
   *stare ne briše* — potrebni su da se pročita ono što je njima šifrovano. Ako je instalacija prvi put pokrenuta bez certifikata,
   ti stari ključevi i dalje stoje u bazi nešifrovani, pa dodavanje certifikata kasnije štiti samo ono što se šifruje *poslije*
-  njega, ne i ranije podatke. Nema još alata za ponovno šifrovanje (re-key) postojećih ključeva. **Zaključak:** da bi zaštita
+  njega, ne i ranije podatke. Za to postoji alat `--rekey-data` (README, DataProtection): pravi novi ključ, ponovo šifruje sve podatke pod njim i, uz
+  `--revoke-old-keys`, povlači stare; backupi napravljeni prije toga ostaju čitljivi sa svojim ključevima. **Zaključak:** da bi zaštita
   ključeva zaista vrijedila, certifikat (`DataProtection:CertificatePath`/`Thumbprint`) mora biti podešen **prije prvog pokretanja**
   na serveru; nova instalacija je tada šifrovana od početka.
-- **GDPR izvoz i anonimizacija** na zahtjev (T-10) nisu urađeni; traži pravnu stranu.
-- **JWT je u `localStorage`** (T-18.1); prelazak na kolačić je veća izmjena koja nije rađena.
+- **GDPR:** izvoz i anonimizacija na zahtjev postoje (T-10). Izvoz sadrži profil, tikete koje je osoba otvorila (s opisom), poruke,
+  rad, metapodatke priloga, obavijesti, audit zapise te osobe, radnje drugih nad njenim nalogom i e-mailove poslane na njenu adresu
+  (bez teksta). Period čuvanja i automatsko brisanje traže pravnu stranu.
+- **Sesija** (T-18.1): kratki access token je samo u memoriji, dugi dio je refresh token u httpOnly kolačiću (README). Kolačić ne
+  štiti od XSS-a koji radi u samoj stranici: skripta na istom originu može pozvati `/api/auth/refresh` i dobiti svjež access token.
+  Zaštita od XSS-a ostaje sanitizacija i CSP.
 - **CSP za SPA nije u repozitoriju.** Zaglavlje je ranije postavljao Vercel (`vercel.json`, uklonjen) i bilo je samo
   *Report-Only*. Sada ga mora postaviti web server koji služi `frontend/dist` (IIS, nginx...). API već šalje strog CSP za svoje
   odgovore. Preporuka je u README-u.

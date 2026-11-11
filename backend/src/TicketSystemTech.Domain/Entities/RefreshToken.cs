@@ -22,4 +22,13 @@ public class RefreshToken : BaseEntity
 
     /// <summary>The hash of the token that replaced this one on rotation; a replaced token coming back is the theft signal.</summary>
     public string? ReplacedByTokenHash { get; set; }
+
+    /// <summary>The person's security stamp when this token was made. A password change (or anything else that rotates the stamp)
+    /// makes every older token fail the comparison at refresh time, so a stolen cookie does not outlive the password it was stolen with.
+    /// Null on rows made before this existed: they are refused, so the person signs in once more.</summary>
+    public string? SecurityStamp { get; set; }
+
+    /// <summary>When the sign-in this token descends from happened. Rotation copies it, so a session has an absolute end however
+    /// often it is renewed (<c>Jwt:SessionMaxDays</c>).</summary>
+    public DateTime SessionStartedAtUtc { get; set; }
 }

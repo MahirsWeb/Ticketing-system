@@ -16,7 +16,8 @@ public enum AiProvider
 }
 
 /// <summary>
-/// The <c>Ai</c> section, read at the moment of each call so that a changed setting applies without a restart.
+/// The <c>Ai</c> section, read at the moment of each call. Re-reading the configuration files while running is switched off (Program.cs), and
+/// environment variables are read when the process starts, so a changed setting still needs a restart.
 /// Nothing leaves the installation unless <see cref="IsAvailable"/>: <c>Ai:Enabled = false</c> is a hard stop.
 /// The old <c>GoogleAi:ApiKey</c> keeps working as the Gemini key.
 /// </summary>

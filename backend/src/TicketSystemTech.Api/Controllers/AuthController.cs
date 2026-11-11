@@ -14,8 +14,30 @@ namespace TicketSystemTech.Api.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _auth;
+    private readonly IConfiguration _config;
 
-    public AuthController(IAuthService auth) => _auth = auth;
+    public AuthController(IAuthService auth, IConfiguration config)
+    {
+        _auth = auth;
+        _config = config;
+    }
+
+    /// <summary>
+    /// True when the request names an Origin that is neither this site nor one of <c>Cors:AllowedOrigins</c>. A browser always sends
+    /// Origin on a cross-site POST, so a page on another site cannot sign the person out or spend their cookie. A request with no
+    /// Origin (a script, a server) carries no browser cookie by accident and is left alone. SameSite=Strict already keeps the cookie
+    /// off such a request; this is the second lock on the same door.
+    /// </summary>
+    private bool ForeignOrigin()
+    {
+        var origin = Request.Headers.Origin.ToString();
+        if (string.IsNullOrEmpty(origin)) return false;
+        if (string.Equals(origin, $"{Request.Scheme}://{Request.Host}", StringComparison.OrdinalIgnoreCase)) return false;
+        var allowed = _config.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
+        return !allowed.Contains(origin, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static readonly object ForeignOriginBody = new { message = "Request from an unexpected origin." };
 
     /// <summary>
     /// The refresh token lives in an httpOnly cookie: script cannot read it, so an injected script cannot steal the session the
@@ -45,6 +67,8 @@ public class AuthController : ControllerBase
         // A full sign-in (not "you must set a password first") gets a refresh cookie for this browser.
         if (outcome.Succeeded && outcome.Value?.AccessToken is not null)
         {
+            // A new sign-in replaces the one this browser still holds: the old cookie is revoked rather than left alive beside it.
+            await _auth.RevokeRefreshTokenAsync(Request.Cookies[RefreshCookieName]);
             var (refreshToken, expiresAt) = await _auth.IssueRefreshTokenAsync(outcome.Value.User!.Id);
             SetRefreshCookie(refreshToken, expiresAt);
         }
@@ -53,8 +77,10 @@ public class AuthController : ControllerBase
 
     /// <summary>Trades the refresh cookie for a fresh access token and rotates the cookie. No body: the cookie is the credential.</summary>
     [HttpPost("refresh")]
+    [EnableRateLimiting(RateLimitPolicies.Refresh)]
     public async Task<ActionResult<LoginResponse>> Refresh()
     {
+        if (ForeignOrigin()) return StatusCode(StatusCodes.Status403Forbidden, ForeignOriginBody);
         var outcome = await _auth.RefreshAsync(Request.Cookies[RefreshCookieName]);
         if (!outcome.Succeeded)
         {
@@ -70,8 +96,10 @@ public class AuthController : ControllerBase
 
     /// <summary>Signs out: revokes this session's refresh token and clears the cookie. Always succeeds.</summary>
     [HttpPost("logout")]
+    [EnableRateLimiting(RateLimitPolicies.Refresh)]
     public async Task<IActionResult> Logout()
     {
+        if (ForeignOrigin()) return StatusCode(StatusCodes.Status403Forbidden, ForeignOriginBody);
         await _auth.RevokeRefreshTokenAsync(Request.Cookies[RefreshCookieName]);
         ClearRefreshCookie();
         return Ok();

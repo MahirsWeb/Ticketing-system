@@ -15,8 +15,10 @@ namespace TicketSystemTech.Api.BackgroundJobs;
 /// Guarantees, and where they stop:
 /// <list type="bullet">
 /// <item>A message survives a restart and a provider outage, and is tried up to <see cref="EmailRetryPolicy.MaxAttempts"/> times.</item>
-/// <item>Two workers (two instances of the application) never send the same message at the same moment: a message is leased
-/// with a conditional UPDATE before it is sent, and only the worker whose UPDATE changed a row sends it.</item>
+/// <item>Two workers (two instances of the application) do not take the same message at the same moment: a message is leased
+/// with a conditional UPDATE before it is sent, and only the worker whose UPDATE changed a row sends it. The lease holds for
+/// <c>Email:Outbox:LeaseSeconds</c> from the moment the message is taken; a single send that takes longer than that (a provider that
+/// hangs for minutes) outlives its lease, and the message can then be taken and sent again. Keep the lease longer than the SMTP timeout.</item>
 /// <item>Delivery is at least once. If the process dies after the provider accepted a message but before the outcome was
 /// written, the lease runs out and the message is sent again. That is the price of never losing one; the outcome is
 /// written even while the application is shutting down to keep that window as small as it can be.</item>
@@ -110,11 +112,15 @@ public sealed class EmailOutboxDispatcher : BackgroundService
                 .ToListAsync(ct);
         }
 
+        // The round was started at nowUtc, but a slow provider can make it last minutes. Each message is leased from the moment it is
+        // TAKEN: a lease counted from the start of the round would already be running out for the later messages while they wait their
+        // turn, and another worker (or the next round) would take and send them a second time, with a second temporary password.
+        var roundStarted = _time.GetTimestamp();
         var taken = 0;
         foreach (var id in due)
         {
             ct.ThrowIfCancellationRequested();
-            if (await DeliverAsync(id, nowUtc, ct)) taken++;
+            if (await DeliverAsync(id, nowUtc + _time.GetElapsedTime(roundStarted), ct)) taken++;
         }
         return taken;
     }
@@ -133,7 +139,8 @@ public sealed class EmailOutboxDispatcher : BackgroundService
             .ExecuteDeleteAsync(ct);
     }
 
-    /// <summary>Takes the message (false if another worker got there first), sends it and records what happened.</summary>
+    /// <summary>Takes the message (false if another worker got there first), sends it and records what happened. <paramref name="nowUtc"/> is
+    /// the moment it is taken, and the lease is counted from it.</summary>
     private async Task<bool> DeliverAsync(Guid id, DateTime nowUtc, CancellationToken ct)
     {
         using var scope = _scopes.CreateScope();

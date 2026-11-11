@@ -15,12 +15,12 @@ namespace TicketSystemTech.Infrastructure.Services;
 /// its unit of work: callers send e-mail about something they have already saved.
 ///
 /// Like the sender it replaces, it is best-effort towards the caller: if even the outbox row cannot be written, that is logged
-/// and the request carries on, because the thing the e-mail is about (a ticket, an assignment) has already been saved.
+/// and the request carries on, because the thing the e-mail is about has already been saved. It is what the in-memory queue uses
+/// (a password-reset or lockout mail, where the answer must not depend on whether the account exists). A mail that must exist exactly
+/// when a change exists is not sent through here but filed with <see cref="EmailOutboxExtensions.StageEmail"/> in the change's own save.
 /// </summary>
 public sealed class OutboxEmailSender : IEmailSender
 {
-    private const int MaxSubjectLength = 500;
-
     private readonly IServiceScopeFactory _scopes;
     private readonly ILogger<OutboxEmailSender> _logger;
 
@@ -37,9 +37,7 @@ public sealed class OutboxEmailSender : IEmailSender
             using var scope = _scopes.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-            // A subject built from a long ticket title must not make the insert (and with it the notification) fail.
-            var shortSubject = subject.Length <= MaxSubjectLength ? subject : subject[..MaxSubjectLength];
-            db.EmailOutbox.Add(new EmailOutboxItem { ToEmail = toEmail, Subject = shortSubject, HtmlBody = htmlBody });
+            db.StageEmail(toEmail, subject, htmlBody);
             await db.SaveChangesAsync(ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

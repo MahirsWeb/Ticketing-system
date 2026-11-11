@@ -23,7 +23,7 @@ export function TaskFilters({
       {isAdmin ? (
         <div className="w-56">
           <Select aria-label={t('filter_branchAria')} value={departmentId} onChange={(e) => onDepartment(e.target.value)}>
-            <option value="">All branches</option>
+            <option value="">{t('filter_allBranches')}</option>
             {(departments.data ?? []).map((d) => (
               <option key={d.id} value={d.id}>
                 {d.name}
@@ -34,7 +34,7 @@ export function TaskFilters({
       ) : (
         <label className="flex items-center gap-2 text-sm text-slate-600">
           <input type="checkbox" checked={mineOnly} onChange={(e) => onMineOnly(e.target.checked)} />
-          My tasks only
+          {t('task_mineOnly')}
         </label>
       )}
       {departments.isError && <ErrorText>{t('filter_branchesLoadError')}</ErrorText>}

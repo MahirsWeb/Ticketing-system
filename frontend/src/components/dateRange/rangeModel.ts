@@ -1,4 +1,5 @@
 import { eachDayOfInterval, endOfMonth, endOfWeek, format, isAfter, isSameDay, startOfMonth, startOfWeek, startOfYear, subDays } from 'date-fns';
+import type { TranslationKey } from '../../i18n/translations';
 
 export function atStartOfDay(d: Date) {
   const x = new Date(d);
@@ -13,23 +14,26 @@ export function atEndOfDay(d: Date) {
 }
 
 /** Ready-made ranges. Each is given by its first and last day, asked for when it is chosen so that "today" is the day of the choosing. */
-export const PRESETS: { label: string; range: () => [Date, Date] }[] = [
-  { label: 'Today', range: () => [new Date(), new Date()] },
-  { label: 'Yesterday', range: () => [subDays(new Date(), 1), subDays(new Date(), 1)] },
-  { label: 'This week', range: () => [startOfWeek(new Date(), { weekStartsOn: 1 }), new Date()] },
-  { label: 'This month', range: () => [startOfMonth(new Date()), new Date()] },
-  { label: 'This year', range: () => [startOfYear(new Date()), new Date()] },
+export const PRESETS: { labelKey: TranslationKey; range: () => [Date, Date] }[] = [
+  { labelKey: 'common_today', range: () => [new Date(), new Date()] },
+  { labelKey: 'common_yesterday', range: () => [subDays(new Date(), 1), subDays(new Date(), 1)] },
+  { labelKey: 'range_thisWeek', range: () => [startOfWeek(new Date(), { weekStartsOn: 1 }), new Date()] },
+  { labelKey: 'range_thisMonth', range: () => [startOfMonth(new Date()), new Date()] },
+  { labelKey: 'range_thisYear', range: () => [startOfYear(new Date()), new Date()] },
 ];
 
-export const WEEKDAY_LABELS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
-export const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+export const WEEKDAY_KEYS: TranslationKey[] = ['weekday_mo', 'weekday_tu', 'weekday_we', 'weekday_th', 'weekday_fr', 'weekday_sa', 'weekday_su'];
+export const MONTH_KEYS: TranslationKey[] = [
+  'month_jan', 'month_feb', 'month_mar', 'month_apr', 'month_may', 'month_jun',
+  'month_jul', 'month_aug', 'month_sep', 'month_oct', 'month_nov', 'month_dec',
+];
 export const YEAR_BLOCK_SIZE = 12;
 
 /** What the button says: the placeholder, one date, or both (a missing beginning is dots, a missing end is today). */
-export function rangeLabel(from: Date | null, to: Date | null, placeholder: string) {
+export function rangeLabel(from: Date | null, to: Date | null, placeholder: string, today = 'Today') {
   if (!from && !to) return placeholder;
   if (from && to && isSameDay(from, to)) return format(from, 'dd.MM.yyyy');
-  return `${from ? format(from, 'dd.MM.yyyy') : '…'} – ${to ? format(to, 'dd.MM.yyyy') : 'Today'}`;
+  return `${from ? format(from, 'dd.MM.yyyy') : '…'} – ${to ? format(to, 'dd.MM.yyyy') : today}`;
 }
 
 /** The weeks that show a month, Monday to Sunday, with the days of the months next to it that fill the first and the last week. */

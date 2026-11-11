@@ -95,6 +95,7 @@ public sealed class TicketCreationService : ITicketCreationService
         var staff = await _db.Users.Where(u => u.Role == UserRole.Employee && u.IsActive && u.DepartmentId == department.Id).ToListAsync();
         var submitted = new NewTicketEvent(ticket, staff, client, company.Name);
         _db.Notifications.AddRange(_notifier.InApp(submitted));
+        _db.EmailOutbox.AddRange(_notifier.Emails(submitted));
 
         // The ticket, its in-app notifications and the idempotency record commit together or not at all, so a
         // retry can never find a ticket without its notifications (or notifications without a ticket).
@@ -172,6 +173,7 @@ public sealed class TicketCreationService : ITicketCreationService
 
         var opened = new TicketOpenedEvent(ticket, client, assignee);
         _db.Notifications.AddRange(_notifier.InApp(opened));
+        _db.EmailOutbox.AddRange(_notifier.Emails(opened));
 
         var raced = await _idempotency.SaveAsync(_currentUser.UserId!.Value, idempotencyKey, ticket.Id);
         if (raced is { } winner) return Outcome<TicketDetailDto>.Ok(await _queries.BuildDetailAsync(winner));

@@ -54,7 +54,6 @@ public sealed class AuthService : IAuthService
 {
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ITokenService _tokenService;
-    private readonly IEmailSender _emailSender;
     private readonly FrontendOptions _frontendOptions;
     private readonly AppDbContext _db;
     private readonly INotificationPublisher _notificationPublisher;
@@ -72,14 +71,13 @@ public sealed class AuthService : IAuthService
     private readonly JwtOptions _jwt;
 
     public AuthService(
-        UserManager<ApplicationUser> userManager, ITokenService tokenService, IEmailSender emailSender, IOptions<FrontendOptions> frontendOptions,
+        UserManager<ApplicationUser> userManager, ITokenService tokenService, IOptions<FrontendOptions> frontendOptions,
         AppDbContext db, INotificationPublisher notificationPublisher, IMemoryCache cache, IBackgroundEmailQueue emailQueue,
         NoticeThrottle lockoutNotices, [FromKeyedServices("password-reset")] NoticeThrottle resetNotices, LoginAttemptLimiter loginLimiter, TimeProvider time,
         IOptions<JwtOptions> jwtOptions)
     {
         _userManager = userManager;
         _tokenService = tokenService;
-        _emailSender = emailSender;
         _frontendOptions = frontendOptions.Value;
         _jwt = jwtOptions.Value;
         _db = db;
@@ -221,7 +219,9 @@ public sealed class AuthService : IAuthService
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(account);
             var link = $"{_frontendOptions.BaseUrl}/verify-email?userId={account.Id}&token={Uri.EscapeDataString(token)}";
             var mail = AccountMessages.VerifyEmail(account.FirstName, link);
-            await _emailSender.SendAsync(account.Email!, mail.Subject, mail.Html);
+            // Filed and saved on the spot: the outbox row is the promise that the mail will be sent, and the worker delivers it.
+            _db.StageEmail(account.Email!, mail.Subject, mail.Html);
+            await _db.SaveChangesAsync();
 
             return Outcome<object>.Ok(new { message = "Password set. Please check your email to verify your account before logging in." });
         }
@@ -312,12 +312,21 @@ public sealed class AuthService : IAuthService
     public async Task<(string RefreshToken, DateTime ExpiresAtUtc)> IssueRefreshTokenAsync(Guid userId)
     {
         var raw = NewRawRefreshToken();
-        var expires = UtcNow.AddDays(Math.Max(_jwt.RefreshTokenDays, 1));
-        _db.RefreshTokens.Add(new RefreshToken { UserId = userId, TokenHash = HashRefreshToken(raw), ExpiresAtUtc = expires });
+        var now = UtcNow;
+        var expires = now.AddDays(Math.Max(_jwt.RefreshTokenDays, 1));
+        var stamp = await _db.Users.Where(u => u.Id == userId).Select(u => u.SecurityStamp).FirstOrDefaultAsync();
+        _db.RefreshTokens.Add(new RefreshToken
+        {
+            UserId = userId,
+            TokenHash = HashRefreshToken(raw),
+            ExpiresAtUtc = expires,
+            SecurityStamp = stamp,
+            SessionStartedAtUtc = now
+        });
 
         // Housekeeping on the same trip: rows that can never be presented again (long expired, or long revoked) are dropped,
         // so the table holds live sessions and a short forensic tail, not history.
-        var cutoff = UtcNow.AddDays(-7);
+        var cutoff = now.AddDays(-7);
         await _db.RefreshTokens
             .Where(t => t.UserId == userId
                         && (t.ExpiresAtUtc < cutoff || (t.RevokedAtUtc != null && t.RevokedAtUtc < cutoff)))
@@ -334,39 +343,78 @@ public sealed class AuthService : IAuthService
 
         if (string.IsNullOrWhiteSpace(rawRefreshToken)) return Reject();
 
+        var now = UtcNow;
         var hash = HashRefreshToken(rawRefreshToken);
         var stored = await _db.RefreshTokens.FirstOrDefaultAsync(t => t.TokenHash == hash);
         if (stored is null) return Reject();
 
-        // A token that was already rotated away is being presented again: either it was stolen, or an old copy is being
-        // replayed. Either way, trust in this session is gone — revoke every live token the person has and make them sign in.
+        // A token that was already rotated away is being presented again. Within a few seconds of the rotation that is two tabs
+        // (or two requests) that raced on the same expired token: honest, and common — a browser restored with five tabs does
+        // exactly this. Later than that it is either a thief or an old copy being replayed: trust in the session is gone, so every live
+        // token of the person is revoked and they sign in again.
+        var raced = false;
         if (stored.RevokedAtUtc is not null)
+        {
+            var grace = TimeSpan.FromSeconds(Math.Max(_jwt.RefreshReuseGraceSeconds, 0));
+            raced = stored.ReplacedByTokenHash is not null && now - stored.RevokedAtUtc.Value <= grace;
+            if (!raced)
+            {
+                await RevokeFamilyAsync(stored.UserId);
+                await _db.SaveChangesAsync();
+                return Reject();
+            }
+        }
+
+        if (stored.ExpiresAtUtc <= now) return Reject();
+
+        // However often it is renewed, a sign-in ends at an absolute date: a stolen cookie is not a permanent key.
+        var sessionEnds = stored.SessionStartedAtUtc.AddDays(Math.Max(_jwt.SessionMaxDays, 1));
+        if (sessionEnds <= now) return Reject();
+
+        var user = await _userManager.FindByIdAsync(stored.UserId.ToString());
+        // The account must still be welcome, and the token minted from it as it is now (role, branch and security stamp can all
+        // have changed since sign-in). A pending temporary password means the person never finished setting their own.
+        // A locked account is NOT refused here: lockout exists to stop new sign-ins with guessed passwords, and anybody who knows an
+        // address can trigger it, so it must not be able to throw out a person who is already signed in.
+        if (user is null || !user.IsActive || user.MustChangePassword)
+        {
+            if (!raced) { stored.RevokedAtUtc = now; await _db.SaveChangesAsync(); }
+            return Reject();
+        }
+
+        // The password was changed (or the stamp was rotated for any other reason) after this session began: a cookie that
+        // predates it must not survive. This is what makes "I think someone is in my account" fixable by changing the password.
+        if (stored.SecurityStamp is null || stored.SecurityStamp != user.SecurityStamp)
         {
             await RevokeFamilyAsync(stored.UserId);
             await _db.SaveChangesAsync();
             return Reject();
         }
 
-        if (stored.ExpiresAtUtc <= UtcNow) return Reject();
-
-        var user = await _userManager.FindByIdAsync(stored.UserId.ToString());
-        // The account must still be welcome, and the token minted from it as it is now (role, branch and security stamp can all
-        // have changed since sign-in). A pending temporary password means the person never finished setting their own.
-        if (user is null || !user.IsActive || await _userManager.IsLockedOutAsync(user) || user.MustChangePassword)
-        {
-            stored.RevokedAtUtc = UtcNow;
-            await _db.SaveChangesAsync();
-            return Reject();
-        }
-
         // Rotate: the presented token is spent, a fresh one takes its place, and the two are linked so a later replay of the
-        // old one is recognised as the theft signal above.
+        // old one is recognised as the theft signal above. The claim is one conditional UPDATE, so of two requests that present
+        // the same live token exactly one wins it; the other is treated as the race it is.
         var rawNext = NewRawRefreshToken();
         var nextHash = HashRefreshToken(rawNext);
-        var expires = UtcNow.AddDays(Math.Max(_jwt.RefreshTokenDays, 1));
-        stored.RevokedAtUtc = UtcNow;
-        stored.ReplacedByTokenHash = nextHash;
-        _db.RefreshTokens.Add(new RefreshToken { UserId = user.Id, TokenHash = nextHash, ExpiresAtUtc = expires });
+        var expires = now.AddDays(Math.Max(_jwt.RefreshTokenDays, 1));
+        if (expires > sessionEnds) expires = sessionEnds;
+
+        if (!raced)
+        {
+            var claimed = await _db.RefreshTokens
+                .Where(t => t.Id == stored.Id && t.RevokedAtUtc == null)
+                .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAtUtc, now).SetProperty(t => t.ReplacedByTokenHash, nextHash));
+            raced = claimed == 0;
+        }
+
+        _db.RefreshTokens.Add(new RefreshToken
+        {
+            UserId = user.Id,
+            TokenHash = nextHash,
+            ExpiresAtUtc = expires,
+            SecurityStamp = user.SecurityStamp,
+            SessionStartedAtUtc = stored.SessionStartedAtUtc
+        });
 
         var (accessToken, accessExpires) = _tokenService.GenerateAccessToken(
             user.Id, user.Email!, user.FirstName, user.LastName, user.Role, user.CompanyId, user.DepartmentId, user.SecurityStamp ?? string.Empty);

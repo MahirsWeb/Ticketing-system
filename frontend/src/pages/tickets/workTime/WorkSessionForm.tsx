@@ -30,18 +30,16 @@ export function WorkSessionForm({ form, workerName }: { form: ReturnType<typeof 
           </div>
         </div>
         <Button type="submit" variant="secondary" className="text-xs" disabled={saving}>
-          {saving ? t('common_saving') : editingId ? t('common_saveChanges') : 'Add session'}
+          {saving ? t('common_saving') : editingId ? t('common_saveChanges') : t('worktime_addSession')}
         </Button>
         {editingId && (
           <Button type="button" variant="ghost" className="text-xs" disabled={saving} onClick={form.cancelEdit}>
-            Cancel
+            {t('common_cancel')}
           </Button>
         )}
-        {form.draftDuration && <span className="text-xs font-medium text-slate-600">Duration: {form.draftDuration}</span>}
+        {form.draftDuration && <span className="text-xs font-medium text-slate-600">{t('worktime_duration', { duration: form.draftDuration })}</span>}
       </div>
-      <p className="mt-2 text-xs text-slate-600">
-        Time is logged for the main assignee only. People added as extra help are listed on the ticket but log no time of their own.
-      </p>
+      <p className="mt-2 text-xs text-slate-600">{t('worktime_mainOnly')}</p>
     </form>
   );
 }

@@ -92,7 +92,7 @@ Slanje email-ova (SMTP): `SmtpEmailTransportTests` (stvaran MailKit prema malom 
 | OpenTelemetry (D13) | Korelacioni ID, file log i health provjere pokrivaju potrebe jedne instance. | Kad postoji centralni monitoring. |
 | SQL Server 2017 (D4) | Izvan Microsoftove glavne podrške; ne može se testirati. | — |
 | Period čuvanja i automatsko brisanje (ostatak T-10), licenca (T-51, T-52) | Traži pravnu stranu. Izvoz i anonimizacija na zahtjev postoje. | Prije prvog kupca. |
-| JWT u `localStorage` (T-18.1), React Query (T-17) | Veći preustroj, nije povezan s nalazima testera. | Prije v2. |
+| React Query (T-17) | Veći preustroj, nije povezan s nalazima testera. | Prije v2. |
 
 ## 5. Otvoreno (nije rađeno)
 
@@ -102,7 +102,7 @@ Navodim samo ono što sam provjerio u kodu:
   `frontend/dist` (README, „Frontend na serveru“).
 - **Poslovna logika u kontrolerima** (T-15, TS-15.1) i 53 direktna `DateTime.UtcNow` (TS-15.2): veliki, odvojen refaktor.
 - **Povezivanje odgovora u niti i atomska konverzija emaila** (T-31, TS-31.1, TS-31.2).
-- **Preostali scenariji označeni "nije ispravljeno" u `IZVJESTAJ_ISPRAVKI.md` 9.10:** TS-17.1 (React Query), TS-18.1 (JWT u `localStorage`), TS-20.2 i TS-20.3 (više instanci), TS-47.1 (notifikacije), TS-51.1 i TS-52.1 (licence), TS-OPS-04.2 i TS-12.1 (zaštita grane `main`).
+- **Preostali scenariji označeni "nije ispravljeno" u `IZVJESTAJ_ISPRAVKI.md` 9.10:** TS-17.1 (React Query), TS-20.2 i TS-20.3 (više instanci), TS-47.1 (notifikacije), TS-51.1 i TS-52.1 (licence), TS-OPS-04.2 i TS-12.1 (zaštita grane `main`).
 - **Ostalih ~60 statičkih nalaza testera (NOVO-\*)** nisu sistematski obrađeni u ovom krugu. Tester ih je označio kao „nije ponovo
   provjereno“; spisak je u `PREGLED-SVIH-NALAZA.md`. Pri sljedećem krugu svaki se rješava istim postupkom: test koji pada, pa
   popravka, pa mutacija.

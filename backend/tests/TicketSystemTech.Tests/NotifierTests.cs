@@ -12,17 +12,10 @@ namespace TicketSystemTech.Tests;
 /// </summary>
 public class NotifierTests
 {
-    private sealed class Mails : IEmailSender
+    /// <summary>The e-mails the notifier asked to be filed, as the outbox would hold them.</summary>
+    private sealed class Mails
     {
         public List<(string To, string Subject, string Html)> Sent { get; } = new();
-        public List<CancellationToken> Tokens { get; } = new();
-
-        public Task SendAsync(string toEmail, string subject, string htmlBody, CancellationToken ct = default)
-        {
-            Sent.Add((toEmail, subject, htmlBody));
-            Tokens.Add(ct);
-            return Task.CompletedTask;
-        }
     }
 
     private sealed class Pushes : INotificationPublisher
@@ -42,7 +35,14 @@ public class NotifierTests
 
     private readonly Mails _mails = new();
     private readonly Pushes _pushes = new();
-    private Notifier Notifier => new(_mails, _pushes);
+    private Notifier Notifier => new(_pushes);
+
+    /// <summary>What the application does after saving a change: files the e-mails (which really happens in the change's own save) and pushes.</summary>
+    private async Task Deliver(NotificationEvent @event, CancellationToken ct = default)
+    {
+        foreach (var mail in Notifier.Emails(@event)) _mails.Sent.Add((mail.ToEmail, mail.Subject, mail.HtmlBody));
+        await Notifier.DeliverAsync(@event, ct);
+    }
 
     private static ApplicationUser Person(string first, string last) =>
         new() { Id = Guid.NewGuid(), FirstName = first, LastName = last, Email = $"{first.ToLowerInvariant()}@example.test" };
@@ -60,7 +60,7 @@ public class NotifierTests
         var @event = new NewTicketEvent(Ticket, new[] { ana, bojan }, client, "Acme");
 
         var lines = Notifier.InApp(@event);
-        await Notifier.DeliverAsync(@event, TestContext.Current.CancellationToken);
+        await Deliver(@event, TestContext.Current.CancellationToken);
 
         Assert.Equal(new[] { ana.Id, bojan.Id }, lines.Select(l => l.UserId));
         Assert.All(lines, l =>
@@ -82,7 +82,7 @@ public class NotifierTests
         var @event = new TicketOpenedEvent(Ticket, client, assignee);
 
         var lines = Notifier.InApp(@event);
-        await Notifier.DeliverAsync(@event, TestContext.Current.CancellationToken);
+        await Deliver(@event, TestContext.Current.CancellationToken);
 
         Assert.Equal(new[] { (assignee.Id, NotificationType.TicketAssigned, "Ticket #100123 assigned to you"), (client.Id, NotificationType.TicketOpened, "Your ticket #100123 has been opened") },
             lines.Select(l => (l.UserId, l.Type, l.Message)));
@@ -98,7 +98,7 @@ public class NotifierTests
         var added = Person("Selma", "Selimović");
 
         var lines = Notifier.InApp(new TicketAssignedEvent(Ticket, added));
-        await Notifier.DeliverAsync(new TicketAssignedEvent(Ticket, added), TestContext.Current.CancellationToken);
+        await Deliver(new TicketAssignedEvent(Ticket, added), TestContext.Current.CancellationToken);
 
         var line = Assert.Single(lines);
         Assert.Equal((added.Id, NotificationType.TicketAssigned, "Ticket #100123 assigned to you"), (line.UserId, line.Type, line.Message));
@@ -114,7 +114,7 @@ public class NotifierTests
         var @event = new TicketTransferredEvent(Ticket, "(unrouted)", "Mostar", by, new[] { staff });
 
         var line = Assert.Single(Notifier.InApp(@event));
-        await Notifier.DeliverAsync(@event, TestContext.Current.CancellationToken);
+        await Deliver(@event, TestContext.Current.CancellationToken);
 
         Assert.Equal((NotificationType.TicketTransferred, "Ticket #100123 transferred to Mostar"), (line.Type, line.Message));
         var mail = Assert.Single(_mails.Sent);
@@ -133,7 +133,7 @@ public class NotifierTests
         var @event = new TicketClosedEvent(Ticket, client, by);
 
         var line = Assert.Single(Notifier.InApp(@event));
-        await Notifier.DeliverAsync(@event, TestContext.Current.CancellationToken);
+        await Deliver(@event, TestContext.Current.CancellationToken);
 
         Assert.Equal((client.Id, NotificationType.TicketClosed, "Ticket #100123 has been resolved"), (line.UserId, line.Type, line.Message));
         var mail = Assert.Single(_mails.Sent);
@@ -150,7 +150,7 @@ public class NotifierTests
         var @event = new NewResponseEvent(Ticket, new[] { one, two });
 
         var lines = Notifier.InApp(@event);
-        await Notifier.DeliverAsync(@event, TestContext.Current.CancellationToken);
+        await Deliver(@event, TestContext.Current.CancellationToken);
 
         Assert.Equal(2, lines.Count);
         Assert.All(lines, l => Assert.Equal("New reply on ticket #100123", l.Message));
@@ -168,7 +168,7 @@ public class NotifierTests
         var @event = new TaskAssignedEvent(task, assignee, by);
 
         var line = Assert.Single(Notifier.InApp(@event));
-        await Notifier.DeliverAsync(@event, TestContext.Current.CancellationToken);
+        await Deliver(@event, TestContext.Current.CancellationToken);
 
         Assert.Equal((NotificationType.TaskAssigned, "Ana Anić assigned you a task: \"Provjeriti ugovor\""), (line.Type, line.Message));
         Assert.Null(line.TicketId);
@@ -185,7 +185,7 @@ public class NotifierTests
         var @event = new TicketOverdueEvent(id, "100123", "Printer ne radi", "it has been open for more than 3 day(s)", new[] { one, two });
 
         var lines = Notifier.InApp(@event);
-        await Notifier.DeliverAsync(@event, TestContext.Current.CancellationToken);
+        await Deliver(@event, TestContext.Current.CancellationToken);
 
         Assert.Equal(new[] { one.Id, two.Id }, lines.Select(l => l.UserId));
         Assert.All(lines, l =>
@@ -206,15 +206,39 @@ public class NotifierTests
     }
 
     [Fact]
-    public async Task The_token_of_the_caller_reaches_the_mail_and_the_push_so_that_stopping_the_application_stops_the_delivery()
+    public async Task The_token_of_the_caller_reaches_the_push_so_that_stopping_the_application_stops_the_delivery()
     {
         using var source = new CancellationTokenSource();
         var @event = new TicketAssignedEvent(Ticket, Person("Selma", "Selimović"));
 
         await Notifier.DeliverAsync(@event, source.Token);
 
-        Assert.Equal(new[] { source.Token }, _mails.Tokens);
         Assert.Equal(new[] { source.Token }, _pushes.Tokens);
+    }
+
+    [Fact]
+    public async Task The_pushes_send_no_e_mail_because_the_e_mail_was_filed_with_the_change()
+    {
+        var @event = new TicketAssignedEvent(Ticket, Person("Selma", "Selimović"));
+
+        Assert.Single(Notifier.Emails(@event));
+        await Notifier.DeliverAsync(@event, TestContext.Current.CancellationToken);
+
+        Assert.Empty(_mails.Sent); // nothing is sent from here: the outbox worker delivers what was filed
+        Assert.Single(_pushes.Sent);
+    }
+
+    [Fact]
+    public void A_person_without_an_address_gets_no_e_mail_and_a_long_subject_is_cut_to_what_the_column_holds()
+    {
+        var nobody = Person("Bez", "Adrese");
+        nobody.Email = null;
+        var talker = Person("Ana", "Anić");
+        var longTitle = new Ticket { Id = Guid.NewGuid(), TicketNumber = "100124", Title = new string('x', 800) };
+
+        Assert.Empty(Notifier.Emails(new TicketAssignedEvent(Ticket, nobody)));
+        var mail = Assert.Single(Notifier.Emails(new NewTicketEvent(longTitle, new[] { talker }, Person("K", "K"), new string('c', 800))));
+        Assert.Equal(500, mail.Subject.Length);
     }
 
     private sealed record SomethingNobodyWroteWordsFor : NotificationEvent;
@@ -225,6 +249,7 @@ public class NotifierTests
         var unknown = new SomethingNobodyWroteWordsFor();
 
         Assert.Throws<ArgumentOutOfRangeException>(() => Notifier.InApp(unknown));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Notifier.Emails(unknown));
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => Notifier.DeliverAsync(unknown, TestContext.Current.CancellationToken));
         Assert.Empty(_mails.Sent);
         Assert.Empty(_pushes.Sent);

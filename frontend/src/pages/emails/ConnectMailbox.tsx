@@ -26,7 +26,7 @@ export function ConnectMailbox({ branchName }: { branchName: string | null }) {
       // secure connection (https, or localhost); on a plain-http page the flow used to carry on without it, and silently.
       const pkce = await createPkce();
       if (!pkce) {
-        setError('A mailbox can only be connected over a secure connection (https). Open the application at its https address and try again.');
+        setError(t('email_httpsOnly'));
         return;
       }
       const redirectUri = `${window.location.origin}/emails/callback`;

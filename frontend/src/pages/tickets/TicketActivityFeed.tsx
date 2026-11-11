@@ -28,7 +28,9 @@ export function TicketActivityFeed({
 }) {
   const { t } = useLanguage();
   const [replyType, setReplyType] = useState<MessageType>('Response');
-  const [files, setFiles] = useState<File[]>([]);
+  // Attachments belong to the mode they were added in, exactly like the text: a file added to an internal note (a screenshot of
+  // an internal system, say) must not travel with the public reply when the person switches modes.
+  const [filesByType, setFilesByType] = useState<Partial<Record<MessageType, File[]>>>({});
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
 
@@ -53,12 +55,14 @@ export function TicketActivityFeed({
     setMessageKey(newIdempotencyKey());
   }, [body, effectiveType]);
 
+  const files = filesByType[effectiveType] ?? [];
+
   function addFiles(newFiles: File[]) {
-    setFiles((prev) => [...prev, ...newFiles]);
+    setFilesByType((prev) => ({ ...prev, [effectiveType]: [...(prev[effectiveType] ?? []), ...newFiles] }));
   }
 
   function removeFile(index: number) {
-    setFiles((prev) => prev.filter((_, i) => i !== index));
+    setFilesByType((prev) => ({ ...prev, [effectiveType]: (prev[effectiveType] ?? []).filter((_, i) => i !== index) }));
   }
 
   async function handleSend() {
@@ -74,7 +78,7 @@ export function TicketActivityFeed({
       onMessageAdded(message);
       clearDraft(storedUnder);
       setBody('');
-      setFiles([]);
+      setFilesByType((prev) => ({ ...prev, [effectiveType]: [] }));
     } catch (err: any) {
       // The text stays in the editor (and in the draft); pressing send again uses the same key, so it cannot be posted twice.
       setSendError(err?.response?.data?.message ?? t('feed_sendError'));
@@ -165,7 +169,7 @@ export function TicketActivityFeed({
               {files.map((f, i) => (
                 <li key={`${f.name}-${i}`} className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">
                   <span aria-hidden>📎</span> {f.name}
-                  <button type="button" onClick={() => removeFile(i)} className="ml-1 font-bold text-slate-600 hover:text-red-600">
+                  <button type="button" aria-label={t('feed_removeFile', { name: f.name })} onClick={() => removeFile(i)} className="ml-1 font-bold text-slate-600 hover:text-red-600">
                     ×
                   </button>
                 </li>

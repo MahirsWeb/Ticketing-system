@@ -11,6 +11,7 @@ import { finishNewTicket } from '../../lib/finishNewTicket';
 import type { ClientLookupResult, TicketPriority, TicketSource, UserListItemDto } from '../../types';
 import { dueDateToUtc } from './ticketOptions';
 import { useTicketLists } from './useTicketLists';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 const NO_ITEMS: never[] = [];
 
@@ -20,6 +21,7 @@ const NO_ITEMS: never[] = [];
  * when the search for another client fails and the form goes away for a moment.
  */
 export function useOnBehalfTicket({ client, prefill, emailMessageId }: { client: ClientLookupResult | null; prefill: EmailPrefillDto | undefined; emailMessageId: string | null }) {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === 'Admin';
@@ -98,15 +100,15 @@ export function useOnBehalfTicket({ client, prefill, emailMessageId }: { client:
     setError(null);
     if (!client) return;
     if (!title.trim() || isBlankHtml(description)) {
-      setError('Title and description are required.');
+      setError(t('newTicket_titleDescRequired'));
       return;
     }
     if (!helpTopicId || !departmentId || !slaPlanId || !assignedToUserId) {
-      setError('All ticket fields except due date are required.');
+      setError(t('onbehalf_errAllRequired'));
       return;
     }
     if (subBranches.length > 0 && !subBranchId) {
-      setError('Please select a sub-branch.');
+      setError(t('common_selectSubBranch'));
       return;
     }
     setLoading(true);
@@ -130,7 +132,7 @@ export function useOnBehalfTicket({ client, prefill, emailMessageId }: { client:
         idempotencyKey
       );
     } catch (err: any) {
-      setError(err?.response?.data?.message ?? 'Could not create the ticket.');
+      setError(err?.response?.data?.message ?? t('onbehalf_createFail'));
       setLoading(false);
       return;
     }
@@ -144,10 +146,7 @@ export function useOnBehalfTicket({ client, prefill, emailMessageId }: { client:
     } catch (err: any) {
       // The ticket exists by now. Saying "could not create" here sent people to try again; the same idempotency key means that
       // sending the form again does not make a second ticket, it only repeats the part that failed.
-      setError(
-        `Ticket #${ticket.ticketNumber} was created, but its files could not be added (${err?.response?.data?.message ?? 'the upload failed'}). ` +
-          'Press the button again to retry the files; the ticket will not be created twice.'
-      );
+      setError(t('onbehalf_filesFail', { number: ticket.ticketNumber, reason: err?.response?.data?.message ?? t('onbehalf_uploadFailed') }));
     } finally {
       setLoading(false);
     }

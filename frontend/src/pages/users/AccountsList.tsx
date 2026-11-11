@@ -20,10 +20,11 @@ export function AccountsList({ isAdmin }: { isAdmin: boolean }) {
   const totalPages = Math.max(1, Math.ceil((answer?.totalCount ?? 0) / PAGE_SIZE));
 
   const message = query.isError ? null : answer ? (settledSearch ? t('accounts_noMatch') : t('accounts_empty')) : t('accounts_loading');
-  const count = answer ? `${answer.totalCount} ${answer.totalCount === 1 ? 'account' : 'accounts'}${settledSearch ? ' match' : ''}` : '';
+  const one = answer?.totalCount === 1;
+  const count = answer ? t(settledSearch ? (one ? 'accounts_count1Match' : 'accounts_countNMatch') : one ? 'accounts_count1' : 'accounts_countN', { count: answer.totalCount }) : '';
   const tabs: { key: AccountTab; label: string }[] = [
-    { key: 'clients', label: `Clients (${totals?.clientCount ?? '…'})` },
-    { key: 'employees', label: `Employees & Admins (${totals?.staffCount ?? '…'})` },
+    { key: 'clients', label: t('accounts_tabClients', { count: totals?.clientCount ?? '…' }) },
+    { key: 'employees', label: t('accounts_tabStaff', { count: totals?.staffCount ?? '…' }) },
   ];
 
   return (
@@ -42,9 +43,7 @@ export function AccountsList({ isAdmin }: { isAdmin: boolean }) {
       </div>
       {query.isError && <ErrorText>{messageOf(query.error, t('accounts_loadFail'))}</ErrorText>}
       {!isAdmin && (
-        <p className="text-xs text-slate-600">
-          You see the clients who have tickets in your branch. To open a ticket for any other client, use "New ticket on behalf" and type their full email address.
-        </p>
+        <p className="text-xs text-slate-600">{t('accounts_staffHint', { button: t('ticket_new') })}</p>
       )}
 
       <AccountsTable rows={answer?.items ?? []} staff={activeTab === 'employees'} message={message} />

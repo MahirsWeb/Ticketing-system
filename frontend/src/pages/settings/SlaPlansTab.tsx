@@ -22,7 +22,7 @@ export function SlaPlansTab() {
   const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
   const actions = useLookupActions<SlaPlanItemFull>({
-    noun: 'SLA plan',
+    noun: t('noun_slaPlan'),
     setActive: (p, isActive) => lookupsApi.updateSlaPlan(p.id, p.name, p.resolutionTimeHours, isActive),
     remove: (p) => lookupsApi.deleteSlaPlan(p.id),
   });
@@ -38,7 +38,7 @@ export function SlaPlansTab() {
     e.preventDefault();
     setError(null);
     if (!name.trim()) {
-      setError('SLA plan name is required.');
+      setError(t('sla_nameRequired'));
       return;
     }
     try {
@@ -81,14 +81,14 @@ export function SlaPlansTab() {
           </Field>
           <ErrorText>{error}</ErrorText>
           <Button type="submit" className="w-full" disabled={!name.trim()}>
-            + Add SLA Plan
+            {t('sla_addBtn')}
           </Button>
         </form>
       </Panel>
 
       <Panel>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-sm font-bold text-slate-800">Existing SLA plans{plans.isSuccess ? ` (${count})` : ''}</h2>
+          <h2 className="text-sm font-bold text-slate-800">{t('lookup_existing', { plural: t('noun_slaPlans') })}{plans.isSuccess ? ` (${count})` : ''}</h2>
           <Input aria-label={t('sla_searchAria')} placeholder={t('sla_searchPlaceholder')} value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
         </div>
         <ErrorText>{actions.changeError}</ErrorText>
@@ -98,7 +98,7 @@ export function SlaPlansTab() {
             {filtered.map((item) => (
               <ListRow key={item.id}>
                 <span className="text-sm text-slate-800">
-                  {item.name} <span className="text-xs text-slate-600">— {item.resolutionTimeHours}h resolution</span>
+                  {item.name} <span className="text-xs text-slate-600">— {t('sla_hoursResolution', { hours: item.resolutionTimeHours })}</span>
                 </span>
                 <div className="flex items-center gap-3 text-xs">
                   <StatusPill active={item.isActive} />
@@ -106,7 +106,7 @@ export function SlaPlansTab() {
                     {item.isActive ? t('common_deactivate') : t('common_reactivate')}
                   </button>
                   <button className="font-medium text-red-600 hover:underline" onClick={() => actions.askDelete(item)}>
-                    Delete
+                    {t('common_delete')}
                   </button>
                 </div>
               </ListRow>
@@ -119,14 +119,12 @@ export function SlaPlansTab() {
       <LookupDialogs
         actions={actions}
         remove={{
-          title: (item) => `Delete "${item.name}"?`,
-          message: () =>
-            t('sla_deleteMsg'),
+          title: (item) => t('lookup_deleteTitle', { name: item.name }),
+          message: () => t('sla_deleteMsg'),
         }}
         deactivate={{
-          title: (item) => `Deactivate "${item.name}"?`,
-          message: (item) =>
-            `Tickets currently using "${item.name}" keep it and are completely unaffected — nothing changes for existing tickets or statistics. This only removes it from the picker when opening a new ticket.`,
+          title: (item) => t('lookup_deactivateTitle', { name: item.name }),
+          message: (item) => t('sla_deactivateMsg', { name: item.name }),
         }}
       />
     </div>

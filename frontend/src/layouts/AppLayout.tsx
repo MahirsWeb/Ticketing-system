@@ -6,6 +6,7 @@ import { NotificationBell } from '../components/NotificationBell';
 import { PhoneNumberBanner } from '../components/PhoneNumberBanner';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { useLanguage } from '../i18n/LanguageContext';
+import type { TranslationKey } from '../i18n/translations';
 import { useTicketCounts } from '../api/ticketQueries';
 import { authApi } from '../api/auth';
 import clsx from 'clsx';
@@ -148,6 +149,8 @@ export default function AppLayout() {
   const location = useLocation();
   const { t } = useLanguage();
   const navByRole = useNavByRole();
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutFailed, setSignOutFailed] = useState(false);
 
   if (!user) return null;
   const nav = navByRole[user.role] ?? [];
@@ -163,16 +166,27 @@ export default function AppLayout() {
               <div className="font-semibold text-white">
                 {user.firstName} {user.lastName}
               </div>
-              <div>{user.role}</div>
+              <div>{t(`role_${user.role}` as TranslationKey)}</div>
             </div>
             <NotificationBell />
             <button
-              onClick={() => {
-                void authApi.logout(); // revoke this browser's refresh token server-side; the cookie is cleared there too
+              disabled={signingOut}
+              onClick={async () => {
+                setSigningOut(true);
+                setSignOutFailed(false);
+                try {
+                  // Wait for the server: until it confirms, the refresh cookie (14 days) is still a live session. Leaving the page
+                  // as "signed out" while it is not would let the next person at a shared computer carry on as this one.
+                  await authApi.logout();
+                } catch {
+                  setSignOutFailed(true);
+                  setSigningOut(false);
+                  return;
+                }
                 signOut();
                 navigate('/login', { replace: true });
               }}
-              className="rounded-md border border-white/20 px-3 py-1.5 text-sm font-medium text-slate-200 hover:bg-white/10"
+              className="rounded-md border border-white/20 px-3 py-1.5 text-sm font-medium text-slate-200 hover:bg-white/10 disabled:opacity-60"
             >
               {t('signOut')}
             </button>
@@ -191,6 +205,12 @@ export default function AppLayout() {
           )}
         </nav>
       </header>
+
+      {signOutFailed && (
+        <div role="alert" className="bg-red-50 px-4 py-2 text-center text-sm text-red-800">
+          {t('common_signOutFailed')}
+        </div>
+      )}
 
       {user.role === 'Client' && <PhoneNumberBanner />}
 

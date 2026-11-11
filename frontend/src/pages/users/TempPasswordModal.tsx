@@ -3,9 +3,11 @@ import { Button } from '../../components/ui';
 import { Modal } from '../../components/Modal';
 import { format, formatDistanceToNow } from 'date-fns';
 import { useLanguage } from '../../i18n/LanguageContext';
+import { useDateLocale } from '../../i18n/dateLocale';
 
 export function TempPasswordModal({ result, onClose }: { result: CreatedUserResponse; onClose: () => void }) {
   const { t } = useLanguage();
+  const locale = useDateLocale();
   const expiresAt = new Date(result.temporaryPasswordExpiresAtUtc);
   return (
     <Modal title={t('temppw_title')} onClose={onClose} maxWidth="max-w-md">
@@ -13,7 +15,7 @@ export function TempPasswordModal({ result, onClose }: { result: CreatedUserResp
           {t('temppw_emailedTo')} <span className="font-semibold">{result.email}</span>.
           {result.temporaryPassword !== null && ' ' + t('temppw_shownHere')} {t('temppw_expiresAt')}{' '}
           <span className="font-semibold">{format(expiresAt, 'HH:mm:ss')}</span>{' '}
-          ({formatDistanceToNow(expiresAt, { addSuffix: true })}).
+          ({formatDistanceToNow(expiresAt, { addSuffix: true, locale })}).
         </p>
         {result.temporaryPassword !== null ? (
           <div className="mb-4 rounded-md border border-dashed border-slate-300 bg-slate-50 p-4 text-center font-mono text-xl tracking-wider text-slate-900">

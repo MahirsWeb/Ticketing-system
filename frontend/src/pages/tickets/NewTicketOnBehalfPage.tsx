@@ -7,9 +7,11 @@ import type { ClientLookupResult } from '../../types';
 import { ClientLookupCard } from './ClientLookupCard';
 import { OnBehalfTicketFields } from './OnBehalfTicketFields';
 import { useOnBehalfTicket } from './useOnBehalfTicket';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /** The two steps, with what the model keeps between them: the client, and what has been typed about the issue. */
 function OnBehalfFlow({ prefill, emailMessageId }: { prefill: EmailPrefillDto | undefined; emailMessageId: string | null }) {
+  const { t } = useLanguage();
   const [client, setClient] = useState<ClientLookupResult | null>(null);
   const model = useOnBehalfTicket({ client, prefill, emailMessageId });
 
@@ -17,8 +19,8 @@ function OnBehalfFlow({ prefill, emailMessageId }: { prefill: EmailPrefillDto | 
     <>
       {prefill && (
         <p className="rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-800">
-          ✉️ Title, description and sender were pulled from the marked email.
-          {prefill.hasAttachments && ' Its attachments will be added to the ticket automatically once created.'}
+          {t('onbehalf_prefilled')}
+          {prefill.hasAttachments && t('onbehalf_prefillAttachments')}
         </p>
       )}
       <ClientLookupCard client={client} onClient={setClient} initialEmail={prefill?.clientEmail} autoLookupEmail={prefill?.clientEmail} />
@@ -33,6 +35,7 @@ function OnBehalfFlow({ prefill, emailMessageId }: { prefill: EmailPrefillDto | 
  * from it; if the e-mail cannot be had the person is told so and does everything by hand.
  */
 export default function NewTicketOnBehalfPage() {
+  const { t } = useLanguage();
   const [searchParams] = useSearchParams();
   const fromEmailMessageId = searchParams.get('fromEmail');
   const prefill = useEmailPrefill(fromEmailMessageId);
@@ -40,18 +43,15 @@ export default function NewTicketOnBehalfPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-slate-900">New ticket on behalf of a client</h1>
-        <p className="mt-1 text-sm text-slate-600">
-          Use this when a client reports an issue by phone (or in person) instead of through the client portal.
-          The ticket will show up exactly as if the client had submitted it themselves.
-        </p>
+        <h1 className="text-xl font-bold text-slate-900">{t('onbehalf_pageTitle')}</h1>
+        <p className="mt-1 text-sm text-slate-600">{t('onbehalf_pageIntro')}</p>
       </div>
 
       {fromEmailMessageId && prefill.isPending ? (
-        <p className="text-sm text-slate-600">Loading the e-mail…</p>
+        <p className="text-sm text-slate-600">{t('onbehalf_loadingEmail')}</p>
       ) : (
         <>
-          {prefill.isError && <ErrorText>The e-mail could not be loaded. Search for the client below and describe the issue by hand.</ErrorText>}
+          {prefill.isError && <ErrorText>{t('onbehalf_emailLoadFail')}</ErrorText>}
           <OnBehalfFlow key={fromEmailMessageId ?? ''} prefill={prefill.data} emailMessageId={fromEmailMessageId} />
         </>
       )}

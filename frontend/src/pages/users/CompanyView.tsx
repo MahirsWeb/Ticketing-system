@@ -23,7 +23,7 @@ export function CompanyView({ company }: { company: CompanyItemFull }) {
   const clients = useCompanyClients(company.id);
 
   const tabs: { key: CompanyTab; label: string }[] = [
-    { key: 'users', label: `Users (${clients.data ? clients.data.length : '…'})` },
+    { key: 'users', label: t('compview_usersTab', { count: clients.data ? clients.data.length : '…' }) },
     { key: 'tickets', label: t('nav_tickets') },
   ];
 

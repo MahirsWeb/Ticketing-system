@@ -28,7 +28,7 @@ export default function TicketsListPage() {
     ? t('ticket_loading')
     : isError
       ? ''
-      : `${totalCount} ticket${totalCount === 1 ? '' : 's'} · ${rangeLabel(filters.createdFrom, filters.createdTo)}`;
+      : t(totalCount === 1 ? 'list_count1' : 'list_countN', { count: totalCount, range: rangeLabel(filters.createdFrom, filters.createdTo, t) });
 
   const tabs = TABS.map((tb) => ({ key: tb.key, label: t(`tab_${tb.key}` as TranslationKey) }));
 

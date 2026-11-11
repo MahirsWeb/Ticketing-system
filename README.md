@@ -300,7 +300,10 @@ upiše kao red u tabelu `EmailOutbox`, a zaseban radnik u pozadini ga šalje pre
   podešavanje u tom roku, poruke odu. Ako server odbije samu poruku (`5xx`, npr. nepostojeći primalac), ponovni pokušaj ne bi
   pomogao pa se poruka odmah označi kao *Failed*.
 - Poruka preživi **restart aplikacije**: ostaje u tabeli i šalje se kad aplikacija ponovo krene. Ako je pokrenuto više
-  instanci, svaka poruka se zaključa prije slanja pa je ne šalju dvije odjednom.
+  instanci, radnik poruku uzima uslovnim `UPDATE`-om i rezerviše je (`Email:Outbox:LeaseSeconds`, računa se od trenutka kad je
+  poruka uzeta, ne od početka kruga), pa je dvije instance u normalnom radu ne uzimaju istovremeno. Slanje koje traje duže od
+  rezervacije (SMTP koji visi duže od `LeaseSeconds`) može završiti slanjem iste poruke još jednom; rezervacija zato mora biti
+  duža od SMTP timeouta.
 - Isporuka je **"najmanje jednom"**: ako aplikacija pukne baš između prihvatanja poruke na serveru i zapisa u bazu da je
   poslano, poruka se nakon isteka zaključavanja pošalje još jednom. Takav duplikat je cijena toga da se poruka ne izgubi.
 - Račun koji je deaktiviran više ne prima email: pravilo primjenjuje sâm radnik, za bilo koji transport, pa se poruka označi
@@ -309,6 +312,15 @@ upiše kao red u tabelu `EmailOutbox`, a zaseban radnik u pozadini ga šalje pre
 - Link za "zaboravljenu lozinku" najprije prođe kroz mali memorijski red (da odgovor na zahtjev ne otkrije vremenom postoji
   li nalog), pa se odatle upiše u outbox kao i ostalo. Ako aplikacija padne u tih nekoliko trenutaka prije upisa, korisnik
   link jednostavno ponovo traži.
+- **Upis u istoj transakciji.** Obavijest o tiketu i zadatku, pozivnica, nova privremena lozinka, potvrda e-maila i dobrodošlica
+  poslovnice upisuju se u `EmailOutbox` istim `SaveChanges`-om kao promjena na koju se odnose: ili postoje oboje ili nijedno.
+  Izuzetak su poruke koje idu kroz memorijski red (zaboravljena lozinka, obavijest o zaključavanju), jer odgovor ne smije otkriti
+  postoji li nalog; tu se upis dešava odmah poslije.
+- **Stari redovi:** redovi napisani prije šifrovanja tijela obrađuju se pri pokretanju: završeni (poslani, preskočeni, neuspjeli)
+  gube tijelo, a čekajući se šifruju na mjestu pa se mail ipak šalje.
+- **Podešavanja se primjenjuju pri pokretanju.** Ponovno čitanje `appsettings.json` tokom rada je isključeno (`Program.cs`), a
+  varijable okruženja se ionako čitaju pri pokretanju procesa; zato promjena bilo kojeg podešavanja (`Smtp`, `Ai`, ...) traži
+  restart aplikacije.
 
 Pregled stanja: `SELECT Status, COUNT(*) FROM EmailOutbox GROUP BY Status` (0 = čeka, 1 = poslano, 2 = preskočeno, 3 = nije
 isporučeno; razlog je u koloni `LastError`).
@@ -363,9 +375,20 @@ aplikacija **odbija da krene** i nabroji sve što fali, dok ne podesiš:
    `DataProtection:CertificateThumbprint`. **Sačuvaj certifikat i lozinku odvojeno od backupa baze i napravi njihovu kopiju:
    bez njih šifrovani podaci ne mogu da se pročitaju.** **Podesi certifikat prije prvog pokretanja na serveru.** Ključevi
    napravljeni bez certifikata ostaju u čistom tekstu *trajno* — svakih 90 dana se pravi novi ključ, ali se stari ne brišu (potrebni
-   su za čitanje ranije šifrovanih podataka), pa certifikat dodat kasnije štiti samo ono što se šifruje poslije njega. Alat za
-   ponovno šifrovanje postojećih ključeva (re-key) još ne postoji. Nova instalacija pokrenuta s certifikatom je šifrovana od prvog
-   dana. Ko svjesno ne želi certifikat: `DataProtection:AllowUnprotectedKeys` = `true`.
+   su za čitanje ranije šifrovanih podataka), pa certifikat dodat kasnije štiti samo ono što se šifruje poslije njega, **dok se ne
+   pokrene re-key**:
+
+   ```bash
+   dotnet TicketSystemTech.Api.dll --rekey-data                      # novi ključ, sve šifrovano ponovo pod njim, provjera
+   dotnet TicketSystemTech.Api.dll --rekey-data --revoke-old-keys    # ... i stari ključevi se povlače
+   ```
+
+   Pokreće se kad je certifikat već podešen, **sa zaustavljenom aplikacijom** i poslije backupa baze. Alat pravi novi ključ,
+   ponovo upisuje sve šifrovano (e-mail, korisničko ime i telefon naloga, adrese firmi, outbox, Outlook tokene), **čita iz baze pod
+   kojim je ključem šta i ne povlači ništa ako išta ostane pod starim**. Tek s `--revoke-old-keys` stari ključevi se povlače i ne
+   otvaraju ništa; to se ne može poništiti, a linkovi za reset lozinke i potvrdu e-maila poslani ranije prestaju da rade. Backupi
+   baze napravljeni prije re-keya ostaju čitljivi sa svojim starim ključevima. Nova instalacija pokrenuta s certifikatom je
+   šifrovana od prvog dana. Ko svjesno ne želi certifikat: `DataProtection:AllowUnprotectedKeys` = `true`.
 
 Ostalo što vrijedi znati:
 
@@ -583,7 +606,7 @@ memoriji, sa pravim migracijama) nad privremenom bazom i provjerava ko šta smij
 - da token prestaje važiti kad se nalog deaktivira, premjesti ili promijeni lozinku;
 - ograničenja AI upotrebe (dužina pitanja, broj upita po osobi) i zaštitu šifarnika koji se koriste;
 - slanje email-ova kroz outbox: upis poruke, šifrovana adresa, uspjeh, ponovni pokušaji s rastućim razmakom, odustajanje,
-  trajno odbijanje, preskakanje, dva radnika istovremeno (poruka se pošalje jednom) i radnik koji pukne usred slanja. SMTP
+  trajno odbijanje, preskakanje, dva radnika istovremeno (poruku uzima samo jedan), rezervacija računata od trenutka uzimanja poruke i radnik koji pukne usred slanja. SMTP
   transport je dodatno probran protiv pravog SMTP razgovora (MailKit prema malom serveru na `localhost`): odgovori `4xx`,
   `5xx`, pogrešna prijava, server koji ćuti ili prekine vezu; mail server u tim testovima nije pravi, pa se ništa ne šalje;
 - audit zapise osjetljivih radnji (ko, šta, koji zahtjev), šifrovanje ključeva u bazi certifikatom, komandu za reset Admin
@@ -642,9 +665,25 @@ se ignoriše). Bez ikakvog SQL Servera ovi testovi se **preskaču** (prikažu se
   prije. Paket je odabran i zato da `dotnet list package --deprecated` ne prijavljuje stari xunit 2 kao *Legacy*.
 - Nije urađeno: OpenTelemetry (OTLP) izvoz, IIS paket, produkcijski docker-compose za kupce (postoji samo primjer
   `docker-compose.example.yml`), više davalaca prijave od lokalnih naloga.
-- **Sesija:** kratki JWT access token stoji samo u memoriji preglednika (nikad u `localStorage`, pa ga ubačena skripta ne može
-  pročitati). Dugi dio je **refresh token u httpOnly kolačiću** (`tst_refresh`, `Path=/api/auth`, `SameSite=Strict`, `Secure`
-  izvan razvoja) koji server postavlja pri prijavi. `POST /api/auth/refresh` mijenja kolačić za novi access token i rotira sam
-  kolačić; stari kolačić iskorišten ponovo znači krađu — svi tokeni te osobe se tad poništavaju. `POST /api/auth/logout`
-  poništava token i briše kolačić. Trajanje: access `Jwt:AccessTokenMinutes`, refresh `Jwt:RefreshTokenDays` (podrazumijevano 14).
-  Frontend pri učitavanju jednom pokuša obnovu iz kolačića, pa reload nije odjava.
+- **Sesija:** kratki JWT access token stoji samo u memoriji preglednika (nikad u `localStorage`, pa ga ne nalazi skripta koja
+  čita pohranu preglednika). Dugi dio je **refresh token u httpOnly kolačiću** (`tst_refresh`, `Path=/api/auth`,
+  `SameSite=Strict`, `Secure` izvan razvoja) koji server postavlja pri prijavi; baza čuva samo njegov SHA-256 hash.
+  **Šta ovo ne štiti:** XSS koji se izvršava u samoj stranici (isti origin) može pozvati `/api/auth/refresh`; preglednik sam
+  doda kolačić i skripta dobije svjež access token. httpOnly kolačić sprečava krađu *kopije* kolačića, ne rad skripte u stranici;
+  zaštita od XSS-a ostaje sanitizacija sadržaja i CSP.
+  - `POST /api/auth/refresh` mijenja kolačić za novi access token i rotira sam kolačić. Ponovna upotreba već rotiranog kolačića
+    u prvih `Jwt:RefreshReuseGraceSeconds` (20) sekundi smatra se utrkom dvije kartice (svaka dobije svoj ispravan kolačić);
+    **kasnije** je znak krađe i poništava sve tokene te osobe. Rotacija je jedan uslovni `UPDATE`, pa dva istovremena zahtjeva
+    ne mogu potrošiti isti token; kartice istog preglednika se usklađuju preko Web Locks.
+  - Kolačić je vezan za *security stamp*: svaka promjena lozinke (regeneracija privremene, postavljanje nove, reset) poništava
+    sve ranije izdate kolačiće. Zaključavanje naloga zbog pogrešnih lozinki blokira **nove** prijave, ali ne izbacuje osobu koja
+    je već prijavljena. Nova prijava poništava kolačić koji je taj preglednik još držao.
+  - Sesija ima **apsolutni rok** `Jwt:SessionMaxDays` (30): koliko god se obnavljala, nakon toga treba ponovo upisati lozinku.
+    `Jwt:RefreshTokenDays` (14) je rok neaktivnosti; `Jwt:AccessTokenMinutes` je trajanje access tokena.
+  - `POST /api/auth/logout` poništava token i briše kolačić; frontend čeka odgovor (ako ne uspije, osoba ostaje prijavljena i
+    dobija poruku da odjava nije uspjela). `/refresh` i `/logout` odbijaju zahtjev s tuđim `Origin`-om (403).
+  - Obnova ima svoj blaži limit (`RateLimits:RefreshPerMinute`, 240 u minuti po adresi), odvojen od prijave; frontend odjavljuje
+    samo na `401`, a na `429`, `5xx` i grešku mreže pokušava ponovo.
+  - **`Secure` kolačić radi samo preko HTTPS-a.** Na HTTP instalaciji preglednik kolačić ne prihvata, pa se pri svakom ponovnom
+    učitavanju stranice osoba mora ponovo prijaviti. Produkcija treba HTTPS.
+  - Stari `localStorage['tst-auth']` iz ranije verzije aplikacija briše pri pokretanju.

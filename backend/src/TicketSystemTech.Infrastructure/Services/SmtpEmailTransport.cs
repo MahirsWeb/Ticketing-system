@@ -132,7 +132,8 @@ public sealed class SmtpEmailTransport : IEmailTransport
     }
 }
 
-/// <summary>The <c>Smtp</c> section, read at the moment of each send so a changed setting applies without a restart.</summary>
+/// <summary>The <c>Smtp</c> section, read at the moment of each send. Re-reading the configuration files while running is switched off (Program.cs), and
+/// environment variables are read when the process starts, so a changed setting still needs a restart.</summary>
 public sealed record SmtpSettings(
     string? Host, int Port, SecureSocketOptions Security, string? Username, string? Password,
     string? FromAddress, string FromName, string? ReplyTo, int TimeoutSeconds)

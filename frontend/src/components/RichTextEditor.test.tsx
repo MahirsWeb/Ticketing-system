@@ -1,7 +1,16 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { render, screen } from '@testing-library/react';
 import { RichTextEditor } from './RichTextEditor';
+
+// jsdom does no layout, and ProseMirror asks for rectangles when it scrolls the cursor into view after typing.
+beforeAll(() => {
+  const noRects = () => [] as unknown as DOMRectList;
+  Element.prototype.getClientRects = noRects;
+  Range.prototype.getClientRects = noRects;
+  Range.prototype.getBoundingClientRect = () => new DOMRect();
+});
 
 describe('the rich text editor', () => {
   it('names every control, so a screen reader does not announce a bare list box or a bare file chooser (TS-19.1)', async () => {
@@ -36,14 +45,31 @@ describe('the rich text editor', () => {
     expect(box.textContent).toBe('');
   });
 
-  it('does not fight the user while typing (value flowing back in does not reset the editor)', async () => {
+  it('passes what is typed on to the parent, and the value that comes back does not disturb the editor', async () => {
+    const seen: string[] = [];
     function Host() {
       const [v, setV] = useState('<p>start</p>');
-      return <RichTextEditor value={v} onChange={setV} ariaLabel="Editor" />;
+      return (
+        <RichTextEditor
+          value={v}
+          onChange={(html) => {
+            seen.push(html);
+            setV(html);
+          }}
+          ariaLabel="Editor"
+        />
+      );
     }
     render(<Host />);
     const box = await screen.findByRole('textbox', { name: 'Editor' });
-    // the controlled round-trip (onChange -> value -> effect) must leave the shown text intact
     expect(box.innerHTML).toContain('start');
+
+    box.focus();
+    await userEvent.keyboard('X');
+
+    expect(seen.length).toBeGreaterThan(0); // typing really reached the parent
+    expect(seen.at(-1)).toContain('X');
+    expect(seen.at(-1)).toContain('start');
+    expect(box.textContent).toContain('X'); // and the round trip left what was typed on the screen
   });
 });

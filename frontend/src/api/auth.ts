@@ -8,8 +8,9 @@ export const authApi = {
   /** Trades the httpOnly refresh cookie for a fresh access token + user. Used on page load and after a 401. */
   refresh: () => apiClient.post<LoginResponse>('/api/auth/refresh', null).then((r) => r.data),
 
-  /** Revokes this browser's refresh token server-side and clears the cookie. Best-effort: ignores failure. */
-  logout: () => apiClient.post('/api/auth/logout', null).then((r) => r.data).catch(() => undefined),
+  /** Revokes this browser's refresh token server-side and clears the cookie. Rejects when the server could not be reached or
+   *  refused: the session is then still alive, so the caller must not pretend the person has signed out. */
+  logout: () => apiClient.post('/api/auth/logout', null).then((r) => r.data),
 
   setNewPassword: (email: string, temporaryPassword: string, newPassword: string, confirmNewPassword: string) =>
     apiClient

@@ -34,7 +34,7 @@ export function CompanyTicketsTab({ companyId, clients }: { companyId: string; c
             ))}
           </Select>
         </div>
-        {list.isSuccess && total > tickets.length && <p className="text-xs text-slate-600">Showing the first {tickets.length} of {total} tickets.</p>}
+        {list.isSuccess && total > tickets.length && <p className="text-xs text-slate-600">{t('comptickets_showingFirst', { shown: tickets.length, total })}</p>}
       </div>
       {list.isPending && (
         <div role="status" aria-label={t('comptickets_loadingAria')} className="flex justify-center py-10">
@@ -82,7 +82,7 @@ export function CompanyTicketsTab({ companyId, clients }: { companyId: string; c
             {tickets.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-3 py-8 text-center text-slate-600">
-                  No tickets found.
+                  {t('ticket_emptyNone')}
                 </td>
               </tr>
             )}

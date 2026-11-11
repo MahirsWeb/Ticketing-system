@@ -32,8 +32,6 @@ export function durationOf(session: TicketWorkSessionDto, now: number) {
   return end - new Date(session.startedAtUtc).getTime();
 }
 
-export const TIME_MESSAGE = 'Enter the time as hours and minutes, for example 09:30.';
-
 /**
  * What a person typed as a time of day, as "HH:MM": hours only ("9"), hours and minutes with a colon ("9:30") or without ("930", "0930").
  * An empty field is "" (nothing); anything else, and a time that does not exist ("25:00", "12:75"), is null. Never a different time from the one typed.

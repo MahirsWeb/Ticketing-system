@@ -107,6 +107,7 @@ public class OverdueTicketNotifier : BackgroundService
             // Only people who can still act on it hear about it: the list, the e-mail and the push all skip inactive accounts.
             var warning = new TicketOverdueEvent(ticket.Id, ticket.TicketNumber, ticket.Title, reason, assignees);
             db.Notifications.AddRange(notifier.InApp(warning));
+            db.EmailOutbox.AddRange(notifier.Emails(warning));
             await db.SaveChangesAsync(ct);
 
             await notifier.DeliverAsync(warning, ct);

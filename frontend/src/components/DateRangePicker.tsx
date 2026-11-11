@@ -39,7 +39,7 @@ export function DateRangePicker({
             <rect x="3" y="4" width="18" height="18" rx="2" />
             <path d="M16 2v4M8 2v4M3 10h18" />
           </svg>
-          {rangeLabel(from, to, placeholder ?? t('dateRange_allTime'))}
+          {rangeLabel(from, to, placeholder ?? t('dateRange_allTime'), t('common_today'))}
         </button>
         {clearable && (from || to) && (
           <button type="button" aria-label={t('common_clear')} onClick={picker.clear} className="mr-2 rounded-full px-1 text-slate-600 hover:bg-slate-100 hover:text-slate-800">
@@ -53,12 +53,12 @@ export function DateRangePicker({
           <div className="w-36 shrink-0 border-r border-slate-100 p-2">
             {PRESETS.map((p) => (
               <button
-                key={p.label}
+                key={p.labelKey}
                 type="button"
                 onClick={() => picker.applyPreset(p.range())}
                 className="block w-full rounded-md px-2 py-1.5 text-left text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-blue-700"
               >
-                {p.label}
+                {t(p.labelKey)}
               </button>
             ))}
             {clearable && (
@@ -67,7 +67,7 @@ export function DateRangePicker({
                 onClick={picker.clear}
                 className="mt-1 block w-full rounded-md px-2 py-1.5 text-left text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-red-600"
               >
-                All time
+                {t('dateRange_allTime')}
               </button>
             )}
           </div>

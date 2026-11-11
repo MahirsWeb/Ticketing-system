@@ -30,7 +30,7 @@ export function MessageDetail({ selected }: { selected: InboxMessageSummaryDto |
             <div>
               <h2 className="text-base font-bold text-slate-900">{detail.data.subject}</h2>
               <p className="mt-1 text-xs text-slate-600">
-                From {selected.fromName ? `${selected.fromName} <${detail.data.clientEmail}>` : detail.data.clientEmail} ·{' '}
+                {t('email_fromLine', { sender: selected.fromName ? `${selected.fromName} <${detail.data.clientEmail}>` : detail.data.clientEmail })} ·{' '}
                 {format(new Date(detail.data.receivedAtUtc), 'dd.MM.yyyy HH:mm')}
               </p>
             </div>
@@ -38,11 +38,11 @@ export function MessageDetail({ selected }: { selected: InboxMessageSummaryDto |
               <div className="shrink-0">
                 {selected.convertedTicketId ? (
                   <Link to={`/tickets/${selected.convertedTicketId}`} className="text-xs font-medium text-green-700 hover:underline">
-                    View ticket →
+                    {t('email_viewTicketLink')}
                   </Link>
                 ) : (
                   <Link to={`/tickets/new-on-behalf?fromEmail=${encodeURIComponent(selected.messageId)}`} className="text-xs font-medium text-blue-700 hover:underline">
-                    Open ticket →
+                    {t('email_openTicketLink')}
                   </Link>
                 )}
               </div>

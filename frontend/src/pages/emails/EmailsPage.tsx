@@ -42,7 +42,7 @@ export default function EmailsPage() {
       <Notice>
         <ErrorText>{t('email_statusFail')}</ErrorText>
         <Button className="mt-4" onClick={() => void status.refetch()}>
-          Try again
+          {t('common_tryAgain')}
         </Button>
       </Notice>
     );

@@ -8,6 +8,7 @@ using TicketSystemTech.Api.Middleware;
 using TicketSystemTech.Api.Notifications;
 using TicketSystemTech.Api.Security;
 using TicketSystemTech.Api.Services;
+using TicketSystemTech.Api.WorkTasks;
 using TicketSystemTech.Application.Common.Interfaces;
 using TicketSystemTech.Application.Common.Options;
 using TicketSystemTech.Domain.Entities;
@@ -44,30 +45,30 @@ public sealed class UserAccountService : IUserAccountService
     private readonly ICurrentUserService _currentUser;
     private readonly ITemporaryPasswordGenerator _tempPasswordGenerator;
     private readonly TemporaryPasswordOptions _tempPasswordOptions;
-    private readonly IEmailSender _emailSender;
     private readonly FrontendOptions _frontendOptions;
     private readonly IMemoryCache _cache;
     private readonly ITicketAssignmentService _assignments;
     private readonly IBranchRules _branches;
+    private readonly INotifier _notifier;
     private readonly TimeProvider _time;
     private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
 
     public UserAccountService(
         UserManager<ApplicationUser> userManager, AppDbContext db, ICurrentUserService currentUser,
         ITemporaryPasswordGenerator tempPasswordGenerator, IOptions<TemporaryPasswordOptions> tempPasswordOptions,
-        IEmailSender emailSender, IOptions<FrontendOptions> frontendOptions, IMemoryCache cache,
-        ITicketAssignmentService assignments, IBranchRules branches, TimeProvider time)
+        IOptions<FrontendOptions> frontendOptions, IMemoryCache cache,
+        ITicketAssignmentService assignments, IBranchRules branches, INotifier notifier, TimeProvider time)
     {
         _userManager = userManager;
         _db = db;
         _currentUser = currentUser;
         _tempPasswordGenerator = tempPasswordGenerator;
         _tempPasswordOptions = tempPasswordOptions.Value;
-        _emailSender = emailSender;
         _frontendOptions = frontendOptions.Value;
         _cache = cache;
         _assignments = assignments;
         _branches = branches;
+        _notifier = notifier;
         _time = time;
     }
 
@@ -146,10 +147,10 @@ public sealed class UserAccountService : IUserAccountService
             EntityId = user.Id,
             Details = $"Role of target: {user.Role}"
         });
-        await _db.SaveChangesAsync();
-
+        // The mail that carries the password is filed in the same save as the record of who asked for it.
         var mail = AccountMessages.NewTemporaryPassword(user.FirstName, user.Email!, tempPassword, _tempPasswordOptions.ValidityMinutes, $"{_frontendOptions.BaseUrl}/login");
-        await _emailSender.SendAsync(user.Email!, mail.Subject, mail.Html);
+        _db.StageEmail(user.Email!, mail.Subject, mail.Html);
+        await _db.SaveChangesAsync();
 
         // Only an Admin gets to see the plaintext. A non-admin employee resetting a client's password must not
         // learn it: it travels by email to the account owner, so the employee cannot sign in as the client.
@@ -209,14 +210,17 @@ public sealed class UserAccountService : IUserAccountService
         // The tickets are released BEFORE the person is saved. The release saves what is pending in the same context, the changes to this
         // person included, so either both happen or neither does: if a ticket in use by someone else makes the save fail (a 409), nothing
         // has changed and the Admin simply tries again. Saving the person first used to leave them moved while their tickets stayed theirs.
+        IReadOnlyList<TaskAssignedEvent> handedBack = Array.Empty<TaskAssignedEvent>();
         if (movedAway)
         {
             await _assignments.ReleaseLiveTicketsAsync(user.Id, "moved to a different role or branch", _currentUser.UserId);
             await _db.EndRunningTaskSessionsAsync(null, user.Id, UtcNow); // their task timers stop too, not just ticket work
+            handedBack = await _db.HandBackOpenTasksAsync(_notifier, user.Id, _currentUser.UserId, "owner moved to a different role or branch");
         }
         var saved = await _userManager.UpdateAsync(user);
         if (!saved.Succeeded) return Outcome<Done>.Invalid(string.Join(" ", saved.Errors.Select(e => e.Description)));
         _cache.Remove(UserStatusCache.Key(user.Id));
+        foreach (var task in handedBack) await _notifier.DeliverAsync(task);
 
         return Outcome<Done>.Ok(Done.Value);
     }
@@ -232,14 +236,17 @@ public sealed class UserAccountService : IUserAccountService
 
         // Someone who can no longer work must not keep owning live tickets. Released first and saved together with the person (see
         // UpdateUser): a failure leaves the account as it was instead of inactive with its tickets still on it.
+        IReadOnlyList<TaskAssignedEvent> handedBack = Array.Empty<TaskAssignedEvent>();
         if (!isActive && user.Role == UserRole.Employee)
         {
             await _assignments.ReleaseLiveTicketsAsync(user.Id, "account deactivated", _currentUser.UserId);
             await _db.EndRunningTaskSessionsAsync(null, user.Id, UtcNow); // a deactivated person's running task timer must stop
+            handedBack = await _db.HandBackOpenTasksAsync(_notifier, user.Id, _currentUser.UserId, "account deactivated");
         }
         var saved = await _userManager.UpdateAsync(user);
         if (!saved.Succeeded) return Outcome<Done>.Invalid(string.Join(" ", saved.Errors.Select(e => e.Description)));
         _cache.Remove(UserStatusCache.Key(user.Id));
+        foreach (var task in handedBack) await _notifier.DeliverAsync(task);
 
         return Outcome<Done>.Ok(Done.Value);
     }
@@ -275,10 +282,9 @@ public sealed class UserAccountService : IUserAccountService
             return Outcome<CreatedUserResponse>.Invalid(string.Join(" ", result.Errors.Select(e => e.Description)));
 
         _db.Audit(_currentUser.UserId, "UserCreated", nameof(ApplicationUser), user.Id, $"Role: {role}");
-        await _db.SaveChangesAsync();
-
         var invitation = AccountMessages.Invite(firstName, email, tempPassword, _tempPasswordOptions.ValidityMinutes, $"{_frontendOptions.BaseUrl}/login");
-        await _emailSender.SendAsync(email, invitation.Subject, invitation.Html);
+        _db.StageEmail(email, invitation.Subject, invitation.Html);
+        await _db.SaveChangesAsync();
 
         // The plaintext temporary password is shown to an Admin only. A non-admin employee (who may create Client accounts)
         // does not get it back: it travels to the new account's own mailbox by e-mail, so the employee cannot sign in as the

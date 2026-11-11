@@ -2,9 +2,8 @@ import { useEffect, useState } from 'react';
 import { ticketsApi } from '../../../api/tickets';
 import { messageOf } from '../../../lib/messageOf';
 import type { TicketDetailDto, TicketWorkSessionDto } from '../../../types';
-import { TIME_MESSAGE, combine, formatDuration, parseTime, toDatePart, toTimePart } from './workTimeModel';
-
-const END_MESSAGE = 'Enter both the date and the time when the work ended, or leave both empty if it is still going.';
+import { combine, formatDuration, parseTime, toDatePart, toTimePart } from './workTimeModel';
+import { useLanguage } from '../../../i18n/LanguageContext';
 
 /** How often the time of a session that is running is counted again. */
 const TICK_MS = 30_000;
@@ -27,6 +26,7 @@ export function useNow(counting: boolean) {
  * never missed, and a time that is not a time is said to be so instead of being turned into another.
  */
 export function useWorkTimeForm(ticketId: string, sessions: TicketWorkSessionDto[], onChanged: (t: TicketDetailDto) => void) {
+  const { t } = useLanguage();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [startDate, setStartDate] = useState('');
   const [startTime, setStartTime] = useState('');
@@ -88,10 +88,10 @@ export function useWorkTimeForm(ticketId: string, sessions: TicketWorkSessionDto
   function problem() {
     const start = parseTime(startTime);
     const end = parseTime(endTime);
-    if (start === null || end === null) return TIME_MESSAGE;
-    if (!startedAt) return 'Enter when the work started.';
+    if (start === null || end === null) return t('worktime_timeFormat');
+    if (!startedAt) return t('worktime_startMissing');
     // An end that is half given is not "still going": that is what an empty end means.
-    if (!!endDate !== !!end) return END_MESSAGE;
+    if (!!endDate !== !!end) return t('worktime_endHalf');
     return null;
   }
 
@@ -106,18 +106,18 @@ export function useWorkTimeForm(ticketId: string, sessions: TicketWorkSessionDto
     const ended = endedAt ? endedAt.toISOString() : null;
     const ok = await run(
       () => (editingId ? ticketsApi.updateWorkSession(ticketId, editingId, started, ended) : ticketsApi.addWorkSession(ticketId, started, ended)),
-      'Could not save the work session.'
+      t('worktime_saveFail')
     );
     if (ok) resetForm();
   }
 
   async function endNow(session: TicketWorkSessionDto) {
-    await run(() => ticketsApi.updateWorkSession(ticketId, session.id, session.startedAtUtc, new Date().toISOString()), 'Could not end the work session.');
+    await run(() => ticketsApi.updateWorkSession(ticketId, session.id, session.startedAtUtc, new Date().toISOString()), t('worktime_endFail'));
   }
 
   async function deleteConfirmed(session: TicketWorkSessionDto) {
     setToDelete(null);
-    const ok = await run(() => ticketsApi.deleteWorkSession(ticketId, session.id), 'Could not delete the work session.');
+    const ok = await run(() => ticketsApi.deleteWorkSession(ticketId, session.id), t('worktime_deleteFail'));
     if (ok && editingId === session.id) resetForm();
   }
 

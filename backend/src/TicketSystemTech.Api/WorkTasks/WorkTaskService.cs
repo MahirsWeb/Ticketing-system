@@ -89,9 +89,10 @@ public sealed class WorkTaskService : IWorkTaskService
         };
         _db.WorkTasks.Add(task);
         _db.WorkTaskAssignmentLogs.Add(new WorkTaskAssignmentLog { WorkTask = task, AssignedByUserId = creator.Id, AssignedToUserId = assignee.Id });
+        var assigned = StageAssignmentNotice(task, assignee, creator); // saved together with the task, so a task that exists has its notice
         await _db.SaveChangesAsync();
 
-        await NotifyAssignee(task, assignee, creator);
+        await _notifier.DeliverAsync(assigned);
 
         return Outcome<WorkTaskDetailDto>.Ok(await _queries.BuildDetailAsync(task.Id));
     }
@@ -120,9 +121,10 @@ public sealed class WorkTaskService : IWorkTaskService
         task.AssignedByUserId = reassignedBy.Id;
         task.AssignedToUserId = newAssignee.Id;
         _db.WorkTaskAssignmentLogs.Add(new WorkTaskAssignmentLog { WorkTaskId = task.Id, AssignedByUserId = reassignedBy.Id, AssignedToUserId = newAssignee.Id });
+        var assigned = StageAssignmentNotice(task, newAssignee, reassignedBy);
         await _db.SaveChangesAsync();
 
-        await NotifyAssignee(task, newAssignee, reassignedBy);
+        await _notifier.DeliverAsync(assigned);
 
         return Outcome<WorkTaskDetailDto>.Ok(await _queries.BuildDetailAsync(id));
     }
@@ -176,9 +178,10 @@ public sealed class WorkTaskService : IWorkTaskService
                 _db.WorkTaskSessions.Add(latest);
                 remaining.Add(latest);
             }
+            var was = _db.Entry(latest).State == EntityState.Added ? ((DateTime, DateTime?)?)null : (latest.StartedAtUtc, latest.EndedAtUtc);
             latest.StartedAtUtc = started;
             latest.EndedAtUtc = ended;
-            AuditSession("WorkTaskSessionChanged", task, latest);
+            AuditSession("WorkTaskSessionChanged", task, latest, was);
         }
 
         task.Status = remaining.Any(s => s.EndedAtUtc is null) ? WorkTaskStatus.InProgress
@@ -231,22 +234,26 @@ public sealed class WorkTaskService : IWorkTaskService
         || session.UserId == _currentUser.UserId
         || task.AssignedToUserId == _currentUser.UserId;
 
-    private void AuditSession(string action, WorkTask task, WorkTaskSession session) =>
+    /// <summary>A change to an existing stretch records what it was as well as what it is now; an addition or a deletion records the stretch itself.</summary>
+    private void AuditSession(string action, WorkTask task, WorkTaskSession session, (DateTime Started, DateTime? Ended)? was = null) =>
         _db.AuditLogs.Add(new AuditLog
         {
             UserId = _currentUser.UserId,
             Action = action,
             EntityType = nameof(WorkTask),
             EntityId = task.Id,
-            Details = $"session {session.Id} of user {session.UserId}: {session.StartedAtUtc:O} - {session.EndedAtUtc?.ToString("O") ?? "running"}"
+            Details = was is { } before
+                ? WorkSessionAuditText.Changed(session.Id, session.UserId, before.Started, before.Ended, session.StartedAtUtc, session.EndedAtUtc)
+                : WorkSessionAuditText.Of(session.Id, session.UserId, session.StartedAtUtc, session.EndedAtUtc)
         });
 
-    private async Task NotifyAssignee(WorkTask task, Infrastructure.Identity.ApplicationUser assignee, Infrastructure.Identity.ApplicationUser assignedBy)
+    /// <summary>Adds the list line and the e-mail to the context, for the caller's own save: the notice and the hand-over stand or fall together.
+    /// The push is sent afterwards, from the returned event.</summary>
+    private TaskAssignedEvent StageAssignmentNotice(WorkTask task, Infrastructure.Identity.ApplicationUser assignee, Infrastructure.Identity.ApplicationUser assignedBy)
     {
         var assigned = new TaskAssignedEvent(task, assignee, assignedBy);
         _db.Notifications.AddRange(_notifier.InApp(assigned));
-        await _db.SaveChangesAsync();
-
-        await _notifier.DeliverAsync(assigned);
+        _db.EmailOutbox.AddRange(_notifier.Emails(assigned));
+        return assigned;
     }
 }

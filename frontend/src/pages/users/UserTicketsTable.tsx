@@ -18,10 +18,10 @@ export function UserTicketsTable({ user }: { user: UserListItemDto }) {
   return (
     <div>
       <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">
-        Tickets {isClient ? 'submitted' : 'assigned'}
+        {isClient ? t('usertickets_submitted') : t('usertickets_assigned')}
         {list.isSuccess ? ` (${total})` : ''}
       </h2>
-      {list.isSuccess && total > tickets.length && <p className="mb-2 text-xs text-slate-600">Showing the first {tickets.length}.</p>}
+      {list.isSuccess && total > tickets.length && <p className="mb-2 text-xs text-slate-600">{t('usertickets_showingFirst', { shown: tickets.length })}</p>}
       <Card className="overflow-hidden">
         {list.isPending ? (
           <div className="flex justify-center py-10">
@@ -39,7 +39,7 @@ export function UserTicketsTable({ user }: { user: UserListItemDto }) {
                 <th className="px-3 py-1.5">{t('table_title')}</th>
                 <th className="px-3 py-1.5">{t('col_status')}</th>
                 <th className="px-3 py-1.5">{t('table_priority')}</th>
-                <th className="px-3 py-1.5">{isClient ? t('table_assignedTo') : 'Client'}</th>
+                <th className="px-3 py-1.5">{isClient ? t('table_assignedTo') : t('table_client')}</th>
                 <th className="px-3 py-1.5">{t('table_created')}</th>
               </tr>
             </thead>
@@ -69,7 +69,7 @@ export function UserTicketsTable({ user }: { user: UserListItemDto }) {
               {tickets.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-3 py-8 text-center text-slate-600">
-                    No tickets found.
+                    {t('ticket_emptyNone')}
                   </td>
                 </tr>
               )}

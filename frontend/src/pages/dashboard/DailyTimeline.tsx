@@ -46,7 +46,7 @@ export function DailyTimeline({
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">{t('dash_dailyTimeline')}</h2>
-          <p className="text-xs text-slate-600">Tickets and tasks for one person, on the same hour axis — see what was squeezed in alongside a ticket.</p>
+          <p className="text-xs text-slate-600">{t('dash_timelineIntro')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {isAdmin && (
@@ -55,13 +55,13 @@ export function DailyTimeline({
                 className={`rounded px-2.5 py-1 font-medium ${mode === 'person' ? 'bg-blue-700 text-white' : 'text-slate-600'}`}
                 onClick={() => setMode('person')}
               >
-                One person
+                {t('dash_modePerson')}
               </button>
               <button
                 className={`rounded px-2.5 py-1 font-medium ${mode === 'branch' ? 'bg-blue-700 text-white' : 'text-slate-600'}`}
                 onClick={() => setMode('branch')}
               >
-                Whole branch
+                {t('dash_modeBranch')}
               </button>
             </div>
           )}
@@ -92,7 +92,7 @@ export function DailyTimeline({
             className="rounded-md border border-slate-300 px-3 py-2 text-sm"
           />
           <Button variant="secondary" onClick={() => setDate(new Date())}>
-            Today
+            {t('common_today')}
           </Button>
         </div>
       </div>
@@ -116,7 +116,7 @@ export function DailyTimeline({
           </div>
         )
       ) : !personId ? (
-        <p className="py-10 text-center text-sm text-slate-600">Choose a person above to see their timeline.</p>
+        <p className="py-10 text-center text-sm text-slate-600">{t('dash_choosePerson')}</p>
       ) : loading ? (
         <p className="py-10 text-center text-sm text-slate-600">{t('common_loading')}</p>
       ) : error ? (

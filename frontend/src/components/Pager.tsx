@@ -12,13 +12,13 @@ export function Pager({ page, totalPages, onPage }: { page: number; totalPages: 
   return (
     <nav aria-label={t('pager_aria')} className="mt-4 flex items-center justify-center gap-2">
       <Button variant="secondary" disabled={page <= 1} onClick={() => onPage(Math.min(page - 1, totalPages))}>
-        Previous
+        {t('pager_previous')}
       </Button>
       <span className="text-sm text-slate-600">
-        Page {page} of {totalPages}
+        {t('pager_pageOf', { page, total: totalPages })}
       </span>
       <Button variant="secondary" disabled={page >= totalPages} onClick={() => onPage(page + 1)}>
-        Next
+        {t('pager_next')}
       </Button>
     </nav>
   );

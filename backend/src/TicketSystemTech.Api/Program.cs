@@ -26,6 +26,7 @@ Environment.SetEnvironmentVariable("DOTNET_hostBuilder__reloadConfigOnChange", "
 // Commands that do their one job and exit, without starting the web host:
 //   --healthcheck                                   asks the application in this container if it is alive (Docker HEALTHCHECK)
 //   --create-key-certificate <file.pfx> <password>  makes the certificate that protects the key ring (see DataProtection in the README)
+//   --rekey-data [--revoke-old-keys]                writes encrypted data again under a new key and retires the old keys (README, DataProtection)
 if (args.Contains("--healthcheck"))
 {
     Environment.ExitCode = await TicketSystemTech.Api.Startup.ContainerHealthProbe.RunAsync();
@@ -163,6 +164,18 @@ builder.Services.AddRateLimiter(options =>
             factory: _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = authPerMinute,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+
+    // Renewing a session is not a password guess (the cookie is 256 random bits), and a whole office shares one public address.
+    var refreshPerMinute = builder.Configuration.GetValue("RateLimits:RefreshPerMinute", 240);
+    options.AddPolicy(TicketSystemTech.Api.Security.RateLimitPolicies.Refresh, context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = refreshPerMinute,
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0
             }));
@@ -383,6 +396,15 @@ if (resetAt >= 0)
     using var resetScope = app.Services.CreateScope();
     Environment.ExitCode = await TicketSystemTech.Api.Startup.AdminPasswordReset.RunAsync(
         resetScope.ServiceProvider, resetAt + 1 < args.Length ? args[resetAt + 1] : null, Console.Out);
+    await Log.CloseAndFlushAsync();
+    return;
+}
+
+// `--rekey-data [--revoke-old-keys]` writes everything that is encrypted at rest again under a new key and, on request, retires the old
+// keys (see DataRekey). Run with the application stopped, after the key ring certificate is in place, and after a backup.
+if (args.Contains("--rekey-data"))
+{
+    Environment.ExitCode = await TicketSystemTech.Api.Startup.DataRekey.RunAsync(app.Services, args.Contains("--revoke-old-keys"), Console.Out);
     await Log.CloseAndFlushAsync();
     return;
 }

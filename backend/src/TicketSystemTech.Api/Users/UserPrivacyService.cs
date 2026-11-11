@@ -6,8 +6,10 @@ using Microsoft.Extensions.Options;
 using TicketSystemTech.Api.Contracts;
 using TicketSystemTech.Api.Emails;
 using TicketSystemTech.Api.Middleware;
+using TicketSystemTech.Api.Notifications;
 using TicketSystemTech.Api.Security;
 using TicketSystemTech.Api.Services;
+using TicketSystemTech.Api.WorkTasks;
 using TicketSystemTech.Application.Common.Interfaces;
 using TicketSystemTech.Application.Common.Options;
 using TicketSystemTech.Domain.Entities;
@@ -46,12 +48,13 @@ public sealed class UserPrivacyService : IUserPrivacyService
     private readonly IMemoryCache _cache;
     private readonly IFileStorage _fileStorage;
     private readonly ITicketAssignmentService _assignments;
+    private readonly INotifier _notifier;
     private readonly TimeProvider _time;
     private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
 
     public UserPrivacyService(
         UserManager<ApplicationUser> userManager, AppDbContext db, ICurrentUserService currentUser, IMemoryCache cache,
-        IFileStorage fileStorage, ITicketAssignmentService assignments, TimeProvider time)
+        IFileStorage fileStorage, ITicketAssignmentService assignments, INotifier notifier, TimeProvider time)
     {
         _userManager = userManager;
         _db = db;
@@ -59,6 +62,7 @@ public sealed class UserPrivacyService : IUserPrivacyService
         _cache = cache;
         _fileStorage = fileStorage;
         _assignments = assignments;
+        _notifier = notifier;
         _time = time;
     }
 
@@ -88,7 +92,7 @@ public sealed class UserPrivacyService : IUserPrivacyService
                 user.LastLoginAtUtc
             },
             ticketsOpened = await _db.Tickets.AsNoTracking().Where(t => t.ClientId == id).OrderBy(t => t.CreatedAt)
-                .Select(t => new { t.TicketNumber, t.Title, status = t.Status.ToString(), t.CreatedAt, t.ClosedAtUtc }).ToListAsync(ct),
+                .Select(t => new { t.TicketNumber, t.Title, description = t.Description, status = t.Status.ToString(), t.CreatedAt, t.ClosedAtUtc }).ToListAsync(ct),
             ticketsAssigned = await (from a in _db.TicketAssignees.AsNoTracking()
                                      join t in _db.Tickets.AsNoTracking() on a.TicketId equals t.Id
                                      where a.UserId == id
@@ -117,7 +121,13 @@ public sealed class UserPrivacyService : IUserPrivacyService
             notifications = await _db.Notifications.AsNoTracking().Where(n => n.UserId == id).OrderBy(n => n.CreatedAt)
                 .Select(n => new { type = n.Type.ToString(), n.Message, n.IsRead, n.CreatedAt }).ToListAsync(ct),
             actionsRecordedInTheAuditLog = await _db.AuditLogs.AsNoTracking().Where(a => a.UserId == id).OrderBy(a => a.CreatedAt)
-                .Select(a => new { a.Action, a.EntityType, a.CreatedAt, a.IpAddress }).ToListAsync(ct)
+                .Select(a => new { a.Action, a.EntityType, a.CreatedAt, a.IpAddress }).ToListAsync(ct),
+            // What was done TO this person's account by somebody else (a reset password, an anonymization, an earlier export). Who did it is
+            // that person's data, not theirs, so only the action, the time and the note are given.
+            actionsRecordedAboutThePerson = await _db.AuditLogs.AsNoTracking()
+                .Where(a => a.EntityType == nameof(ApplicationUser) && a.EntityId == id && a.UserId != id).OrderBy(a => a.CreatedAt)
+                .Select(a => new { a.Action, a.CreatedAt, a.Details }).ToListAsync(ct),
+            emailsAddressedToThePerson = await ExportOutboxAsync(user.Email, ct)
         };
 
         // Recorded before the file is handed over, so a request that is given up on before this line neither delivers the data nor leaves a record.
@@ -125,6 +135,22 @@ public sealed class UserPrivacyService : IUserPrivacyService
         await _db.SaveChangesAsync(ct);
 
         return Outcome<UserExport>.Ok(new UserExport(export, $"user-{user.Id}.json"));
+    }
+
+    /// <summary>
+    /// The e-mails the system has sent, or tried to send, to this person's address. The address is stored encrypted, so it cannot be
+    /// matched in the database and the (short-lived: they are removed after a week or a month) rows are read and compared here. The text of
+    /// a message is not part of this: it is removed once the mail is out, and a message that never went out is only listed.
+    /// </summary>
+    private async Task<List<object>> ExportOutboxAsync(string? address, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(address)) return new List<object>();
+        var rows = await _db.EmailOutbox.AsNoTracking().OrderBy(o => o.CreatedAt)
+            .Select(o => new { o.ToEmail, o.Subject, o.Status, o.Attempts, o.CreatedAt, o.CompletedAtUtc }).ToListAsync(ct);
+        return rows
+            .Where(o => string.Equals(o.ToEmail, address, StringComparison.OrdinalIgnoreCase))
+            .Select(o => (object)new { o.Subject, status = o.Status.ToString(), o.Attempts, o.CreatedAt, o.CompletedAtUtc })
+            .ToList();
     }
 
     public async Task<Outcome<Done>> AnonymizeAsync(Guid id)
@@ -167,7 +193,9 @@ public sealed class UserPrivacyService : IUserPrivacyService
         {
             await _assignments.ReleaseLiveTicketsAsync(user.Id, "account anonymized", _currentUser.UserId);
             await _db.EndRunningTaskSessionsAsync(null, user.Id, UtcNow); // stop any running task timer, like deactivation does
+            var handedBack = await _db.HandBackOpenTasksAsync(_notifier, user.Id, _currentUser.UserId, "account anonymized");
             await _db.SaveChangesAsync();
+            foreach (var task in handedBack) await _notifier.DeliverAsync(task);
         }
 
         return Outcome<Done>.Ok(Done.Value);

@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import AppLayout from './AppLayout';
 import { ticketsApi } from '../api/tickets';
+import { authApi } from '../api/auth';
 import { LanguageProvider } from '../i18n/LanguageContext';
 import { useAuthStore } from '../store/authStore';
 import { renderWithQuery } from '../test/renderWithQuery';
@@ -12,6 +13,7 @@ import type { UserSummary } from '../types';
 vi.mock('../api/tickets', () => ({
   ticketsApi: { counts: vi.fn().mockResolvedValue({ total: 4, mine: 1, opened: 2, closed: 1, new: 1 }) },
 }));
+vi.mock('../api/auth', () => ({ authApi: { logout: vi.fn() } }));
 vi.mock('../api/notifications', () => ({ notificationsApi: { list: vi.fn().mockResolvedValue([]), markRead: vi.fn() } }));
 vi.mock('../lib/notificationsHub', () => ({
   getNotificationsHub: () => ({ on: vi.fn(), off: vi.fn(), onreconnected: vi.fn() }),
@@ -91,5 +93,37 @@ describe('the tickets menu in the navigation', () => {
     expect(panel.className).toContain('invisible');
     await userEvent.click(toggle);
     expect(panel.className).not.toMatch(/(^|\s)invisible(\s|$)/);
+  });
+});
+
+// Signing out must wait for the server: until it confirms, the refresh cookie is still a live session for the next person at the computer.
+describe('signing out', () => {
+  beforeEach(() => {
+    useAuthStore.setState({ accessToken: 't', user: employee, signedOutOnPurpose: false });
+    vi.mocked(authApi.logout).mockReset();
+  });
+
+  it('ends the session only after the server has confirmed it', async () => {
+    let confirm!: () => void;
+    vi.mocked(authApi.logout).mockReturnValue(new Promise<undefined>((resolve) => (confirm = () => resolve(undefined))) as never);
+    renderLayout();
+
+    await userEvent.click(await screen.findByRole('button', { name: /sign out/i }));
+    expect(useAuthStore.getState().accessToken).toBe('t'); // still signed in while the answer is awaited
+
+    await act(async () => confirm());
+    await waitFor(() => expect(useAuthStore.getState().accessToken).toBeNull());
+    expect(useAuthStore.getState().signedOutOnPurpose).toBe(true);
+  });
+
+  it('says so and stays signed in when the server could not be reached, instead of pretending', async () => {
+    vi.mocked(authApi.logout).mockRejectedValue(new Error('Network Error'));
+    renderLayout();
+
+    await userEvent.click(await screen.findByRole('button', { name: /sign out/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/sign out failed/i);
+    expect(useAuthStore.getState().accessToken).toBe('t');
+    expect(screen.getByRole('button', { name: /sign out/i })).toBeEnabled(); // and they can try again
   });
 });

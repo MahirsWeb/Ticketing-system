@@ -1,4 +1,5 @@
 import { format } from 'date-fns';
+import { englishTranslate, type Translate } from '../../i18n/translate';
 
 export const PAGE_SIZE = 20;
 
@@ -63,8 +64,8 @@ export function parseDate(iso: string | null): Date | null {
 }
 
 /** Which period the list is for, in words. */
-export function rangeLabel(from: Date | null, to: Date | null): string {
-  if (from) return `from ${format(from, 'dd.MM.yyyy')} to ${to ? format(to, 'dd.MM.yyyy') : 'today'}`;
-  if (to) return `up to ${format(to, 'dd.MM.yyyy')}`;
-  return 'all time';
+export function rangeLabel(from: Date | null, to: Date | null, t: Translate = englishTranslate): string {
+  if (from) return t('range_fromTo', { from: format(from, 'dd.MM.yyyy'), to: to ? format(to, 'dd.MM.yyyy') : t('range_today') });
+  if (to) return t('range_upTo', { to: format(to, 'dd.MM.yyyy') });
+  return t('range_allTime');
 }

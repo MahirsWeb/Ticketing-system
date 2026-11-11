@@ -123,10 +123,10 @@ export function SimpleLookupTab({
                   {editingId === item.id ? (
                     <>
                       <button className="font-medium text-blue-700 hover:underline" onClick={() => handleSaveEdit(item)}>
-                        Save
+                        {t('common_save')}
                       </button>
                       <button className="text-slate-600 hover:underline" onClick={() => setEditingId(null)}>
-                        Cancel
+                        {t('common_cancel')}
                       </button>
                     </>
                   ) : (
@@ -140,13 +140,13 @@ export function SimpleLookupTab({
                           setEditError(null);
                         }}
                       >
-                        Rename
+                        {t('common_rename')}
                       </button>
                       <button className="text-slate-600 hover:underline" onClick={() => actions.toggle(item)}>
                         {item.isActive ? t('common_deactivate') : t('common_reactivate')}
                       </button>
                       <button className="font-medium text-red-600 hover:underline" onClick={() => actions.askDelete(item)}>
-                        Delete
+                        {t('common_delete')}
                       </button>
                     </>
                   )}
@@ -160,7 +160,7 @@ export function SimpleLookupTab({
 
       <LookupDialogs
         actions={actions}
-        remove={{ title: (item) => `Delete "${item.name}"?`, message: () => deleteWarning }}
+        remove={{ title: (item) => t('lookup_deleteTitle', { name: item.name }), message: () => deleteWarning }}
         deactivate={{ title: (item) => t('lookup_deactivateTitle', { name: item.name }), message: () => deactivateWarning }}
       />
     </div>

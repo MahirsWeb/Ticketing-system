@@ -21,7 +21,7 @@ export function LeaderboardCard({ entries }: { entries: LeaderboardEntryDto[] })
                 <span className="mr-2 font-bold text-slate-600">#{i + 1}</span>
                 {entry.name}
               </span>
-              <span className="font-semibold text-slate-800">{entry.closedCount} closed</span>
+              <span className="font-semibold text-slate-800">{t('dash_countClosed', { count: entry.closedCount })}</span>
             </div>
           )}
         />

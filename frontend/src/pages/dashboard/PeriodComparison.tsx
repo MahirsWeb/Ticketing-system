@@ -54,7 +54,7 @@ export function PeriodComparison({
               onClick={() => setMode('count')}
               className={`px-3 py-1.5 rounded-l-md ${mode === 'count' ? 'bg-blue-700 text-white' : 'text-slate-600'}`}
             >
-              Count
+              {t('dash_countMode')}
             </button>
             <button
               onClick={() => setMode('percent')}

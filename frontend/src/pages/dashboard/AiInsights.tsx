@@ -46,7 +46,7 @@ export function AiInsights({ from, to, departmentId, agentId }: { from: Date; to
           <p className="text-xs text-slate-600">
             {canRun
               ? t('dash_aiPrompt')
-              : `Select a period of at least ${MIN_AI_INSIGHTS_DAYS} days to run AI analysis.`}
+              : t('dash_aiMinPeriod', { days: MIN_AI_INSIGHTS_DAYS })}
           </p>
         </div>
         <Button variant="secondary" onClick={generate} disabled={!canRun || loading}>

@@ -334,6 +334,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
             // Only the SHA-256 hash is stored (44 chars in Base64); the raw value lives in the browser's httpOnly cookie.
             e.Property(t => t.TokenHash).HasMaxLength(64).IsRequired();
             e.Property(t => t.ReplacedByTokenHash).HasMaxLength(64);
+            e.Property(t => t.SecurityStamp).HasMaxLength(100);
             e.HasIndex(t => t.TokenHash).IsUnique(); // every refresh looks a presented token up by its hash
             e.HasIndex(t => t.UserId);               // revoking a person's whole family (sign-out, theft signal, deactivation)
         });

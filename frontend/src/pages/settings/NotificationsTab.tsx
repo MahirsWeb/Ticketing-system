@@ -38,12 +38,10 @@ function OverdueForm({ initial }: { initial: OverdueNotificationSettingsDto }) {
   return (
     <Panel className="max-w-lg">
       <h2 className="text-sm font-bold text-slate-800">{t('notif_overdueTitle')}</h2>
-      <p className="mt-0.5 mb-4 text-xs text-slate-600">
-        Emails every assignee once a ticket first becomes overdue. Each ticket is only notified once.
-      </p>
+      <p className="mt-0.5 mb-4 text-xs text-slate-600">{t('notif_overdueIntro')}</p>
       <label className="mb-3 flex items-center gap-2 text-sm text-slate-700">
         <input type="checkbox" checked={notifyOnSlaBreach} onChange={(e) => setNotifyOnSlaBreach(e.target.checked)} />
-        Notify when a ticket passes its SLA due date
+        {t('notif_slaCheckbox')}
       </label>
       <Field>
         <Label>{t('notif_overdueDaysLabel')}</Label>

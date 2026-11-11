@@ -39,7 +39,7 @@ export function CompanyEditPanel({ edit, open }: { edit: CompanyEdit; open: bool
               </Field>
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" checked={values.isActive} onChange={(e) => set.isActive(e.target.checked)} />
-                Active
+                {t('common_active')}
               </label>
               <div className="md:col-span-3">
                 <ErrorText>{edit.error}</ErrorText>
@@ -48,7 +48,7 @@ export function CompanyEditPanel({ edit, open }: { edit: CompanyEdit; open: bool
                     {edit.saving ? t('common_saving') : t('common_save')}
                   </Button>
                   <Button variant="secondary" onClick={edit.cancel}>
-                    Cancel
+                    {t('common_cancel')}
                   </Button>
                 </div>
               </div>
@@ -61,9 +61,7 @@ export function CompanyEditPanel({ edit, open }: { edit: CompanyEdit; open: bool
         <ConfirmDialog
           title={values.isActive ? t('compedit_reactivateTitle') : t('compedit_deactivateTitle')}
           message={
-            values.isActive
-              ? `"${values.name}" will become active again and reappear in the company picker when creating a new client account.`
-              : `Existing clients and tickets for "${values.name}" are completely unaffected — nothing is deleted or changed for them. Deactivating only removes this company from the picker when creating a new client account.`
+            values.isActive ? t('compedit_reactivateMsg', { name: values.name }) : t('compedit_deactivateMsg', { name: values.name })
           }
           confirmLabel={values.isActive ? t('compedit_reactivate') : t('compedit_deactivate')}
           danger={!values.isActive}

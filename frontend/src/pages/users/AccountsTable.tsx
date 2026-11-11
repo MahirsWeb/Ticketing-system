@@ -13,16 +13,16 @@ export function AccountsTable({ rows, staff, message }: { rows: UserListItemDto[
         <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-600">
           <tr>
             <th scope="col" className="px-4 py-2">
-              Name
+              {t('common_name')}
             </th>
             <th scope="col" className="px-4 py-2">
-              Email
+              {t('common_email')}
             </th>
             <th scope="col" className="px-4 py-2">
               {staff ? t('detail_branch') : t('common_company')}
             </th>
             <th scope="col" className="px-4 py-2">
-              Status
+              {t('col_status')}
             </th>
           </tr>
         </thead>

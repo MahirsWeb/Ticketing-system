@@ -6,6 +6,7 @@ using TicketSystemTech.Application.Common;
 using TicketSystemTech.Application.Common.Interfaces;
 using TicketSystemTech.Domain.Entities;
 using TicketSystemTech.Domain.Enums;
+using TicketSystemTech.Infrastructure.Persistence;
 using TicketSystemTech.Infrastructure.Services;
 
 namespace TicketSystemTech.Tests.Integration;
@@ -415,5 +416,89 @@ public class EmailOutboxTests : IAsyncLifetime
         Assert.Equal(3, removed);
         var left = (await RowsAsync()).Select(r => r.Subject).OrderBy(s => s).ToList();
         Assert.Equal(new[] { "failed-8-days", "pending-ancient", "sent-recent" }, left);
+    }
+
+    // ======================= the lease is counted from the moment a message is taken =======================
+
+    [SqlFact]
+    public async Task A_slow_provider_does_not_use_up_the_lease_of_the_messages_still_waiting_their_turn()
+    {
+        await Sender.SendAsync("first@outbox.test", "Lease A", "<p>a</p>");
+        await Sender.SendAsync("second@outbox.test", "Lease B", "<p>b</p>");
+        var leases = new List<DateTime>();
+        Transport.Answer = _ =>
+        {
+            // What the row says while the provider call is in progress: until when this message is reserved for this worker.
+            leases.Add(_world.Db(db => db.EmailOutbox.Where(m => m.Subject.StartsWith("Lease") && m.LeasedUntilUtc != null)
+                .Select(m => m.LeasedUntilUtc!.Value).SingleAsync()).GetAwaiter().GetResult());
+            Thread.Sleep(1500); // a provider that takes its time
+            return EmailSendResult.Sent();
+        };
+
+        await Worker.ProcessOnceAsync(DateTime.UtcNow);
+
+        Assert.Equal(2, leases.Count);
+        // The second message was taken about 1.5 s after the round began, so its reservation must run that much longer; a lease counted
+        // from the start of the round would expire at the same moment as the first one's, while the message still waits.
+        Assert.True((leases[1] - leases[0]).TotalSeconds >= 1.0, $"leases were {leases[0]:O} and {leases[1]:O}");
+    }
+
+    // ======================= a promised mail exists exactly when the change does =======================
+
+    [SqlFact]
+    public async Task A_mail_filed_with_a_change_is_saved_with_it_and_lost_with_it()
+    {
+        // A save that fails (here: two sessions with the same token hash break the unique index) takes the staged mail down with it ...
+        await Assert.ThrowsAnyAsync<DbUpdateException>(() => _world.Db(async db =>
+        {
+            db.StageEmail(Recipient, "Atomic one", "<p>x</p>");
+            db.RefreshTokens.Add(new RefreshToken { UserId = Guid.NewGuid(), TokenHash = "atomic-duplicate", ExpiresAtUtc = DateTime.UtcNow.AddDays(1) });
+            db.RefreshTokens.Add(new RefreshToken { UserId = Guid.NewGuid(), TokenHash = "atomic-duplicate", ExpiresAtUtc = DateTime.UtcNow.AddDays(1) });
+            return await db.SaveChangesAsync();
+        }));
+        Assert.Empty(await RowsAsync());
+
+        // ... and a save that goes through keeps both.
+        await _world.Db(async db =>
+        {
+            db.StageEmail(Recipient, "Atomic two", "<p>y</p>");
+            db.RefreshTokens.Add(new RefreshToken { UserId = Guid.NewGuid(), TokenHash = "atomic-fine", ExpiresAtUtc = DateTime.UtcNow.AddDays(1) });
+            return await db.SaveChangesAsync();
+        });
+        Assert.Equal("Atomic two", (await OnlyRowAsync()).Subject);
+        await _world.Db(db => db.RefreshTokens.Where(t => t.TokenHash == "atomic-fine").ExecuteDeleteAsync());
+    }
+
+    // ======================= rows written before the body was encrypted =======================
+
+    [SqlFact]
+    public async Task Old_rows_with_a_plain_text_body_are_cleaned_up_once_and_a_waiting_one_is_still_sent()
+    {
+        var sent = Guid.NewGuid();
+        var waiting = Guid.NewGuid();
+        const string secret = "reset?token=LEGACY-SECRET-TOKEN";
+        await _world.Db(async db =>
+        {
+            foreach (var (id, status) in new[] { (sent, (int)EmailOutboxStatus.Sent), (waiting, (int)EmailOutboxStatus.Pending) })
+                await db.Database.ExecuteSqlInterpolatedAsync(
+                    $"INSERT INTO [EmailOutbox] ([Id],[CreatedAt],[ToEmail],[Subject],[HtmlBody],[Status],[Attempts],[NextAttemptAtUtc]) VALUES ({id}, SYSUTCDATETIME(), N'legacy@outbox.test', N'Legacy', {secret}, {status}, 0, '2000-01-01')");
+            return 0;
+        });
+
+        var protector = _world.Factory.Services.GetRequiredService<IPiiProtector>();
+        var (dropped, encrypted) = await _world.Db(db => OutboxBodyBackfill.RunAsync(db, protector, NullLogger.Instance));
+        Assert.Equal((1, 1), (dropped, encrypted));
+
+        string Raw(Guid id) => _world.Db(db => db.Database.SqlQuery<string>($"SELECT [HtmlBody] AS [Value] FROM [EmailOutbox] WHERE [Id] = {id}").SingleAsync()).GetAwaiter().GetResult();
+        Assert.Equal("", Raw(sent)); // the text of a mail that is done with is gone
+        Assert.StartsWith("CfDJ8", Raw(waiting)); // the one still waiting is no longer readable without the key ring ...
+        Assert.DoesNotContain("LEGACY-SECRET-TOKEN", Raw(waiting));
+
+        // ... and it still goes out with its original text.
+        await Worker.ProcessOnceAsync(DateTime.UtcNow);
+        Assert.Contains(("legacy@outbox.test", "Legacy"), Transport.Calls);
+
+        // Nothing left to do the second time.
+        Assert.Equal((0, 0), await _world.Db(db => OutboxBodyBackfill.RunAsync(db, protector, NullLogger.Instance)));
     }
 }

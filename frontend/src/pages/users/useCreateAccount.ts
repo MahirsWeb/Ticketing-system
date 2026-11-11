@@ -3,6 +3,7 @@ import { useCompanies, useDepartments, useSubBranches } from '../../api/lookupQu
 import { usersApi } from '../../api/users';
 import { messageOf } from '../../lib/messageOf';
 import type { CreatedUserResponse, UserRole } from '../../types';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 /**
  * The form for a new account: what is written and chosen, the lists it chooses from (asked for only when the kind of account needs them),
@@ -10,6 +11,7 @@ import type { CreatedUserResponse, UserRole } from '../../types';
  * What is written is sent without the spaces around it, and names of nothing but spaces are not names.
  */
 export function useCreateAccount({ preselectedCompanyId, onCreated }: { preselectedCompanyId: string | null; onCreated: (created: CreatedUserResponse) => void }) {
+  const { t } = useLanguage();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -35,19 +37,19 @@ export function useCreateAccount({ preselectedCompanyId, onCreated }: { preselec
     const last = lastName.trim();
 
     if (!first || !last) {
-      setError('First name and last name are required.');
+      setError(t('createacc_namesRequired'));
       return;
     }
     if (needsCompany && !companyId) {
-      setError('Please select a company.');
+      setError(t('createacc_selectCompany'));
       return;
     }
     if (needsBranch && !departmentId) {
-      setError('Please select a branch.');
+      setError(t('createacc_selectBranch'));
       return;
     }
     if (needsBranch && subBranchChoices.length > 0 && !subBranchId) {
-      setError('Please select a sub-branch.');
+      setError(t('common_selectSubBranch'));
       return;
     }
 
@@ -64,7 +66,7 @@ export function useCreateAccount({ preselectedCompanyId, onCreated }: { preselec
       setDepartmentId('');
       setSubBranchId('');
     } catch (err) {
-      setError(messageOf(err, 'Could not create the account.'));
+      setError(messageOf(err, t('createacc_createFail')));
     } finally {
       setLoading(false);
     }

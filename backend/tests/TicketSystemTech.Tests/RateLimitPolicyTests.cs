@@ -44,6 +44,18 @@ public class RateLimitPolicyTests
     [Fact]
     public void The_names_are_the_ones_that_were_in_use_before_they_were_written_once()
     {
-        Assert.Equal(new[] { "auth", "ai", "ai-staff" }, RateLimitPolicies.All);
+        Assert.Equal(new[] { "auth", "refresh", "ai", "ai-staff" }, RateLimitPolicies.All);
+    }
+
+    [Fact]
+    public void Renewing_a_session_and_signing_out_have_their_own_generous_limit_while_signing_in_keeps_the_strict_one()
+    {
+        // A whole office behind one address renews its tokens at about the same moment; sharing the sign-in limit made people look signed out.
+        var names = NamesInUse().ToDictionary(n => n.Where, n => n.Policy);
+
+        Assert.Equal(RateLimitPolicies.Refresh, names["AuthController.Refresh"]);
+        Assert.Equal(RateLimitPolicies.Refresh, names["AuthController.Logout"]);
+        Assert.Equal(RateLimitPolicies.Auth, names["AuthController"]); // everything else on the controller (sign-in, reset, ...) stays strict
+        Assert.False(names.ContainsKey("AuthController.Login"));
     }
 }

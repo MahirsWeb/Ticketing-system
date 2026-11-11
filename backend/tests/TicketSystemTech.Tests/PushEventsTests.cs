@@ -28,11 +28,6 @@ public partial class PushEventsTests
         public Task PushToRoleAsync(UserRole role, string eventName, object payload, CancellationToken ct = default) => Task.CompletedTask;
     }
 
-    private sealed class NoMail : IEmailSender
-    {
-        public Task SendAsync(string toEmail, string subject, string htmlBody, CancellationToken ct = default) => Task.CompletedTask;
-    }
-
     [Fact]
     public void The_names_are_the_ones_that_were_in_use_before_they_were_written_once()
     {
@@ -51,7 +46,7 @@ public partial class PushEventsTests
     public async Task Everything_the_notifier_pushes_is_a_name_on_the_list_and_each_of_its_events_has_one()
     {
         var pushes = new Pushes();
-        var notifier = new Notifier(new NoMail(), pushes);
+        var notifier = new Notifier(pushes);
         var person = new ApplicationUser { Id = Guid.NewGuid(), FirstName = "Ana", LastName = "Anić", Email = "ana@x.test" };
         var ticket = new Ticket { Id = Guid.NewGuid(), TicketNumber = "100001", Title = "t" };
         var task = new WorkTask { Id = Guid.NewGuid(), Title = "w" };

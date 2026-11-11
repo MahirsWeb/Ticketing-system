@@ -15,7 +15,7 @@ export function OnBehalfTicketFields({ model }: { model: OnBehalfTicket }) {
     <Card className="p-5">
       <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-600">{t('onbehalf_heading')}</h2>
       <form onSubmit={model.submit} className="space-y-4">
-        {lists.failed && <ErrorText>Some of the lists could not be loaded. Reload the page to try again.</ErrorText>}
+        {lists.failed && <ErrorText>{t('onbehalf_listsFail')}</ErrorText>}
         <Field>
           <Label>{t('newTicket_titleLabel')}</Label>
           <Input required value={values.title} onChange={(e) => set.setTitle(e.target.value)} placeholder={t('newTicket_titlePlaceholder')} />
@@ -23,7 +23,7 @@ export function OnBehalfTicketFields({ model }: { model: OnBehalfTicket }) {
         <div>
           <Label>{t('newTicket_descLabel')}</Label>
           <RichTextEditor
-            ariaLabel="Description"
+            ariaLabel={t('common_description')}
             value={values.description}
             onChange={set.setDescription}
             onFilesSelected={model.addFiles}
@@ -73,7 +73,7 @@ export function OnBehalfTicketFields({ model }: { model: OnBehalfTicket }) {
             label={t('detail_slaPlan')}
             value={values.slaPlanId}
             onChange={set.setSlaPlanId}
-            options={lists.slaPlans.map((s) => ({ value: s.id, label: `${s.name} (${s.resolutionTimeHours}h resolution)` }))}
+            options={lists.slaPlans.map((s) => ({ value: s.id, label: `${s.name} (${t('sla_hoursResolution', { hours: s.resolutionTimeHours })})` }))}
           />
           <SelectField label={t('table_priority')} value={values.priority} onChange={(v) => set.setPriority(v as typeof values.priority)} options={PRIORITIES.map((p) => ({ value: p, label: t(`priority_${p}` as TranslationKey) }))} />
           <DueDateField value={values.dueDate} onChange={set.setDueDate} />

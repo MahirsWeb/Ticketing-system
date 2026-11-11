@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { messageOf } from './settingsHelpers';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 export interface Lookup {
   id: string;
@@ -23,6 +24,7 @@ export function useLookupActions<T extends Lookup>({
   /** Absent for what is only ever switched off (a sub-branch). */
   remove?: (item: T) => Promise<unknown>;
 }) {
+  const { t } = useLanguage();
   const [confirmDeactivate, setConfirmDeactivate] = useState<T | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<T | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -33,7 +35,7 @@ export function useLookupActions<T extends Lookup>({
     try {
       await setActive(item, isActive);
     } catch (err) {
-      setChangeError(messageOf(err, `Could not change this ${noun}.`));
+      setChangeError(messageOf(err, t('lookup_changeFail', { noun })));
     }
   }
 
@@ -66,7 +68,7 @@ export function useLookupActions<T extends Lookup>({
         await remove(confirmDelete);
         setConfirmDelete(null);
       } catch (err) {
-        setDeleteError(messageOf(err, `Could not delete this ${noun}.`));
+        setDeleteError(messageOf(err, t('lookup_deleteFail', { noun })));
       }
     },
   };

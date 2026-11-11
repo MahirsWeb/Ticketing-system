@@ -27,7 +27,7 @@ export function CompanyUsersTab({ companyId, clients }: { companyId: string; cli
         <Input placeholder={t('compusers_searchPlaceholder')} value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
         <Link to={`/users?companyId=${companyId}`}>
           <Button variant="secondary" className="whitespace-nowrap text-xs">
-            + Add user
+            {t('compusers_addUser')}
           </Button>
         </Link>
       </div>

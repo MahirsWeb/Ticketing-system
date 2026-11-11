@@ -55,11 +55,11 @@ export function InboxView({ connectedEmail }: { connectedEmail: string | null })
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-900">{t('nav_emails')}</h1>
-          <p className="text-xs text-slate-600">Connected: {connectedEmail}</p>
+          <p className="text-xs text-slate-600">{t('email_connectedAs', { email: connectedEmail ?? '' })}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="secondary" disabled={inbox.isFetching} onClick={() => void inbox.refetch()}>
-            {inbox.isRefetching ? 'Refreshing…' : 'Refresh'}
+            {inbox.isRefetching ? t('email_refreshing') : t('email_refresh')}
           </Button>
           <Button variant="secondary" className="text-red-600" disabled={disconnecting} onClick={() => setConfirmDisconnect(true)}>
             {disconnecting ? t('email_disconnecting') : t('email_disconnect')}

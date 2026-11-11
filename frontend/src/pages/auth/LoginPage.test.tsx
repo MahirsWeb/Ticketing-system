@@ -32,4 +32,11 @@ describe('the sign-in page', () => {
 
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
+
+  it('names its fields, so a screen reader says what to type and not just the placeholder (TS-19.1)', () => {
+    renderLogin();
+
+    expect(screen.getByRole('textbox', { name: /email/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/password/i)).toHaveAttribute('type', 'password');
+  });
 });

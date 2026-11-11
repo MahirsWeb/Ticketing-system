@@ -28,22 +28,24 @@ public class WorkTaskSessionTests : IAsyncLifetime
         await _world.Db(async db =>
         {
             await db.AuditLogs.Where(a => a.EntityId != null && _tasks.Contains(a.EntityId.Value)).ExecuteDeleteAsync();
+            await db.Notifications.Where(n => n.Message.Contains("Session task")).ExecuteDeleteAsync();
             await db.WorkTasks.Where(t => _tasks.Contains(t.Id)).ExecuteDeleteAsync(); // its sessions go with it
             await db.TicketWorkSessions.Where(s => _tickets.Contains(s.TicketId)).ExecuteDeleteAsync();
             return await db.Tickets.Where(t => _tickets.Contains(t.Id)).ExecuteDeleteAsync();
         });
     }
 
-    private async Task<Guid> NewTaskAsync(Actor worker)
+    private async Task<Guid> NewTaskAsync(Actor worker, Actor? assignedBy = null, WorkTaskStatus status = WorkTaskStatus.Pending)
     {
         var task = new WorkTask
         {
             Title = "Session task " + Guid.NewGuid().ToString("N")[..6],
             Description = "d",
             DepartmentId = _world.BranchA,
-            CreatedByUserId = worker.Id,
-            AssignedByUserId = worker.Id,
-            AssignedToUserId = worker.Id
+            CreatedByUserId = (assignedBy ?? worker).Id,
+            AssignedByUserId = (assignedBy ?? worker).Id,
+            AssignedToUserId = worker.Id,
+            Status = status
         };
         await _world.Db(async db => { db.WorkTasks.Add(task); return await db.SaveChangesAsync(); });
         _tasks.Add(task.Id);
@@ -136,9 +138,13 @@ public class WorkTaskSessionTests : IAsyncLifetime
         // the person who did the work (here also the current assignee) may
         Assert.Equal(200, (await _world.Send(_world.EmpA1, HttpMethod.Patch, $"/api/work-tasks/{task}/time", Time(past, past.AddHours(2)))).Code);
 
-        // the change is written to the audit log (it was not recorded before)
-        var audited = await _world.Db(db => db.AuditLogs.AsNoTracking().AnyAsync(a => a.EntityId == task && a.Action == "WorkTaskSessionChanged"));
-        Assert.True(audited);
+        // the change is written to the audit log, with what the time WAS as well as what it became (a dispute needs both)
+        var details = await _world.Db(db => db.AuditLogs.AsNoTracking().Where(a => a.EntityId == task && a.Action == "WorkTaskSessionChanged").Select(a => a.Details).SingleAsync());
+        var parts = details!.Split(" -> ");
+        Assert.Equal(2, parts.Length);
+        Assert.Contains(past.ToString("O")[..19], parts[0]);              // the old stretch: started at `past` ...
+        Assert.Contains(past.AddHours(1).ToString("O")[..19], parts[0]);  // ... and ended an hour later
+        Assert.Contains(past.AddHours(2).ToString("O")[..19], parts[1]);  // the new one ends two hours after the start
     }
 
     // ======================= entering a time by hand =======================
@@ -450,5 +456,42 @@ public class WorkTaskSessionTests : IAsyncLifetime
         seenByB.Title = "renamed by the other person";
 
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => b.SaveChangesAsync());
+    }
+
+    // ======================= a person who stops working =======================
+
+    [SqlFact]
+    public async Task The_open_tasks_of_a_deactivated_person_go_back_to_who_handed_them_over_and_are_not_left_in_progress()
+    {
+        var leaver = await _world.CreateActorAsync("taskleaver", UserRole.Employee, _world.BranchA, null);
+        var task = await NewTaskAsync(leaver, assignedBy: _world.EmpA1, status: WorkTaskStatus.InProgress);
+        await AddSessionAsync(task, leaver, DateTime.UtcNow.AddMinutes(-20), null); // the timer is running
+
+        var deactivated = await _world.Send(_world.Admin, HttpMethod.Patch, $"/api/users/{leaver.Id}/active", new { isActive = false });
+        Assert.Equal(200, deactivated.Code);
+
+        var row = await _world.Db(db => db.WorkTasks.AsNoTracking().SingleAsync(t => t.Id == task));
+        Assert.Equal(_world.EmpA1.Id, row.AssignedToUserId);            // somebody active has it again
+        Assert.Equal(WorkTaskStatus.Pending, row.Status);               // and nobody is "working" on it
+        Assert.All(await SessionsOfAsync(task), s => Assert.NotNull(s.EndedAtUtc)); // the timer stopped
+
+        var history = await _world.Db(db => db.WorkTaskAssignmentLogs.AsNoTracking().Where(h => h.WorkTaskId == task).ToListAsync());
+        Assert.Contains(history, h => h.AssignedToUserId == _world.EmpA1.Id && h.AssignedByUserId == _world.Admin.Id);
+        Assert.True(await _world.Db(db => db.AuditLogs.AnyAsync(a => a.EntityId == task && a.Action == "WorkTaskHandedBack")));
+        // the colleague who got it back is told, in the list and by mail
+        Assert.True(await _world.Db(db => db.Notifications.AnyAsync(n => n.UserId == _world.EmpA1.Id && n.Type == NotificationType.TaskAssigned && n.Message.Contains(row.Title))));
+    }
+
+    [SqlFact]
+    public async Task A_finished_task_stays_with_the_person_who_did_it_and_a_task_nobody_else_can_take_stays_put()
+    {
+        var leaver = await _world.CreateActorAsync("taskleaver2", UserRole.Employee, _world.BranchA, null);
+        var done = await NewTaskAsync(leaver, assignedBy: _world.EmpA1, status: WorkTaskStatus.Done);
+        var selfMade = await NewTaskAsync(leaver); // made by the person and given to themselves: nobody to hand it back to
+
+        Assert.Equal(200, (await _world.Send(_world.Admin, HttpMethod.Patch, $"/api/users/{leaver.Id}/active", new { isActive = false })).Code);
+
+        var rows = await _world.Db(db => db.WorkTasks.AsNoTracking().Where(t => t.Id == done || t.Id == selfMade).ToListAsync());
+        Assert.All(rows, t => Assert.Equal(leaver.Id, t.AssignedToUserId));
     }
 }

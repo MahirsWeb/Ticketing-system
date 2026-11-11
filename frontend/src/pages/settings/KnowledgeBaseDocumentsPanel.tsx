@@ -11,10 +11,6 @@ import { ReindexStatusError } from './ReindexStatusError';
 import { ListRow, Panel } from './settingsUi';
 import { useLanguage } from '../../i18n/LanguageContext';
 
-function formatBytesAsChunks(chunkCount: number) {
-  return `${chunkCount} ${chunkCount === 1 ? 'chunk' : 'chunks'}`;
-}
-
 /** The manuals and instructions the AI assistant answers from: uploaded, removed, and rebuilt from their stored originals. */
 export function KnowledgeBaseDocumentsPanel() {
   const { t } = useLanguage();
@@ -79,11 +75,7 @@ export function KnowledgeBaseDocumentsPanel() {
   return (
     <Panel className="max-w-lg">
       <h2 className="text-sm font-bold text-slate-800">{t('kbdoc_title')}</h2>
-      <p className="mt-0.5 mb-4 text-xs text-slate-600">
-        Upload manuals or instructions (Word .docx, Excel .xls/.xlsx, PDF) so the AI assistant can answer
-        questions using official documentation, not just past tickets. Legacy binary .doc isn't supported —
-        re-save as .docx first.
-      </p>
+      <p className="mt-0.5 mb-4 text-xs text-slate-600">{t('kbdoc_intro')}</p>
       <ErrorText>{error}</ErrorText>
       <label>
         <span className="sr-only">{t('kbdoc_uploadBtn')}</span>
@@ -96,7 +88,7 @@ export function KnowledgeBaseDocumentsPanel() {
           className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-blue-700 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-blue-800"
         />
       </label>
-      {uploading && <p className="mt-2 text-xs text-slate-600">Uploading and indexing — this can take a moment per file…</p>}
+      {uploading && <p className="mt-2 text-xs text-slate-600">{t('kbdoc_uploading')}</p>}
 
       {list.isError && <ErrorText>{t('kbdoc_loadFail')}</ErrorText>}
       {list.isSuccess && documents.length > 0 && (
@@ -106,7 +98,7 @@ export function KnowledgeBaseDocumentsPanel() {
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium text-slate-800">{d.title}</div>
                 <div className="text-xs text-slate-600">
-                  {d.sourceFileName} · {formatBytesAsChunks(d.chunkCount)}
+                  {d.sourceFileName} · {t(d.chunkCount === 1 ? 'kbdoc_chunk' : 'kbdoc_chunks', { count: d.chunkCount })}
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-3">
@@ -114,12 +106,12 @@ export function KnowledgeBaseDocumentsPanel() {
                   className="text-xs text-blue-700 hover:underline disabled:opacity-50"
                   disabled={reindexRunning}
                   onClick={() => handleReindexDocument(d)}
-                  title={reindexRunning ? 'A re-index is already running.' : t('kbdoc_rebuildTitle')}
+                  title={reindexRunning ? t('kbdoc_reindexRunning') : t('kbdoc_rebuildTitle')}
                 >
-                  Re-index
+                  {t('kbdoc_reindex')}
                 </button>
                 <button className="text-xs text-red-600 hover:underline" onClick={() => setConfirmDelete(d)}>
-                  Delete
+                  {t('common_delete')}
                 </button>
               </div>
             </ListRow>

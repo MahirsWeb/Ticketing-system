@@ -6,6 +6,7 @@ import { ErrorText, Spinner } from '../../components/ui';
 import { UserProfileCard } from './UserProfileCard';
 import { UserTicketsTable } from './UserTicketsTable';
 import { useLanguage } from '../../i18n/LanguageContext';
+import type { TranslationKey } from '../../i18n/translations';
 
 /**
  * One person: who they are and, for an administrator, what can be done to their account, and the tickets they submitted or have. Another person
@@ -41,13 +42,13 @@ export default function UserDetailPage() {
     <div className="space-y-6">
       <div>
         <Link to="/users" className="text-xs font-medium text-blue-700 hover:underline">
-          ← All users
+          {t('userdetail_back')}
         </Link>
         <div className="mt-1 flex flex-wrap items-center gap-3">
           <h1 className="text-xl font-bold text-slate-900">
             {target.firstName} {target.lastName}
           </h1>
-          <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">{target.role}</span>
+          <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">{t(`role_${target.role}` as TranslationKey)}</span>
         </div>
       </div>
 

@@ -11,7 +11,7 @@ export function CompanyHeader({ company, editing, onToggleEdit }: { company: Com
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
         <Link to="/users?tab=companies" className="text-xs font-medium text-blue-700 hover:underline">
-          ← All companies
+          {t('comphdr_back')}
         </Link>
         <div className="mt-1 flex flex-wrap items-center gap-3">
           <h1 className="text-xl font-bold text-slate-900">{company.name}</h1>

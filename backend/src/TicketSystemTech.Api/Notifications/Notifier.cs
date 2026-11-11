@@ -36,30 +36,29 @@ public sealed record TaskAssignedEvent(WorkTask Task, ApplicationUser Assignee, 
 public sealed record TicketOverdueEvent(Guid TicketId, string TicketNumber, string Title, string Reason, IReadOnlyList<ApplicationUser> Assignees) : NotificationEvent;
 
 /// <summary>
-/// The one place that knows how a happening becomes the three things a person can be given: a line in the notification list (kept in the same
-/// transaction as the change itself), an e-mail (through the outbox) and a real-time push. A service says <i>what happened</i>; it does not
-/// choose subjects, event names or the wording of the list.
+/// The one place that knows how a happening becomes the three things a person can be given: a line in the notification list and an e-mail
+/// (both kept in the same transaction as the change itself) and a real-time push (after it). A service says <i>what happened</i>; it does
+/// not choose subjects, event names or the wording of the list.
 /// </summary>
 public interface INotifier
 {
     /// <summary>The lines for the notification list. The caller adds them to its context, so they are saved together with the change they report.</summary>
     IReadOnlyList<Notification> InApp(NotificationEvent @event);
 
-    /// <summary>The e-mails and the pushes. Called after the change was saved: a failure to reach somebody must not undo it.
-    /// A background job passes its own token, so that stopping the application stops the delivery as well.</summary>
+    /// <summary>The e-mails, as outbox rows. Like the lines, the caller adds them to its context so that they are saved together with the
+    /// change they report: an e-mail that was promised exists exactly when the change does, and the outbox worker delivers it from there.</summary>
+    IReadOnlyList<EmailOutboxItem> Emails(NotificationEvent @event);
+
+    /// <summary>The real-time pushes. Called after the change was saved: a failure to reach somebody must not undo it, and a push that is
+    /// missed is harmless (the list has the line). A background job passes its own token, so that stopping the application stops the delivery as well.</summary>
     Task DeliverAsync(NotificationEvent @event, CancellationToken ct = default);
 }
 
 public sealed class Notifier : INotifier
 {
-    private readonly IEmailSender _emailSender;
     private readonly INotificationPublisher _publisher;
 
-    public Notifier(IEmailSender emailSender, INotificationPublisher publisher)
-    {
-        _emailSender = emailSender;
-        _publisher = publisher;
-    }
+    public Notifier(INotificationPublisher publisher) => _publisher = publisher;
 
     /// <summary>One person's share of an event: the line, the mail and the push they get.</summary>
     private sealed record Delivery(
@@ -155,12 +154,18 @@ public sealed class Notifier : INotifier
             .Select(d => new Notification { UserId = d.To.Id, Type = d.Type, Message = d.InAppText, TicketId = d.TicketId })
             .ToList();
 
+    public IReadOnlyList<EmailOutboxItem> Emails(NotificationEvent @event) =>
+        Deliveries(@event)
+            .Where(d => !string.IsNullOrWhiteSpace(d.To.Email))
+            .Select(d => new EmailOutboxItem { ToEmail = d.To.Email!, Subject = Shorten(d.Subject), HtmlBody = d.Html })
+            .ToList();
+
+    // The column holds 500 characters, and a subject made from a long ticket title must not make the whole save fail.
+    private static string Shorten(string subject) => subject.Length <= 500 ? subject : subject[..500];
+
     public async Task DeliverAsync(NotificationEvent @event, CancellationToken ct = default)
     {
         foreach (var d in Deliveries(@event))
-        {
-            await _emailSender.SendAsync(d.To.Email!, d.Subject, d.Html, ct);
             await _publisher.PushToUserAsync(d.To.Id, d.PushEvent, d.PushPayload, ct);
-        }
     }
 }

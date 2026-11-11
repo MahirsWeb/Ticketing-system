@@ -2,12 +2,14 @@ import { useMemo, useState } from 'react';
 import clsx from 'clsx';
 import type { GanttEntryDto } from '../types';
 import { useLanguage } from '../i18n/LanguageContext';
+import type { Translate } from '../i18n/translate';
+import { translations, type TranslationKey } from '../i18n/translations';
 
-function describe(e: GanttEntryDto) {
+function describe(e: GanttEntryDto, t: Translate, status: string) {
   const from = e.startedAtUtc ? fmtTime(e.startedAtUtc) : '?';
-  const to = e.endedAtUtc ? fmtTime(e.endedAtUtc) : 'ongoing';
+  const to = e.endedAtUtc ? fmtTime(e.endedAtUtc) : t('gantt_ongoing');
   // A block without logged work is the time the ticket has been open, not time somebody spent on it: it says so in words, too.
-  return `${e.title}, ${e.status}, ${from} to ${to}${e.isLogged === false ? ', open time, no work logged' : ''}`;
+  return `${e.title}, ${status}, ${from} ${t('gantt_to')} ${to}${e.isLogged === false ? `, ${t('gantt_openTimeLower')}` : ''}`;
 }
 
 /// Diagonal stripes on a lighter colour: "the ticket was open", as opposed to the solid colour of logged work.
@@ -93,6 +95,12 @@ export function GanttChart({ entries, date }: { entries: GanttEntryDto[]; date: 
 
   const ROW_HEIGHT = 28; // 24px block + 4px gap
 
+  // A ticket's status and a task's status are different lists of words, each with its own translation.
+  const statusOf = (e: GanttEntryDto) => {
+    const key = (e.type === 'Ticket' ? `status_${e.status}` : `taskStatus_${e.status}`) as TranslationKey;
+    return key in translations.en ? t(key) : e.status;
+  };
+
   function Lane({ label, items, colors, emptyLabel }: { label: string; items: GanttEntryDto[]; colors: Record<string, string>; emptyLabel: string }) {
     // Greedily pack time-overlapping items into separate sub-rows (earliest start first) so
     // simultaneous work is stacked, never rendered on top of itself.
@@ -135,8 +143,8 @@ export function GanttChart({ entries, date }: { entries: GanttEntryDto[]; date: 
             <button
               type="button"
               key={e.id}
-              aria-label={describe(e)}
-              title={describe(e)}
+              aria-label={describe(e, t, statusOf(e))}
+              title={describe(e, t, statusOf(e))}
               onMouseEnter={() => setHovered(e)}
               onMouseLeave={() => setHovered(null)}
               onFocus={() => setHovered(e)}
@@ -175,15 +183,15 @@ export function GanttChart({ entries, date }: { entries: GanttEntryDto[]; date: 
       </div>
 
       <div className="mt-2 flex items-center gap-3">
-        <div className="w-20 shrink-0 text-xs font-semibold text-slate-600"><span aria-hidden>🎫</span> Tickets</div>
+        <div className="w-20 shrink-0 text-xs font-semibold text-slate-600"><span aria-hidden>🎫</span> {t('gantt_tickets')}</div>
         <div className="flex-1">
-          <Lane label={t('gantt_ticketWork')} items={tickets} colors={TICKET_COLORS} emptyLabel="No ticket work logged this day" />
+          <Lane label={t('gantt_ticketWork')} items={tickets} colors={TICKET_COLORS} emptyLabel={t('gantt_noTicketWork')} />
         </div>
       </div>
       <div className="mt-2 flex items-center gap-3">
-        <div className="w-20 shrink-0 text-xs font-semibold text-slate-600"><span aria-hidden>📋</span> Tasks</div>
+        <div className="w-20 shrink-0 text-xs font-semibold text-slate-600"><span aria-hidden>📋</span> {t('gantt_tasks')}</div>
         <div className="flex-1">
-          <Lane label={t('gantt_taskWork')} items={tasks} colors={TASK_COLORS} emptyLabel="No tasks logged this day" />
+          <Lane label={t('gantt_taskWork')} items={tasks} colors={TASK_COLORS} emptyLabel={t('gantt_noTaskWork')} />
         </div>
       </div>
 
@@ -191,18 +199,18 @@ export function GanttChart({ entries, date }: { entries: GanttEntryDto[]; date: 
         {Object.entries(TICKET_COLORS).map(([status, color]) => (
           <span key={'t' + status} className="inline-flex items-center gap-1">
             <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: color }} />
-            Ticket: {status}
+            {t('gantt_legendTicket', { status: t(`status_${status}` as TranslationKey) })}
           </span>
         ))}
         {Object.entries(TASK_COLORS).map(([status, color]) => (
           <span key={'k' + status} className="inline-flex items-center gap-1">
             <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: color }} />
-            Task: {status}
+            {t('gantt_legendTask', { status: t(`taskStatus_${status}` as TranslationKey) })}
           </span>
         ))}
         <span className="inline-flex items-center gap-1">
           <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-sm border border-dashed border-slate-700 bg-slate-300" style={{ backgroundImage: ELAPSED_PATTERN }} />
-          Open time, no work logged
+          {t('gantt_openTime')}
         </span>
       </div>
 
@@ -211,8 +219,8 @@ export function GanttChart({ entries, date }: { entries: GanttEntryDto[]; date: 
           <div className="rounded-md bg-slate-50 px-3 py-1.5 text-xs text-slate-700">
             <span className="font-semibold">{hovered.title}</span>{' '}
             {hovered.startedAtUtc ? fmtTime(hovered.startedAtUtc) : '?'}
-            {hovered.endedAtUtc ? `–${fmtTime(hovered.endedAtUtc)}` : ' (ongoing)'} · {hovered.status}
-            {hovered.isLogged === false && ' · open time, no work logged'}
+            {hovered.endedAtUtc ? `–${fmtTime(hovered.endedAtUtc)}` : ` (${t('gantt_ongoing')})`} · {statusOf(hovered)}
+            {hovered.isLogged === false && ` · ${t('gantt_openTimeLower')}`}
           </div>
         ) : (
           <p className="px-3 text-xs text-slate-600">{t('gantt_hint')}</p>

@@ -46,13 +46,13 @@ public class PersonalDataTests : IAsyncLifetime
         return person;
     }
 
-    private async Task<Guid> TicketOfAsync(Actor client, string title, string messageHtml)
+    private async Task<Guid> TicketOfAsync(Actor client, string title, string messageHtml, string description = "<p>description</p>")
     {
         var ticket = new Ticket
         {
             TicketNumber = "PD-" + Guid.NewGuid().ToString("N")[..8],
             Title = title,
-            Description = "<p>description</p>",
+            Description = description,
             ClientId = client.Id,
             CompanyId = _world.CompanyId,
             Status = TicketStatus.New,
@@ -93,6 +93,22 @@ public class PersonalDataTests : IAsyncLifetime
         // the export itself is recorded, and the record holds no personal data
         var entry = await _world.Db(db => db.AuditLogs.AsNoTracking().Where(a => a.Action == "UserDataExported" && a.EntityId == client.Id).Select(a => a.Details).SingleAsync());
         Assert.DoesNotContain(client.Email, entry ?? "");
+    }
+
+    [SqlFact]
+    public async Task The_export_holds_what_the_person_wrote_in_the_ticket_itself_and_what_was_done_to_their_account()
+    {
+        var client = await PersonAsync("gdprFull", UserRole.Client);
+        await TicketOfAsync(client, "Tiket s opisom", "<p>odgovor</p>", description: "<p>OPIS-XYZ-GDPR</p>");
+        // Somebody else acts on the account (a regenerated password): that is recorded ABOUT the person, and a mail goes to their address.
+        Assert.Equal(200, (await _world.Post(_world.Admin, $"/api/users/{client.Id}/regenerate-temp-password")).Code);
+
+        var json = (await _world.Get(_world.Admin, $"/api/users/{client.Id}/export")).Json;
+
+        Assert.Contains("OPIS-XYZ-GDPR", json.GetProperty("ticketsOpened").EnumerateArray().Select(t => t.GetProperty("description").GetString()).Single());
+        Assert.Contains("RegenerateTempPassword", json.GetProperty("actionsRecordedAboutThePerson").EnumerateArray().Select(a => a.GetProperty("action").GetString()));
+        Assert.NotEmpty(json.GetProperty("emailsAddressedToThePerson").EnumerateArray());
+        Assert.DoesNotContain(_world.Admin.Id.ToString(), json.GetProperty("actionsRecordedAboutThePerson").GetRawText()); // who did it is the other person's data
     }
 
     [SqlFact]

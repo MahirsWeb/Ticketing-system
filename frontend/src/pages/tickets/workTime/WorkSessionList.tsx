@@ -28,28 +28,28 @@ export function WorkSessionList({
   return (
     <ul className="mb-3 divide-y divide-slate-100 rounded-md border border-slate-100 bg-white text-sm">
       {sessions.map((s) => {
-        const whose = `the session of ${s.userName} from ${when(s.startedAtUtc)}`;
+        const whose = t('worktime_whose', { name: s.userName, when: when(s.startedAtUtc) });
         return (
           <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
             <div>
               <span className="font-medium text-slate-700">{s.userName}</span>
               <span className="ml-2 tabular-nums text-slate-600">
                 {when(s.startedAtUtc)} –{' '}
-                {s.endedAtUtc ? when(s.endedAtUtc) : <span className="font-semibold text-green-700">running</span>}
+                {s.endedAtUtc ? when(s.endedAtUtc) : <span className="font-semibold text-green-700">{t('worktime_running')}</span>}
               </span>
               <span className="ml-2 text-xs text-slate-600">{formatDuration(durationOf(s, now))}</span>
             </div>
             <div className="flex items-center gap-1">
               {!s.endedAtUtc && (
-                <Button type="button" variant="secondary" className="px-2 py-1 text-xs" disabled={saving} aria-label={`End now: ${whose}`} onClick={() => onEnd(s)}>
-                  End now
+                <Button type="button" variant="secondary" className="px-2 py-1 text-xs" disabled={saving} aria-label={t('worktime_endNowAria', { whose })} onClick={() => onEnd(s)}>
+                  {t('worktime_endNow')}
                 </Button>
               )}
-              <Button type="button" variant="ghost" className="px-2 py-1 text-xs" disabled={saving} aria-label={`Edit ${whose}`} onClick={() => onEdit(s)}>
-                Edit
+              <Button type="button" variant="ghost" className="px-2 py-1 text-xs" disabled={saving} aria-label={t('worktime_editAria', { whose })} onClick={() => onEdit(s)}>
+                {t('common_edit')}
               </Button>
-              <Button type="button" variant="ghost" className="px-2 py-1 text-xs text-red-600" disabled={saving} aria-label={`Delete ${whose}`} onClick={() => onDelete(s)}>
-                Delete
+              <Button type="button" variant="ghost" className="px-2 py-1 text-xs text-red-600" disabled={saving} aria-label={t('worktime_deleteAria', { whose })} onClick={() => onDelete(s)}>
+                {t('common_delete')}
               </Button>
             </div>
           </li>

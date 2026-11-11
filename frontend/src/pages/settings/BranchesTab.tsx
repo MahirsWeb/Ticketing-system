@@ -26,7 +26,7 @@ export function BranchesTab() {
   const [editError, setEditError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const actions = useLookupActions<DepartmentItemFull>({
-    noun: 'branch',
+    noun: t('noun_branch'),
     setActive: (d, isActive) => lookupsApi.updateDepartment(d.id, d.name, d.email, isActive),
     remove: (d) => lookupsApi.deleteDepartment(d.id),
   });
@@ -100,14 +100,14 @@ export function BranchesTab() {
           </Field>
           <ErrorText>{error}</ErrorText>
           <Button type="submit" className="w-full" disabled={!canAdd}>
-            + Add Branch
+            {t('branches_addBtn')}
           </Button>
         </form>
       </Panel>
 
       <Panel>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-sm font-bold text-slate-800">Existing branches{departments.isSuccess ? ` (${count})` : ''}</h2>
+          <h2 className="text-sm font-bold text-slate-800">{t('lookup_existing', { plural: t('noun_branches') })}{departments.isSuccess ? ` (${count})` : ''}</h2>
           <Input aria-label={t('branches_searchAria')} placeholder={t('branches_searchPlaceholder')} value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
         </div>
         <ErrorText>{editError ?? actions.changeError}</ErrorText>
@@ -131,17 +131,17 @@ export function BranchesTab() {
                     {editingId === item.id ? (
                       <>
                         <button className="font-medium text-blue-700 hover:underline" onClick={() => handleSaveEdit(item)}>
-                          Save
+                          {t('common_save')}
                         </button>
                         <button className="text-slate-600 hover:underline" onClick={() => setEditingId(null)}>
-                          Cancel
+                          {t('common_cancel')}
                         </button>
                       </>
                     ) : (
                       <>
                         <StatusPill active={item.isActive} />
                         <button className="text-slate-600 hover:underline" onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}>
-                          {expandedId === item.id ? t('branches_hideSub') : 'Sub-branches'}
+                          {expandedId === item.id ? t('branches_hideSub') : t('branches_subBranches')}
                         </button>
                         <button
                           className="font-medium text-blue-700 hover:underline"
@@ -152,13 +152,13 @@ export function BranchesTab() {
                             setEditError(null);
                           }}
                         >
-                          Edit
+                          {t('common_edit')}
                         </button>
                         <button className="text-slate-600 hover:underline" onClick={() => actions.toggle(item)}>
-                          {item.isActive ? 'Deactivate' : 'Reactivate'}
+                          {item.isActive ? t('common_deactivate') : t('common_reactivate')}
                         </button>
                         <button className="font-medium text-red-600 hover:underline" onClick={() => actions.askDelete(item)}>
-                          Delete
+                          {t('common_delete')}
                         </button>
                       </>
                     )}
@@ -167,7 +167,7 @@ export function BranchesTab() {
                 {expandedId === item.id && <SubBranchesInline departmentId={item.id} />}
               </div>
             ))}
-            {filtered.length === 0 && <p className="py-8 text-center text-sm text-slate-600">No branches found.</p>}
+            {filtered.length === 0 && <p className="py-8 text-center text-sm text-slate-600">{t('branches_empty')}</p>}
           </div>
         )}
       </Panel>
@@ -175,14 +175,12 @@ export function BranchesTab() {
       <LookupDialogs
         actions={actions}
         remove={{
-          title: () => 'Delete this branch?',
-          message: (item) =>
-            `"${item.name}" and ALL of its sub-branches will be permanently deleted. Tickets and staff currently assigned to it become unassigned from a branch (not deleted themselves), and those tickets lose their branch name in past reports/statistics going forward since the branch record itself is gone. This cannot be undone.`,
+          title: () => t('branches_deleteTitle'),
+          message: (item) => t('branches_deleteMsg', { name: item.name }),
         }}
         deactivate={{
-          title: () => 'Deactivate this branch?',
-          message: (item) =>
-            `Existing tickets, staff and statistics for "${item.name}" are completely unaffected — nothing is changed or deleted. This only removes it from the picker when opening a new ticket or assigning new staff. Staff already in this branch can still work and open tickets in it as normal; its sub-branches are not affected either.`,
+          title: () => t('branches_deactivateTitle'),
+          message: (item) => t('branches_deactivateMsg', { name: item.name }),
         }}
       />
     </div>

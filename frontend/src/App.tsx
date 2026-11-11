@@ -56,7 +56,8 @@ function useSessionBootstrap() {
   useEffect(() => {
     if (started.current) return; // StrictMode runs effects twice in development; the refresh must fire once
     started.current = true;
-    void refreshAccessToken().finally(finishInitializing);
+    // A server that cannot answer right now (RefreshUnavailableError) leaves the person on the sign-in page with their cookie intact.
+    void refreshAccessToken().catch(() => null).finally(finishInitializing);
   }, [finishInitializing]);
 }
 

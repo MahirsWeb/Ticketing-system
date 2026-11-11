@@ -62,6 +62,8 @@ public static class StartupTasks
         var inProduction = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().IsProduction();
         await Step("Encryption check", logger, () => PiiBackfillMigration.RunAsync(db, piiProtector, logger, refuseToStartWithPlaintextLeft: inProduction, ct: ct));
 
+        await Step("Outbox bodies", logger, () => OutboxBodyBackfill.RunAsync(db, piiProtector, logger, ct));
+
         await Step("Embedding format", logger, () => EmbeddingFormatBackfill.RunAsync(db, AiSettings.DefaultGeminiEmbeddingModel, logger, ct));
 
         await Step("Avatar paths", logger, () => AvatarPathBackfill.RunAsync(db, logger, ct));

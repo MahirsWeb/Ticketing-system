@@ -89,6 +89,7 @@ public sealed class TicketMessageService : ITicketMessageService
             var recipients = await _db.Users.Where(u => recipientIds.Contains(u.Id) && u.IsActive).ToListAsync();
             var reply = new NewResponseEvent(ticket, recipients);
             _db.Notifications.AddRange(_notifier.InApp(reply));
+            _db.EmailOutbox.AddRange(_notifier.Emails(reply));
             if (recipients.Count > 0) await _db.SaveChangesAsync();
 
             await _notifier.DeliverAsync(reply);

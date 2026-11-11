@@ -5,6 +5,7 @@ import { zoomRange } from '../../lib/chartRange';
 import { Card } from '../../components/ui';
 import type { TimeSeriesPointDto } from '../../types';
 import { useLanguage } from '../../i18n/LanguageContext';
+import { useDateLocale } from '../../i18n/dateLocale';
 
 /**
  * Tickets opened and closed per day. Dragging across the chart narrows the period of the whole dashboard to those days, a right click goes
@@ -23,6 +24,7 @@ export function TicketsOverTime({
   onRangeChange: (from: Date, to: Date) => void;
 }) {
   const { t } = useLanguage();
+  const locale = useDateLocale();
   const [hideWeekends, setHideWeekends] = useState(false);
   const [zoomStack, setZoomStack] = useState<{ from: Date; to: Date }[]>([]);
   const [refAreaLeft, setRefAreaLeft] = useState<string | null>(null);
@@ -73,26 +75,26 @@ export function TicketsOverTime({
               }}
               className="text-xs text-slate-600 hover:text-slate-800 hover:underline"
             >
-              Reset zoom
+              {t('dash_resetZoom')}
             </button>
           )}
           <label className="flex items-center gap-1.5 text-xs text-slate-600">
             <input type="checkbox" checked={hideWeekends} onChange={(e) => setHideWeekends(e.target.checked)} />
-            Hide weekends
+            {t('dash_hideWeekends')}
           </label>
         </div>
       </div>
-      <p className="mb-3 text-xs text-slate-600">Drag to zoom into a range · right-click to zoom back out</p>
+      <p className="mb-3 text-xs text-slate-600">{t('dash_zoomHint')}</p>
       <div onContextMenu={handleContextMenu} className="select-none">
         <ResponsiveContainer width="100%" height={280}>
           <LineChart data={chartData} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-            <XAxis dataKey="date" tick={{ fontSize: 12 }} tickFormatter={(d) => format(new Date(d), 'dd MMM')} allowDataOverflow />
+            <XAxis dataKey="date" tick={{ fontSize: 12 }} tickFormatter={(d) => format(new Date(d), 'dd MMM', { locale })} allowDataOverflow />
             <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
-            <Tooltip labelFormatter={(d) => (d ? format(new Date(d as string), 'dd MMM yyyy') : '')} />
+            <Tooltip labelFormatter={(d) => (d ? format(new Date(d as string), 'dd MMM yyyy', { locale }) : '')} />
             <Legend />
-            <Line type="monotone" dataKey="opened" name="Opened" stroke="#2f5ea8" strokeWidth={2} dot={false} />
-            <Line type="monotone" dataKey="closed" name="Closed" stroke="#15803d" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="opened" name={t('tab_opened')} stroke="#2f5ea8" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="closed" name={t('tab_closed')} stroke="#15803d" strokeWidth={2} dot={false} />
             {refAreaLeft && refAreaRight && <ReferenceArea x1={refAreaLeft} x2={refAreaRight} strokeOpacity={0.3} fill="#2f5ea8" fillOpacity={0.15} />}
           </LineChart>
         </ResponsiveContainer>

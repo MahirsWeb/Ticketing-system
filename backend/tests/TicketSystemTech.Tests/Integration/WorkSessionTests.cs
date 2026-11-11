@@ -260,6 +260,13 @@ public class WorkSessionTests : IAsyncLifetime
         Assert.Contains("WorkSessionAdded", actions);
         Assert.Contains("WorkSessionChanged", actions);
         Assert.Contains("WorkSessionDeleted", actions);
+
+        // a change keeps the old time beside the new one: 9:00-10:00 became 8:30-10:15
+        var change = await _world.Db(db => db.AuditLogs.AsNoTracking().Where(a => a.EntityId == ticket && a.Action == "WorkSessionChanged").Select(a => a.Details).SingleAsync());
+        var halves = change!.Split(" -> ");
+        Assert.Equal(2, halves.Length);
+        Assert.Contains(Yesterday(9).ToString("O")[..19], halves[0]);
+        Assert.Contains(Yesterday(8, 30).ToString("O")[..19], halves[1]);
     }
 
     [SqlFact]
