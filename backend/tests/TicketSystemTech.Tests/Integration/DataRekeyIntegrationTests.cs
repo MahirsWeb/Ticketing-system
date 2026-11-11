@@ -21,7 +21,7 @@ public class DataRekeyIntegrationTests
         Assert.NotEmpty(before); // there is something encrypted to begin with
 
         var result = await DataRekey.RunCoreAsync(_world.Factory.Services, new ConfigurationBuilder().Build(), rewrite: true, revokeOldKeys: false,
-            allowUnprotected: true, allowRunning: false, TestContext.Current.CancellationToken);
+            allowUnprotected: true, allowRunning: true, TestContext.Current.CancellationToken);
 
         Assert.True(result.Values > 0);
         Assert.Equal(before.Values.Sum(), result.KeysBefore.Values.Sum());
@@ -46,7 +46,7 @@ public class DataRekeyIntegrationTests
         var before = await _world.Db(db => DataRekey.KeysInUseAsync(db));
 
         var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => DataRekey.RunCoreAsync(_world.Factory.Services, new ConfigurationBuilder().Build(),
-            rewrite: true, revokeOldKeys: false, allowUnprotected: false, allowRunning: false, TestContext.Current.CancellationToken));
+            rewrite: true, revokeOldKeys: false, allowUnprotected: false, allowRunning: true, TestContext.Current.CancellationToken));
 
         Assert.Contains("no certificate", refused.Message);
         Assert.Equal(before, await _world.Db(db => DataRekey.KeysInUseAsync(db))); // nothing was rewritten
@@ -63,4 +63,29 @@ public class DataRekeyIntegrationTests
         Assert.Equal(1, code);
         Assert.Contains("Nothing to do", output.ToString());
     }
+
+    [SqlFact]
+    public async Task While_the_application_runs_the_tool_refuses_even_though_no_connection_is_open_and_changes_nothing()
+    {
+        // The test host IS a running application: it holds the marker on this database. Give it a moment to take it, as a real start would.
+        for (var i = 0; i < 50 && !await MarkerIsHeldAsync(); i++) await Task.Delay(100, TestContext.Current.CancellationToken);
+        var before = await _world.Db(db => DataRekey.KeysInUseAsync(db));
+
+        var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => DataRekey.RunCoreAsync(_world.Factory.Services, new ConfigurationBuilder().Build(),
+            rewrite: true, revokeOldKeys: false, allowUnprotected: true, allowRunning: false, TestContext.Current.CancellationToken));
+
+        Assert.Contains("application is running", refused.Message);
+        Assert.Equal(before, await _world.Db(db => DataRekey.KeysInUseAsync(db))); // nothing was rewritten
+    }
+
+    private async Task<bool> MarkerIsHeldAsync() =>
+        // An exclusive request from a connection of our own is refused (-1) exactly while a shared one is held.
+        await _world.Db(async db =>
+        {
+            await using var connection = new Microsoft.Data.SqlClient.SqlConnection(db.Database.GetConnectionString());
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "DECLARE @r int; EXEC @r = sp_getapplock @Resource = N'TicketSystemTech.InstanceRunning', @LockMode = N'Exclusive', @LockOwner = N'Session', @LockTimeout = 0; SELECT @r;";
+            return Convert.ToInt32(await command.ExecuteScalarAsync()) < 0;
+        });
 }

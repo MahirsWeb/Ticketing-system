@@ -52,6 +52,7 @@ public static class DataRekey
 
     public static async Task<Result> RunCoreAsync(IServiceProvider services, IConfiguration configuration, bool rewrite, bool revokeOldKeys, bool allowUnprotected, bool allowRunning, CancellationToken ct)
     {
+        if (!rewrite && !revokeOldKeys) throw new InvalidOperationException("Nothing to do: give --rekey-data, --revoke-old-keys, or both.");
         using var scope = services.CreateScope();
         var provider = scope.ServiceProvider;
         var db = provider.GetRequiredService<AppDbContext>();
@@ -59,8 +60,9 @@ public static class DataRekey
         var time = provider.GetRequiredService<TimeProvider>();
         var warnings = new List<string>();
 
+        // Held for the whole run: while this tool has it, no application can claim to be running, and one that is running keeps it from being taken.
+        await using var guard = await RefuseWhileTheApplicationRunsAsync(db, allowRunning, ct);
         await EnsureNobodyElseIsConnectedAsync(db, allowRunning, ct);
-        if (!rewrite && !revokeOldKeys) throw new InvalidOperationException("Nothing to do: give --rekey-data, --revoke-old-keys, or both.");
 
         var before = await KeysInUseAsync(db, ct);
         Guid keep;
@@ -111,6 +113,38 @@ public static class DataRekey
     /// <summary>The key that protects new values now: the one activated most recently that is already active and not retired.</summary>
     public static Guid KeyInForce(IKeyManager keyManager, TimeProvider time) =>
         keyManager.GetAllKeys().Where(k => !k.IsRevoked && k.ActivationDate <= time.GetUtcNow()).OrderByDescending(k => k.ActivationDate).Select(k => k.KeyId).FirstOrDefault();
+
+    /// <summary>
+    /// The running application (any instance, on any machine) holds a shared application lock for as long as it lives (<see cref="RunningInstanceMarker"/>).
+    /// This asks for it exclusively on a connection of its own and refuses when it is not given, and keeps the connection (and so the lock) until disposed.
+    /// An application that is idle has no open connection to count, which is why the connections alone are no proof that it is stopped.
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+        Justification = "The connection is handed to the caller, which holds the lock until it disposes it; every other path disposes it here.")]
+    private static async Task<IAsyncDisposable?> RefuseWhileTheApplicationRunsAsync(AppDbContext db, bool allowRunning, CancellationToken ct)
+    {
+        if (allowRunning) return null;
+        var text = db.Database.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(text)) return null;
+
+        var connection = new Microsoft.Data.SqlClient.SqlConnection(new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(text) { Pooling = false, MultipleActiveResultSets = false }.ConnectionString);
+        try
+        {
+            await connection.OpenAsync(ct);
+            await using var command = connection.CreateCommand();
+            command.CommandText = "DECLARE @r int; EXEC @r = sp_getapplock @Resource = @resource, @LockMode = N'Exclusive', @LockOwner = N'Session', @LockTimeout = 0; SELECT @r;";
+            command.Parameters.AddWithValue("@resource", RunningInstanceMarker.Resource);
+            if ((int)(await command.ExecuteScalarAsync(ct))! < 0)
+                throw new InvalidOperationException(
+                    "The application is running (an instance holds its running marker on this database). Stop every instance and run this again, or give --allow-running if you are sure none is.");
+            return connection;
+        }
+        catch
+        {
+            await connection.DisposeAsync();
+            throw;
+        }
+    }
 
     /// <summary>Nothing may be writing while values are rewritten (it would write new ones under whichever key it saw). Other programs connected to this
     /// database are counted by the server (not the connections of this process); if the server does not allow the question, the check cannot be made.</summary>

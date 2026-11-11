@@ -391,8 +391,9 @@ aplikacija **odbija da krene** i nabroji sve što fali, dok ne podesiš:
    (e-mail, korisničko ime i telefon naloga, adrese firmi, outbox, Outlook tokene) i **čita iz baze pod kojim je ključem šta**;
    `--revoke-old-keys` ne povlači ništa ako išta ostane pod starim. Alat **odbija** da radi: bez certifikata (novi ključ bi stajao
    nešifrovan u bazi; `--allow-unprotected-keys` ga ipak pušta, uz upozorenje), dok postoji ključ koji tek počinje (Data Protection je
-   sama napravila sljedeći: pokreni poslije tog trenutka) i dok su na bazu spojeni drugi programi (aplikacija nije zaustavljena;
-   `--allow-running` ako to nije aplikacija). Povlačenje se ne može poništiti, a linkovi za reset lozinke i potvrdu e-maila poslani
+   sama napravila sljedeći: pokreni poslije tog trenutka) i dok je aplikacija pokrenuta: pokrenuta aplikacija drži zaključavanje
+   „radi” u bazi (`TicketSystemTech.InstanceRunning`, nestaje samim završetkom procesa), što vidi i ona koja trenutno miruje, a
+   alat dodatno odbija ako su na bazu spojeni drugi programi (`--allow-running` ako to nije aplikacija). Povlačenje se ne može poništiti, a linkovi za reset lozinke i potvrdu e-maila poslani
    ranije prestaju da rade. Backupi baze napravljeni prije re-keya ostaju čitljivi sa svojim starim ključevima. Nova instalacija
    pokrenuta s certifikatom je šifrovana od prvog dana. Ko svjesno ne želi certifikat: `DataProtection:AllowUnprotectedKeys` = `true`.
 

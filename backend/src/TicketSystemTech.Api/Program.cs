@@ -284,6 +284,8 @@ builder.Services.AddScoped<IKnowledgeBaseDocumentIndexer, KnowledgeBaseDocumentI
 builder.Services.Configure<MicrosoftGraphOptions>(builder.Configuration.GetSection("MicrosoftGraph"));
 builder.Services.AddSingleton<INotificationPublisher, SignalRNotificationPublisher>();
 builder.Services.AddHostedService<TicketSystemTech.Api.BackgroundJobs.OverdueTicketNotifier>();
+// Lets --rekey-data / --revoke-old-keys find out that the application is running (it holds a shared SQL application lock while it lives).
+builder.Services.AddHostedService<TicketSystemTech.Api.Startup.RunningInstanceMarker>();
 builder.Services.AddHttpContextAccessor();
 // Gemini, embeddings and Microsoft Graph: one typed client each, with its own timeouts, retries and circuit breaker.
 builder.Services.AddOutboundHttpClients();
