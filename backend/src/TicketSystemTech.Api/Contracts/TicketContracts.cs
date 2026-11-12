@@ -30,7 +30,8 @@ public record CreateTicketOnBehalfRequest(
     [Required] TicketPriority Priority,
     DateTime? DueDateUtc,
     [Required] Guid AssignedToUserId,
-    Guid? CategoryId // Internal-only classification, staff/Admin — never shown to the client.
+    Guid? CategoryId, // Internal-only classification, staff/Admin — never shown to the client.
+    string? EmailMessageId = null // The e-mail of the branch's connected mailbox this ticket is made from: the ticket, the e-mail's files and the "converted" mark are saved as one.
 );
 
 public record OpenTicketRequest(

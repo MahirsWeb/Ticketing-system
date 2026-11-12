@@ -4063,6 +4063,7 @@ export interface components {
             description?: string;
             /** Format: date-time */
             dueDateUtc?: string | null;
+            emailMessageId?: string | null;
             /** Format: uuid */
             helpTopicId?: string;
             priority?: components["schemas"]["TicketPriority"];

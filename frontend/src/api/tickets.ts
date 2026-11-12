@@ -67,6 +67,8 @@ export const ticketsApi = {
       dueDateUtc: string | null;
       assignedToUserId: string;
       categoryId?: string;
+      /** The e-mail the ticket is made from: the server saves the ticket, the e-mail's files and the "converted" mark as one. */
+      emailMessageId?: string;
     },
     idempotencyKey?: string
   ) => refreshed(apiClient.post<TicketDetailDto>('/api/tickets/on-behalf', payload, idempotencyHeaders(idempotencyKey)).then((r) => r.data)),

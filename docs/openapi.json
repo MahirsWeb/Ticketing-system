@@ -332,6 +332,10 @@
             "nullable": true,
             "type": "string"
           },
+          "emailMessageId": {
+            "nullable": true,
+            "type": "string"
+          },
           "helpTopicId": {
             "format": "uuid",
             "type": "string"

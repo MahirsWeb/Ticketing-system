@@ -39,13 +39,17 @@ public sealed class TicketCreationService : ITicketCreationService
     private readonly ITicketQueries _queries;
     private readonly ITicketRouting _routing;
     private readonly ITicketIdempotency _idempotency;
+    private readonly IEmailIntegrationService _mailbox;
+    private readonly IFileStorage _fileStorage;
     private readonly TimeProvider _time;
     private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
 
     public TicketCreationService(
         AppDbContext db, ICurrentUserService currentUser, ITicketNumberGenerator ticketNumberGenerator, INotifier notifier, IPiiProtector piiProtector, IHtmlSanitizerService html, ITicketQueries queries,
-        ITicketRouting routing, ITicketIdempotency idempotency, TimeProvider time)
+        ITicketRouting routing, ITicketIdempotency idempotency, IEmailIntegrationService mailbox, IFileStorage fileStorage, TimeProvider time)
     {
+        _mailbox = mailbox;
+        _fileStorage = fileStorage;
         _db = db;
         _currentUser = currentUser;
         _ticketNumberGenerator = ticketNumberGenerator;
@@ -114,6 +118,20 @@ public sealed class TicketCreationService : ITicketCreationService
         if (idempotencyKey is not null && await _idempotency.FindPreviousAsync(_currentUser.UserId!.Value, idempotencyKey) is { } previous)
             return Outcome<TicketDetailDto>.Ok(await _queries.BuildDetailAsync(previous));
 
+        // A ticket made from an e-mail: asking again for the same e-mail (another key, a second click, a colleague) gives the ticket that e-mail already became,
+        // not a second one and not a second copy of its files.
+        var emailMessageId = string.IsNullOrWhiteSpace(request.EmailMessageId) ? null : request.EmailMessageId.Trim();
+        Guid mailboxBranch = default;
+        if (emailMessageId is not null)
+        {
+            if (_currentUser.DepartmentId is null) return Outcome<TicketDetailDto>.Invalid("Your account is not assigned to a branch, so it has no mailbox.");
+            mailboxBranch = _currentUser.DepartmentId.Value;
+            var already = await _db.EmailTicketMarks.AsNoTracking()
+                .Where(m => m.DepartmentId == mailboxBranch && m.MessageId == emailMessageId && m.ConvertedTicketId != null)
+                .Select(m => m.ConvertedTicketId).FirstOrDefaultAsync();
+            if (already is { } existing) return Outcome<TicketDetailDto>.Ok(await _queries.BuildDetailAsync(existing));
+        }
+
         var clientEmailHash = _piiProtector.Hash(request.ClientEmail);
         var client = await _db.Users.FirstOrDefaultAsync(u => u.NormalizedEmail == clientEmailHash && u.Role == UserRole.Client);
         if (client is null) return Outcome<TicketDetailDto>.NotFound("No client account found with that email.");
@@ -175,11 +193,35 @@ public sealed class TicketCreationService : ITicketCreationService
         _db.Notifications.AddRange(_notifier.InApp(opened));
         _db.EmailOutbox.AddRange(_notifier.Emails(opened));
 
-        var raced = await _idempotency.SaveAsync(_currentUser.UserId!.Value, idempotencyKey, ticket.Id);
-        if (raced is { } winner) return Outcome<TicketDetailDto>.Ok(await _queries.BuildDetailAsync(winner));
+        // The e-mail's files and the "converted" mark join the ticket in the SAME save: either the ticket exists with its files and the e-mail is marked, or nothing
+        // was saved (and the files that were stored are taken back). Reaching the mailbox can fail; then no ticket is made and the person simply tries again.
+        IReadOnlyList<string> storedFiles = Array.Empty<string>();
+        if (emailMessageId is not null)
+            storedFiles = await _mailbox.StageAttachmentsAndMarkAsync(mailboxBranch, _currentUser.UserId!.Value, emailMessageId, ticket.Id);
+
+        Guid? raced;
+        try
+        {
+            raced = await _idempotency.SaveAsync(_currentUser.UserId!.Value, idempotencyKey, ticket.Id);
+        }
+        catch
+        {
+            await TakeBackAsync(storedFiles);
+            throw;
+        }
+        if (raced is { } winner)
+        {
+            await TakeBackAsync(storedFiles); // the request that won made the ticket; these files belong to nothing
+            return Outcome<TicketDetailDto>.Ok(await _queries.BuildDetailAsync(winner));
+        }
 
         await _notifier.DeliverAsync(opened);
 
         return Outcome<TicketDetailDto>.Ok(await _queries.BuildDetailAsync(ticket.Id));
+    }
+
+    private async Task TakeBackAsync(IReadOnlyList<string> storedFiles)
+    {
+        foreach (var stored in storedFiles) await _fileStorage.DeleteAsync(stored, CancellationToken.None);
     }
 }

@@ -36,4 +36,9 @@ public interface IEmailIntegrationService
     /// converted to it: all in ONE save, so that a failure leaves neither half behind (no files on the ticket for a message that is not marked, and
     /// no "converted" mark on a ticket that never got its files).</summary>
     Task ImportAttachmentsAndMarkConvertedAsync(Guid departmentId, Guid uploadedByUserId, string messageId, Guid ticketId, CancellationToken ct = default);
+
+    /// <summary>The same as <see cref="ImportAttachmentsAndMarkConvertedAsync"/>, but nothing is saved: the files are stored and the rows (attachments and the
+    /// "converted" mark) are added to the caller's context, so that the caller saves them in ONE save together with the ticket they belong to. Returns the stored
+    /// references of the files, which the caller must delete if its save fails (or is not made).</summary>
+    Task<IReadOnlyList<string>> StageAttachmentsAndMarkAsync(Guid departmentId, Guid uploadedByUserId, string messageId, Guid ticketId, CancellationToken ct = default);
 }

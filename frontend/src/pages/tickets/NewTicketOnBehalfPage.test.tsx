@@ -535,7 +535,7 @@ describe('opening a ticket on behalf of a client', () => {
       expect(await screen.findByText(/its files could not be added \(the upload failed\)/)).toBeInTheDocument();
     });
 
-    it('mark the e-mail as turned into the ticket when the ticket came from an e-mail', async () => {
+    it('sends the e-mail with the ticket, in ONE request, and does not ask for the e-mail to be marked in a second one (TS-31.1)', async () => {
       const user = userEvent.setup();
       vi.mocked(emailIntegrationApi.getPrefill).mockResolvedValue({ messageId: 'm1', clientEmail: 'k@x.test', subject: 'Printer ne radi', bodyHtml: '<p>Od klijenta</p>', receivedAtUtc: '2026-11-05T08:00:00Z', hasAttachments: false });
       vi.mocked(usersApi.lookupByEmail).mockResolvedValue(klijent as never);
@@ -547,12 +547,13 @@ describe('opening a ticket on behalf of a client', () => {
       await user.click(screen.getByRole('button', { name: 'Create & open ticket' }));
 
       expect(await screen.findByText('the ticket page')).toBeInTheDocument();
-      expect(vi.mocked(emailIntegrationApi.completeTicket).mock.calls).toEqual([['m1', 'new1']]);
+      expect(vi.mocked(ticketsApi.createOnBehalf).mock.calls[0][0]).toMatchObject({ emailMessageId: 'm1' });
+      expect(emailIntegrationApi.completeTicket).not.toHaveBeenCalled(); // the server saved the ticket, the e-mail's files and the mark as one
     });
 
-    it('say that the ticket was created, and not that it was not, when the e-mail could not be marked', async () => {
+    it('says why, and makes no ticket page, when the server could not take the ticket from the e-mail', async () => {
       const user = userEvent.setup();
-      vi.mocked(emailIntegrationApi.completeTicket).mockRejectedValueOnce(new Error('network'));
+      vi.mocked(ticketsApi.createOnBehalf).mockRejectedValueOnce({ response: { data: { message: 'The mailbox could not be reached right now.' } } });
       vi.mocked(emailIntegrationApi.getPrefill).mockResolvedValue({ messageId: 'm1', clientEmail: 'k@x.test', subject: 'Printer ne radi', bodyHtml: '<p>Od klijenta</p>', receivedAtUtc: '2026-11-05T08:00:00Z', hasAttachments: false });
       vi.mocked(usersApi.lookupByEmail).mockResolvedValue(klijent as never);
       renderPage('/tickets/new-on-behalf?fromEmail=m1');
@@ -562,7 +563,8 @@ describe('opening a ticket on behalf of a client', () => {
 
       await user.click(screen.getByRole('button', { name: 'Create & open ticket' }));
 
-      expect(await screen.findByText(/Ticket #100500 was created/)).toBeInTheDocument();
+      expect(await screen.findByText(/mailbox could not be reached/)).toBeInTheDocument();
+      expect(screen.queryByText('the ticket page')).not.toBeInTheDocument();
     });
   });
 

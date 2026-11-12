@@ -252,53 +252,7 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
 
     public async Task ImportAttachmentsAndMarkConvertedAsync(Guid departmentId, Guid uploadedByUserId, string messageId, Guid ticketId, CancellationToken ct = default)
     {
-        var conn = await GetValidConnectionAsync(departmentId, ct);
-        var url = $"{GraphBase}/me/messages/{Uri.EscapeDataString(messageId)}/attachments";
-        var doc = await GetGraphAsync(conn, url, ct);
-
-        var storedHere = new List<string>(); // so that a failed save does not leave files behind that no row points to
-        foreach (var a in doc.RootElement.GetProperty("value").EnumerateArray())
-        {
-            if (!a.TryGetProperty("contentBytes", out var contentBytesProp)) continue; // skip non-file (e.g. item) attachments
-
-            var name = a.GetProperty("name").GetString() ?? "attachment";
-            // Same allow-list and size cap as direct uploads: an inbound email is the easiest way to get an
-            // .html/.svg/.exe in front of staff, so it must not be a way around the rules.
-            if (!AttachmentPolicy.IsAllowedExtension(Path.GetExtension(name))) continue;
-
-            var contentType = a.TryGetProperty("contentType", out var ct2) ? ct2.GetString() ?? "application/octet-stream" : "application/octet-stream";
-            // The size is judged from the length of the text BEFORE it is decoded: decoding a huge attachment only to throw it away is the cost.
-            var base64 = contentBytesProp.GetString()!;
-            if ((long)base64.Length * 3 / 4 > AttachmentPolicy.MaxFileSizeBytes + 3) continue;
-            var bytes = Convert.FromBase64String(base64);
-            if (bytes.LongLength > AttachmentPolicy.MaxFileSizeBytes) continue;
-
-            using var stream = new MemoryStream(bytes);
-            var fileUrl = await _fileStorage.SaveAsync(name, contentType, stream, ct);
-            storedHere.Add(fileUrl);
-
-            _db.TicketAttachments.Add(new TicketAttachment
-            {
-                TicketId = ticketId,
-                FileName = name,
-                FileUrl = fileUrl,
-                FileSizeBytes = bytes.Length,
-                ContentType = contentType,
-                UploadedByUserId = uploadedByUserId
-            });
-        }
-
-        // The mark goes into the same save as the files.
-        var mark = await _db.EmailTicketMarks.FirstOrDefaultAsync(m => m.DepartmentId == departmentId && m.MessageId == messageId, ct);
-        if (mark is null)
-        {
-            mark = new EmailTicketMark { DepartmentId = departmentId, MessageId = messageId };
-            _db.EmailTicketMarks.Add(mark);
-        }
-        mark.IsMarked = true;
-        mark.MarkedByUserId = uploadedByUserId;
-        mark.ConvertedTicketId = ticketId;
-
+        var storedHere = await StageAttachmentsAndMarkAsync(departmentId, uploadedByUserId, messageId, ticketId, ct);
         try
         {
             await _db.SaveChangesAsync(ct);
@@ -308,6 +262,65 @@ public class GraphEmailIntegrationService : IEmailIntegrationService
             foreach (var stored in storedHere) await _fileStorage.DeleteAsync(stored, CancellationToken.None);
             throw;
         }
+    }
+
+    public async Task<IReadOnlyList<string>> StageAttachmentsAndMarkAsync(Guid departmentId, Guid uploadedByUserId, string messageId, Guid ticketId, CancellationToken ct = default)
+    {
+        var conn = await GetValidConnectionAsync(departmentId, ct);
+        var url = $"{GraphBase}/me/messages/{Uri.EscapeDataString(messageId)}/attachments";
+        var doc = await GetGraphAsync(conn, url, ct);
+
+        var storedHere = new List<string>(); // so that a failed save does not leave files behind that no row points to
+        try
+        {
+            foreach (var a in doc.RootElement.GetProperty("value").EnumerateArray())
+            {
+                if (!a.TryGetProperty("contentBytes", out var contentBytesProp)) continue; // skip non-file (e.g. item) attachments
+
+                var name = a.GetProperty("name").GetString() ?? "attachment";
+                // Same allow-list and size cap as direct uploads: an inbound email is the easiest way to get an
+                // .html/.svg/.exe in front of staff, so it must not be a way around the rules.
+                if (!AttachmentPolicy.IsAllowedExtension(Path.GetExtension(name))) continue;
+
+                var contentType = a.TryGetProperty("contentType", out var ct2) ? ct2.GetString() ?? "application/octet-stream" : "application/octet-stream";
+                // The size is judged from the length of the text BEFORE it is decoded: decoding a huge attachment only to throw it away is the cost.
+                var base64 = contentBytesProp.GetString()!;
+                if ((long)base64.Length * 3 / 4 > AttachmentPolicy.MaxFileSizeBytes + 3) continue;
+                var bytes = Convert.FromBase64String(base64);
+                if (bytes.LongLength > AttachmentPolicy.MaxFileSizeBytes) continue;
+
+                using var stream = new MemoryStream(bytes);
+                var fileUrl = await _fileStorage.SaveAsync(name, contentType, stream, ct);
+                storedHere.Add(fileUrl);
+
+                _db.TicketAttachments.Add(new TicketAttachment
+                {
+                    TicketId = ticketId,
+                    FileName = name,
+                    FileUrl = fileUrl,
+                    FileSizeBytes = bytes.Length,
+                    ContentType = contentType,
+                    UploadedByUserId = uploadedByUserId
+                });
+            }
+        }
+        catch
+        {
+            foreach (var stored in storedHere) await _fileStorage.DeleteAsync(stored, CancellationToken.None);
+            throw;
+        }
+
+        // The mark goes into the same save as the files (and, when the caller says so, the ticket).
+        var mark = await _db.EmailTicketMarks.FirstOrDefaultAsync(m => m.DepartmentId == departmentId && m.MessageId == messageId, ct);
+        if (mark is null)
+        {
+            mark = new EmailTicketMark { DepartmentId = departmentId, MessageId = messageId };
+            _db.EmailTicketMarks.Add(mark);
+        }
+        mark.IsMarked = true;
+        mark.MarkedByUserId = uploadedByUserId;
+        mark.ConvertedTicketId = ticketId;
+        return storedHere;
     }
 
     // ---------------- helpers ----------------

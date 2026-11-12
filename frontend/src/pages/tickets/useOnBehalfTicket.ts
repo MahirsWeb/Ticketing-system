@@ -128,6 +128,7 @@ export function useOnBehalfTicket({ client, prefill, emailMessageId }: { client:
           dueDateUtc: dueDateToUtc(dueDate),
           assignedToUserId,
           categoryId: categoryId || undefined,
+          emailMessageId: emailMessageId || undefined,
         },
         idempotencyKey
       );
@@ -138,7 +139,8 @@ export function useOnBehalfTicket({ client, prefill, emailMessageId }: { client:
     }
 
     try {
-      await finishNewTicket(ticket.id, files, emailMessageId, uploadedFiles.current, {
+      // The e-mail's own files and its "converted" mark were saved WITH the ticket by the server; what is left is only the files the person added by hand.
+      await finishNewTicket(ticket.id, files, null, uploadedFiles.current, {
         upload: ticketsApi.uploadAttachments,
         complete: emailIntegrationApi.completeTicket,
       });

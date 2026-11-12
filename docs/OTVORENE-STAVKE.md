@@ -21,7 +21,7 @@ U četvrtom krugu su svi scenariji iz paketa testera ponovo izvedeni (uživo, u 
 | Stavka | Šta je ostalo | Zašto | Šta treba |
 |---|---|---|---|
 | **T-20** | Aplikacija radi kao jedna instanca (prilozi na disku, SignalR i keš u memoriji) | Epic za skaliranje; README to navodi kao ograničenje | Samo ako zatreba više od jedne instance |
-| **T-31** (TS-31.1, 31.2) | Povezivanje odgovora u niti (ConversationId / In-Reply-To) ne postoji; uvoz priloga i oznaka poruke su sada jedno snimanje (TS-31.1 ispravljen) | Veća funkcionalnost | Posebna izrada |
+| **T-31** (TS-31.1, 31.2) | Povezivanje odgovora u niti (ConversationId / In-Reply-To) ne postoji; **TS-31.1 je ispravljen u cijelosti**: tiket iz e-maila, njegovi prilozi i oznaka „pretvoreno“ su jedno snimanje u jednom zahtjevu (`emailMessageId` u `POST /api/tickets/on-behalf`), ponovljeni poziv za isti e-mail vraća isti tiket bez novih priloga | Veća funkcionalnost | Posebna izrada |
 | ~~**T-45**~~ | ~~i18n pokriva oko 5 % interfejsa~~ → **Završeno:** cijeli interfejs i poruke servera prevedeni na bosanski; `noHardcodedText.test.ts` pada na svaki tekst koji ne ide kroz `t()` (IZVJESTAJ 9.17, 9.18) | Šabloni e-mailova su i dalje engleski C# stringovi (mail ide na adresu osobe, ne na ekran) | Riješeno 2026-11-11 |
 | **T-48** (TS-48.1) | Nema verzija API-ja, webhookova ni mašinskih kredencijala | Nije rađeno | Samo ako ih kupci traže |
 | **T-51** (TS-51.1) | NPOI je pod OSMF licencom s naknadom; nema zabilježene odluke | Pravno pitanje | **Odluka vlasnika:** plaćanje, build iz izvora ili zamjena biblioteke |

@@ -766,3 +766,9 @@ Provjera sa stanovišta testera dala je pet stavki; četiri su ispravljene, peta
 - **Frontend je javljao jezik serveru pri svakom učitavanju.** Sada jednom po osobi i jeziku u kartici (`sessionStorage`), uz test.
 - **Kompromisi** (jedna prijava po osobi, maskiranje samo osoba na tiketu i firme, e-mail na engleskom za one koji nisu birali jezik) zapisani su u `docs/OTVORENE-STAVKE.md`.
 - **Test ovisan o satu:** `A_day_that_has_not_happened_yet_...` padao je između ponoći i 02:00 po lokalnom vremenu jer je tražio dan po UTC-u, a aplikacija dan računa u poslovnoj zoni. Test sada koristi poslovnu zonu. (`affcfb8`)
+
+### 9.23 TS-31.1 do kraja: tiket iz e-maila je jedna komanda (2026-11-12)
+
+Ranije su prilozi i oznaka bili jedno snimanje, ali tiket je i dalje pravljen jednim zahtjevom, a „ovaj e-mail je sada taj tiket“ drugim. Sada `POST /api/tickets/on-behalf` prima opcioni `emailMessageId`: server dohvati priloge iz sandučića poslovnice, pa **tiket, priloge e-maila i oznaku „pretvoreno“ snima u jednom `SaveChanges`**. Ako Microsoft ne odgovori, tiket se ne pravi (nema ni priloga ni oznake) i osoba pokuša ponovo; pohranjeni fajlovi se vraćaju ako snimanje ne uspije ili ako je drugi zahtjev s istim ključem već napravio tiket. Ponovljen poziv za isti e-mail (drugi ključ, kolega, drugi klik) vraća **isti tiket bez novih priloga**. Frontend šalje `emailMessageId` uz tiket i više ne zove `complete-ticket` (endpoint ostaje). Prilozi koje osoba doda ručno idu i dalje zasebno (multipart).
+
+Testovi (pravi API, prava baza, lažni Microsoft): tri integraciona (jedno snimanje: jedna SQL komanda imenuje `Tickets`, `TicketAttachments` i `EmailTicketMarks`; ponovljeni e-mail; pad Microsofta bez tiketa) i dva frontend; mutacija (bez uvoza i bez provjere ponovljenog e-maila) ruši sva tri.
