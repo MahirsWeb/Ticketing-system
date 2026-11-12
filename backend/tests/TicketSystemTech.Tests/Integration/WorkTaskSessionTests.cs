@@ -299,7 +299,9 @@ public class WorkTaskSessionTests : IAsyncLifetime
         await _world.Db(async db => { db.Tickets.Add(ticket); return await db.SaveChangesAsync(); });
         _tickets.Add(ticket.Id);
 
-        var today = (await GanttAsync(_world.EmpA1, Day(DateTime.UtcNow))).GetProperty("entries").EnumerateArray().Select(e => e.GetProperty("id").GetGuid()).ToList();
+        // "Today" is the day in the business time zone, which is how the application reads a day: between midnight and two o'clock local time the UTC date is still yesterday's.
+        var businessToday = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TicketSystemTech.Application.Sla.BusinessTimeZone.Resolve(new TicketSystemTech.Application.Common.Options.SlaOptions().TimeZoneId));
+        var today = (await GanttAsync(_world.EmpA1, Day(businessToday))).GetProperty("entries").EnumerateArray().Select(e => e.GetProperty("id").GetGuid()).ToList();
         var future = (await GanttAsync(_world.EmpA1, "2027-06-30")).GetProperty("entries").GetArrayLength();
 
         Assert.Contains(task, today);
