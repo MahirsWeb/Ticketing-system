@@ -3214,6 +3214,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/users/me/notification-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["NotificationPreferenceItem"][];
+                        "text/json": components["schemas"]["NotificationPreferenceItem"][];
+                        "text/plain": components["schemas"]["NotificationPreferenceItem"][];
+                    };
+                };
+            };
+        };
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/*+json": components["schemas"]["SetNotificationPreferencesRequest"];
+                    "application/json": components["schemas"]["SetNotificationPreferencesRequest"];
+                    "text/json": components["schemas"]["SetNotificationPreferencesRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["NotificationPreferenceItem"][];
+                        "text/json": components["schemas"]["NotificationPreferenceItem"][];
+                        "text/plain": components["schemas"]["NotificationPreferenceItem"][];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users/me/phone": {
         parameters: {
             query?: never;
@@ -4229,6 +4293,10 @@ export interface components {
         NameOnlyRequest: {
             name?: string;
         };
+        NotificationPreferenceItem: {
+            email?: boolean;
+            type?: string;
+        };
         OpenTicketRequest: {
             /** Format: uuid */
             assignedToUserId?: string;
@@ -4311,6 +4379,9 @@ export interface components {
             email?: string;
             newPassword?: string;
             temporaryPassword?: string;
+        };
+        SetNotificationPreferencesRequest: {
+            preferences?: components["schemas"]["NotificationPreferenceItem"][] | null;
         };
         SetPhoneNumberRequest: {
             phoneNumber?: string;

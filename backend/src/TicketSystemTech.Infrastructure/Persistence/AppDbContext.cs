@@ -135,6 +135,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
         builder.Entity<ApplicationUser>(e =>
         {
             e.Property(u => u.PreferredLanguage).HasMaxLength(5).IsRequired().HasDefaultValue("en");
+            e.Property(u => u.MutedEmailTypes).HasMaxLength(300).IsRequired().HasDefaultValue("");
             e.Property(u => u.FirstName).HasMaxLength(100).IsRequired();
             e.Property(u => u.LastName).HasMaxLength(100).IsRequired();
             e.Property(u => u.Email).HasConversion(piiConverter).HasMaxLength(1000);

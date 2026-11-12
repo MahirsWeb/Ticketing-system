@@ -76,6 +76,8 @@ public class EndpointAuthorizationTests
         "GET /hubs/notifications/negotiate => any signed-in person",
         "PATCH /api/users/me/phone => Client",
         "PUT /api/users/me/language => any signed-in person",
+        "GET /api/users/me/notification-preferences => any signed-in person",
+        "PUT /api/users/me/notification-preferences => any signed-in person",
         "PATCH /api/users/{id:guid}/active => Admin",
         "PATCH /api/work-tasks/{id:guid}/time => Employee",
         "POST /api/auth/forgot-password => public",

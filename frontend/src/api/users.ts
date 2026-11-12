@@ -11,6 +11,12 @@ function accountMade<T>(request: Promise<T>): Promise<T> {
   });
 }
 
+export interface NotificationPreference {
+  /** A name of the kind of event, e.g. "NewResponse". */
+  type: string;
+  email: boolean;
+}
+
 export const usersApi = {
   lookupByEmail: (email: string, signal?: AbortSignal) =>
     apiClient.get<ClientLookupResult>('/api/users/lookup-by-email', { params: { email }, signal }).then((r) => r.data),
@@ -80,6 +86,12 @@ export const usersApi = {
   },
 
   setMyPhone: (phoneNumber: string) => apiClient.patch('/api/users/me/phone', { phoneNumber }).then((r) => r.data),
+
+  /** The e-mails about tickets and tasks this person is sent (by their role), each on or off. */
+  getMyNotificationPreferences: () => apiClient.get<NotificationPreference[]>('/api/users/me/notification-preferences').then((r) => r.data),
+
+  setMyNotificationPreferences: (preferences: NotificationPreference[]) =>
+    apiClient.put<NotificationPreference[]>('/api/users/me/notification-preferences', { preferences }).then((r) => r.data),
 
   /** Tells the server which language the person chose, so that the e-mails to them are written in it. */
   setMyLanguage: (language: string) => apiClient.put('/api/users/me/language', { language }).then((r) => r.data),

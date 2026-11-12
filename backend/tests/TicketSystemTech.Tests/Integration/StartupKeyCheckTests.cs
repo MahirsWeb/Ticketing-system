@@ -83,7 +83,7 @@ public class StartupKeyCheckTests
             .Build();
         try
         {
-            StartupTasks.RunAsync(new ServicesWith(real, protector), configuration, NullLogger.Instance, TestContext.Current.CancellationToken).GetAwaiter().GetResult();
+            StartupTasks.RunAsync(new ServicesWith(real, protector), configuration, NullLogger.Instance, ct: TestContext.Current.CancellationToken).GetAwaiter().GetResult();
             return null;
         }
         catch (Exception ex)

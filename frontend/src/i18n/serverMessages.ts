@@ -66,6 +66,7 @@ const BS: Record<string, string> = {
   'The message is empty.': 'Poruka je prazna.',
   'System events are recorded automatically and cannot be posted directly.': 'Sistemski događaji se bilježe automatski i ne mogu se slati izravno.',
   'This ticket is closed. Reopen it to add a message.': 'Ovaj tiket je zatvoren. Ponovo ga otvorite da dodate poruku.',
+  'This kind of e-mail cannot be switched on or off.': 'Ova vrsta e-maila se ne može uključiti ni isključiti.',
   'Your account is not assigned to a branch, so it has no mailbox.': 'Vaš nalog nije dodijeljen nijednoj poslovnici, pa nema sandučić.',
   'This exact message was just sent. If you meant to send it again, wait a few seconds.': 'Ista poruka je upravo poslana. Ako ste je htjeli poslati ponovo, pričekajte nekoliko sekundi.',
   'Message does not belong to this ticket.': 'Poruka ne pripada ovom tiketu.',

@@ -142,6 +142,15 @@ public class UsersController : ControllerBase
     public async Task<IActionResult> SetMyLanguage(SetLanguageRequest request) =>
         this.ToResult(await _profile.SetMyLanguageAsync(request.Language));
 
+    /// <summary>Which e-mails about tickets and tasks this person gets (the ones their role is sent, each on or off). Any signed-in person.</summary>
+    [HttpGet("me/notification-preferences")]
+    public async Task<ActionResult<List<NotificationPreferenceItem>>> GetMyNotificationPreferences(CancellationToken ct) =>
+        this.ToActionResult(await _profile.GetMyNotificationPreferencesAsync(ct));
+
+    [HttpPut("me/notification-preferences")]
+    public async Task<ActionResult<List<NotificationPreferenceItem>>> SetMyNotificationPreferences(SetNotificationPreferencesRequest request) =>
+        this.ToActionResult(await _profile.SetMyNotificationPreferencesAsync(request));
+
     [HttpPost("me/skip-phone-prompt")]
     [Authorize(Roles = nameof(UserRole.Client))]
     public async Task<IActionResult> SkipPhonePrompt() =>

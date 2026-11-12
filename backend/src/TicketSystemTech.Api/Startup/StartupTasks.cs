@@ -27,18 +27,26 @@ namespace TicketSystemTech.Api.Startup;
 /// </summary>
 public static class StartupTasks
 {
-    public static async Task RunAsync(IServiceProvider services, IConfiguration configuration, ILogger logger, CancellationToken ct = default)
+    /// <summary>
+    /// Whether this start changes the schema. Asked for by name (<c>Startup:Migrate</c>) it is what was asked; unasked, it is on where a person is developing
+    /// (Development) or testing, and OFF everywhere else: a server brings its database up to date as a step of its own (<c>--migrate-only</c>, under a login that
+    /// may change the schema) and the application only checks that it is current. The <c>--migrate-only</c> step itself always migrates.
+    /// </summary>
+    public static bool MigratesOnStart(IConfiguration configuration, Microsoft.Extensions.Hosting.IHostEnvironment environment, bool migrateOnlyStep = false) =>
+        migrateOnlyStep || (configuration.GetValue<bool?>("Startup:Migrate") ?? (environment.IsDevelopment() || environment.IsEnvironment("Testing")));
+
+    public static async Task RunAsync(IServiceProvider services, IConfiguration configuration, ILogger logger, bool migrateOnlyStep = false, CancellationToken ct = default)
     {
         using var scope = services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        if (!configuration.GetValue("Startup:Migrate", true))
+        if (!MigratesOnStart(configuration, scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>(), migrateOnlyStep))
         {
             var pending = (await db.Database.GetPendingMigrationsAsync(ct)).ToList();
             if (pending.Count > 0)
                 throw new InvalidOperationException(
-                    $"Startup:Migrate is off but the database is missing {pending.Count} migration(s), starting with {pending[0]}. " +
-                    "Run the application once with --migrate-only (using a login that may change the schema) before starting it.");
+                    $"The application does not change the database schema when it starts (Startup:Migrate is off, which is the default outside Development), and the database is missing {pending.Count} migration(s), starting with {pending[0]}. " +
+                    "Run the application once with --migrate-only (using a login that may change the schema) before starting it, or set Startup:Migrate=true to let it migrate itself.");
 
             // The keys MUST be verified on every start, migrating or not. A wrong Pii:HashKey or a key ring that does not
             // belong to this database would otherwise let the application start "healthy" while every sign-in silently fails

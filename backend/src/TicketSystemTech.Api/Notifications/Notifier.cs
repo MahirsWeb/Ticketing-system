@@ -159,7 +159,7 @@ public sealed class Notifier : INotifier
 
     public IReadOnlyList<EmailOutboxItem> Emails(NotificationEvent @event) =>
         Deliveries(@event)
-            .Where(d => !string.IsNullOrWhiteSpace(d.To.Email))
+            .Where(d => !string.IsNullOrWhiteSpace(d.To.Email) && !NotificationPreferences.IsMuted(d.To.MutedEmailTypes, d.Type))
             .Select(d => new EmailOutboxItem { ToEmail = d.To.Email!, Subject = Shorten(d.Subject), HtmlBody = d.Html })
             .ToList();
 

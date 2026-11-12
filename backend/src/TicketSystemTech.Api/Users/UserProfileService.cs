@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using TicketSystemTech.Api.Contracts;
+using TicketSystemTech.Api.Notifications;
 using TicketSystemTech.Api.Emails;
 using TicketSystemTech.Api.Middleware;
 using TicketSystemTech.Api.Security;
@@ -29,6 +30,12 @@ public interface IUserProfileService
 
     /// <summary>Remembers the language the person chose in the application, so that the e-mails to them are written in it.</summary>
     Task<Outcome<Done>> SetMyLanguageAsync(string? language);
+
+    /// <summary>The e-mails about tickets and tasks that this person can switch off, and whether each is on.</summary>
+    Task<Outcome<List<NotificationPreferenceItem>>> GetMyNotificationPreferencesAsync(CancellationToken ct = default);
+
+    /// <summary>Switches the listed kinds of e-mail on or off. A kind that is not listed is left as it is; one that this role is never sent is refused.</summary>
+    Task<Outcome<List<NotificationPreferenceItem>>> SetMyNotificationPreferencesAsync(SetNotificationPreferencesRequest request);
 }
 
 public sealed class UserProfileService : IUserProfileService
@@ -108,5 +115,40 @@ public sealed class UserProfileService : IUserProfileService
         if (current != chosen)
             await _userManager.Users.Where(u => u.Id == _currentUser.UserId.Value).ExecuteUpdateAsync(s => s.SetProperty(u => u.PreferredLanguage, chosen));
         return Outcome<Done>.Ok(Done.Value);
+    }
+
+    public async Task<Outcome<List<NotificationPreferenceItem>>> GetMyNotificationPreferencesAsync(CancellationToken ct = default)
+    {
+        if (_currentUser.UserId is null) return Outcome<List<NotificationPreferenceItem>>.Unauthorized();
+        var row = await _userManager.Users.Where(u => u.Id == _currentUser.UserId.Value).Select(u => new { u.Role, u.MutedEmailTypes }).FirstOrDefaultAsync(ct);
+        if (row is null) return Outcome<List<NotificationPreferenceItem>>.Unauthorized();
+        return Outcome<List<NotificationPreferenceItem>>.Ok(Items(row.Role, row.MutedEmailTypes));
+    }
+
+    public async Task<Outcome<List<NotificationPreferenceItem>>> SetMyNotificationPreferencesAsync(SetNotificationPreferencesRequest request)
+    {
+        if (_currentUser.UserId is null) return Outcome<List<NotificationPreferenceItem>>.Unauthorized();
+        var row = await _userManager.Users.Where(u => u.Id == _currentUser.UserId.Value).Select(u => new { u.Role, u.MutedEmailTypes }).FirstOrDefaultAsync();
+        if (row is null) return Outcome<List<NotificationPreferenceItem>>.Unauthorized();
+
+        var allowed = NotificationPreferences.EmailTypesFor(row.Role);
+        var muted = NotificationPreferences.Parse(row.MutedEmailTypes);
+        foreach (var item in request.Preferences ?? new List<NotificationPreferenceItem>())
+        {
+            if (!Enum.TryParse<NotificationType>(item.Type, ignoreCase: false, out var type) || !allowed.Contains(type))
+                return Outcome<List<NotificationPreferenceItem>>.Invalid("This kind of e-mail cannot be switched on or off.");
+            if (item.Email) muted.Remove(type); else muted.Add(type);
+        }
+
+        var serialized = NotificationPreferences.Serialize(muted);
+        if (serialized != row.MutedEmailTypes)
+            await _userManager.Users.Where(u => u.Id == _currentUser.UserId.Value).ExecuteUpdateAsync(s => s.SetProperty(u => u.MutedEmailTypes, serialized));
+        return Outcome<List<NotificationPreferenceItem>>.Ok(Items(row.Role, serialized));
+    }
+
+    private static List<NotificationPreferenceItem> Items(UserRole role, string? muted)
+    {
+        var off = NotificationPreferences.Parse(muted);
+        return NotificationPreferences.EmailTypesFor(role).Select(t => new NotificationPreferenceItem(t.ToString(), !off.Contains(t))).ToList();
     }
 }

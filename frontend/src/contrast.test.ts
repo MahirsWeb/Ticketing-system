@@ -13,7 +13,7 @@ const TOO_LIGHT = /(?<![\w-])text-(?:slate|gray|zinc|neutral|stone)-(?:100|200|3
 /** On the dark navigation bar or a decoration without a text alternative: [file ending, how many are allowed]. */
 const ALLOWED: Record<string, number> = {
   'components/LanguageSwitcher.tsx': 1, // the inactive language on the dark bar
-  'layouts/AppLayout.tsx': 4, // the menu, the language, the name and the sign-out button on the dark bar
+  'layouts/AppLayout.tsx': 5, // the menu, the language, the name, the e-mail notifications link and the sign-out button on the dark bar
   'components/dateRange/DaysView.tsx': 1, // a day in the future: the button is disabled, and a disabled control is exempt from the contrast rule
 };
 

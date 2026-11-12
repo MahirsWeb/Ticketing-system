@@ -263,7 +263,7 @@ Posljedice koje treba znati:
 | `Storage:UploadsPath` | Ne | Folder za priloge tiketa i dokumente baze znanja (default `App_Data/uploads` pored aplikacije). Ne servira se javno; za produkciju postavi putanju **van** foldera koji se redeploya. Prilozi se otvaraju kroz potpisane linkove koji ističu za 4 sata. |
 | `SeedAdmin:Email` / `Password` | ✅ Email da, lozinka ne | Email za prvi Admin nalog koji se automatski pravi. Ako ostaviš `Password` prazno, generiše se nasumična privremena lozinka. |
 | `SeedAdmin:PrintGeneratedPassword` | Ne (default `false`) | Ako je `true`, generisana lozinka se **jednom** ispiše u terminal (nikad u log). Inače se ne prikazuje, a nova se dobija komandom `--reset-admin-password`. |
-| `Startup:Migrate` | Ne (default `true`; u `docker-compose.example.yml` je `false` uz zaseban `migrate` servis) | Da li backend pri pokretanju sam primjenjuje migracije i jednokratne popravke baze. Postavi na `false` ako migracije radiš kao zaseban korak (`dotnet TicketSystemTech.Api.dll --migrate-only` — primijeni migracije, seeduje prvog admina i izađe); backend tada odbija da krene na neažuriranoj bazi. Više instanci koje krenu istovremeno čekaju jedna drugu (SQL Server zaključak), pa se migracije ne izvršavaju paralelno. |
+| `Startup:Migrate` | Ne (default: `true` u Development, **`false` svugdje drugdje**; u `docker-compose.example.yml` je zaseban `migrate` servis) | Da li backend pri pokretanju sam primjenjuje migracije i jednokratne popravke baze. Izvan razvoja se to radi kao zaseban korak izdanja (`dotnet TicketSystemTech.Api.dll --migrate-only` — primijeni migracije, seeduje prvog admina i izađe, uvijek, bez obzira na ovu postavku); backend tada samo provjerava šemu i **odbija da krene na neažuriranoj bazi**, uz poruku šta uraditi. `Startup:Migrate=true` vraća staro ponašanje (aplikacija sama migrira pri svakom startu). Više instanci koje krenu istovremeno čekaju jedna drugu (SQL Server zaključak), pa se migracije ne izvršavaju paralelno. |
 | `Sla:Mode` | Ne (default `CalendarHours`) | Kako se računa rok tiketa iz SLA plana. `CalendarHours` = sati teku non-stop (plan od 24 h = rok za 24 h). `BusinessHours` = broje se samo radni sati. Rok koji osoblje ručno unese uvijek ima prednost. |
 | `Sla:TimeZoneId`, `Sla:WorkdayStart`, `Sla:WorkdayEnd` | Ne | Samo za `BusinessHours`: vremenska zona (default `Europe/Sarajevo`) i radno vrijeme (default `08:00`–`16:00`). |
 | `Sla:WorkDays`, `Sla:Holidays` | Ne | Samo za `BusinessHours`: radni dani (default ponedjeljak–petak) i neradni datumi (`yyyy-MM-dd`). Ako ih postaviš, **zamjenjuju** default; ne dodaju se na njega. |
@@ -401,6 +401,7 @@ aplikacija **odbija da krene** i nabroji sve što fali, dok ne podesiš:
 
 Ostalo što vrijedi znati:
 
+- **Izbor e-mailova po korisniku.** Svako (administrator, osoblje, klijent) bira koje e-mailove o tiketima i zadacima želi (stranica „E-mail obavijesti“, `/my-notifications`; `GET`/`PUT /api/users/me/notification-preferences`): svaka vrsta događaja koju njegova uloga dobija može se isključiti. Lista u aplikaciji (zvonce) i push uvijek stižu, a e-mailovi o samom nalogu (pozivnica, lozinka, zaključavanje, sandučić poslovnice) nisu izbor. Izbor se čuva na nalogu (`MutedEmailTypes`).
 - **Jezik e-mailova.** E-mailovi se sastavljaju na serveru, pa je jezik primaoca zapisan na nalogu (`PreferredLanguage`, `en` ili `bs`): frontend ga javlja
   (`PUT /api/users/me/language`) pri prijavi i kad osoba promijeni jezik, a svi šabloni i naslovi (13 poruka o tiketima, zadacima i nalozima) postoje na
   oba jezika. Novi nalog počinje na jeziku administratora koji ga pravi (pozivnica je napisana njime). Sve ostalo je engleski.
@@ -425,6 +426,9 @@ Ostalo što vrijedi znati:
   `HEALTHCHECK` koji pita `/health/live`.
 - **Docker slika**: bazne slike su zakucane digestom (Dependabot predlaže nove), proces nije root, a volume treba na
   `/data` (prilozi i log fajlovi) i `/app/wwwroot/avatars` (profilne slike). Primjer:
+
+  Prije prvog pokretanja, i poslije svake nadogradnje, baza se dovodi u red zasebnim korakom (aplikacija izvan razvoja sama ne mijenja šemu):
+  `docker run --rm <iste -e vrijednosti> ticketsystemtech-api --migrate-only` (u `docker-compose.example.yml` to radi servis `migrate`).
 
   ```bash
   docker run -p 8080:8080 \

@@ -370,7 +370,8 @@ var app = builder.Build();
 try
 {
     await TicketSystemTech.Api.Startup.StartupTasks.RunAsync(
-        app.Services, builder.Configuration, app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup"));
+        app.Services, builder.Configuration, app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup"),
+        migrateOnlyStep: args.Contains("--migrate-only"));
 }
 catch (Exception ex)
 {

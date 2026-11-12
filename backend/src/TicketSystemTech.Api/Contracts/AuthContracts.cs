@@ -54,6 +54,11 @@ public record ResetPasswordRequest(
 
 public record SetLanguageRequest(string? Language);
 
+/// <param name="Type">A name of <c>NotificationType</c>, e.g. "NewResponse".</param>
+public record NotificationPreferenceItem(string Type, bool Email);
+
+public record SetNotificationPreferencesRequest(List<NotificationPreferenceItem>? Preferences);
+
 public record SetPhoneNumberRequest(
     [Required, Phone] string PhoneNumber
 );

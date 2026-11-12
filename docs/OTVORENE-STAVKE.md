@@ -32,6 +32,8 @@ U četvrtom krugu su svi scenariji iz paketa testera ponovo izvedeni (uživo, u 
 - **Šabloni e-mailova** su sada na engleskom i bosanskom, prema jeziku koji je primalac izabrao u aplikaciji (`PreferredLanguage` na nalogu); novi nalog počinje na jeziku administratora koji ga pravi (IZVJESTAJ 9.21). Ostaju engleski za osobe koje nikad nisu otvorile aplikaciju na bosanskom.
 - **Migracija `RefreshTokenSessionBinding`** se primjenjuje pri startu aplikacije (ili `--migrate-only` kod `Migrate=false`); na svježe resetovanoj bazi nema posla.
 
+**Ispravljeno poslije faze A (IZVJESTAJ 9.24):** TS-47.1 (izbor e-mailova po korisniku) i TS-14.2 (izvan Development aplikacija sama ne migrira; zaseban korak `--migrate-only`).
+
 **Svjesni kompromisi (da tester ne prijavi kao nove greške):**
 
 - **Jedna prijava po osobi ima cijenu:** ko zna lozinku može ponavljanim prijavama izbacivati vlasnika naloga (zaštita je zaključavanje naloga i limit prijava), a uređaj koji je ostao iza zadržava važeći access token do isteka (`Jwt:AccessTokenMinutes`, kratko) i SignalR vezu do prvog zahtjeva koji traži novi token.

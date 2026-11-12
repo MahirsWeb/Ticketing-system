@@ -194,6 +194,12 @@ export default function AppLayout() {
               <div>{t(`role_${user.role}` as TranslationKey)}</div>
             </div>
             <NotificationBell />
+            <Link
+              to="/my-notifications"
+              className="rounded-md border border-white/20 px-3 py-1.5 text-sm font-medium text-slate-200 hover:bg-white/10"
+            >
+              {t('nav_emailNotices')}
+            </Link>
             <button
               disabled={signingOut}
               onClick={async () => {
