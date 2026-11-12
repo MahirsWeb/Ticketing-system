@@ -103,6 +103,21 @@ public class KnowledgeBaseRedactionTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task The_name_of_the_company_is_not_kept_in_the_chunk()
+    {
+        var company = await _world.Db(db => db.Companies.Where(c => c.Id == _world.CompanyId).Select(c => c.Name).SingleAsync());
+        var id = await ClosedTicketWithNoteAsync($"Firma {company} je javila da backup job kasni. Uzrok je bio što se poklapa s opterećenjem baze preko dana, pa je backup job pomjeren van radnog vremena, na dva sata poslije ponoći, i od tada sve radi bez zastoja.");
+
+        using var scope = _world.Factory.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<IKnowledgeBaseIndexer>().IndexTicketAsync(id);
+        var content = await _world.Db(db => db.KnowledgeBaseChunks.Where(c => c.TicketId == id).Select(c => c.Content).SingleAsync());
+
+        Assert.DoesNotContain(company, content, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("[company]", content);
+        Assert.Contains("backup job kasni", content);
+    }
+
+    [SqlFact]
     public async Task A_company_that_does_not_want_its_tickets_sent_to_an_AI_provider_gets_no_chunk_and_loses_the_ones_it_had()
     {
         var kept = await ClosedTicketWithNoteAsync(Typed);

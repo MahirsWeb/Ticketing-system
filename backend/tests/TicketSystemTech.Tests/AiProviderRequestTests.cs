@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using TicketSystemTech.Application.Common;
+using TicketSystemTech.Application.Common.Interfaces;
 using TicketSystemTech.Infrastructure.Services;
 
 namespace TicketSystemTech.Tests;
@@ -150,5 +151,35 @@ public class AiProviderRequestTests
 
         Assert.Equal(AiPromptLimits.MaxEmbeddingChars - 1, sent.Length);
         Assert.DoesNotContain(sent, c => char.IsSurrogate(c));
+    }
+
+    private sealed class SlowHandler : HttpMessageHandler
+    {
+        private readonly TimeSpan _delay;
+        public SlowHandler(TimeSpan delay) => _delay = delay;
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            await Task.Delay(_delay, cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("""{"embedding":{"values":[0.1,0.2,0.3]}}""", Encoding.UTF8, "application/json") };
+        }
+    }
+
+    // TS-DEP-01.3: a person's question must not wait for a provider that does not answer, but the indexing of a long document, which nobody is watching, must not be cut short.
+    [Fact]
+    public async Task A_question_gives_up_on_a_provider_that_does_not_answer_but_background_indexing_waits_for_it()
+    {
+        var config = Config(("Ai:InteractiveEmbeddingTimeoutSeconds", "1"));
+        var service = new AiEmbeddingService(new HttpClient(new SlowHandler(TimeSpan.FromSeconds(3))), config, NullLogger<AiEmbeddingService>.Instance, TimeProvider.System);
+
+        var started = DateTime.UtcNow;
+        var question = await service.EmbedAsync("pitanje", EmbeddingPriority.Interactive, TestContext.Current.CancellationToken);
+        var waited = DateTime.UtcNow - started;
+
+        Assert.Null(question);
+        Assert.True(waited < TimeSpan.FromSeconds(2.5), $"the question waited {waited.TotalSeconds:0.0} s");
+
+        var indexing = await service.EmbedAsync("dugačak dokument", EmbeddingPriority.Background, TestContext.Current.CancellationToken);
+        Assert.NotNull(indexing); // the same provider, three seconds late: indexing is given the time
     }
 }

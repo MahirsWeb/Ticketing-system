@@ -30,8 +30,9 @@ public static class OutboundHttp
         services.AddHttpClient<IEmbeddingService, AiEmbeddingService>(c => c.Timeout = TimeSpan.FromMinutes(2))
             .AddStandardResilienceHandler(o =>
             {
-                // The question a person has just asked waits for this call, so a provider that does not answer must not hold the screen for long.
-                Limits(o, attempt: TimeSpan.FromSeconds(10), total: TimeSpan.FromSeconds(12));
+                // The limit for the patient callers (indexing a long document, a bulk reindex). The question a person has just asked has a shorter one
+                // of its own inside AiEmbeddingService (Ai:InteractiveEmbeddingTimeoutSeconds, 12 s), so a provider that does not answer does not hold the screen.
+                Limits(o, attempt: TimeSpan.FromSeconds(30), total: TimeSpan.FromSeconds(40));
                 NoAutomaticRetry(o);
                 BreakerIgnoresRateLimits(o);
             });

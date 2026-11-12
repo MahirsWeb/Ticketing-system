@@ -30,6 +30,10 @@ public class AiEmbeddingService : IEmbeddingService
     private static readonly TimeSpan BackgroundLongestWait = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan InteractiveLongestWait = TimeSpan.FromSeconds(5);
 
+    /// <summary>How long a person's question waits for the provider (<c>Ai:InteractiveEmbeddingTimeoutSeconds</c>). A bulk reindex and the indexing of a long
+    /// document are not held to it: they are given the whole of the client's own limit, because nobody is looking at the screen.</summary>
+    private const int DefaultInteractiveTimeoutSeconds = 12;
+
     private readonly HttpClient _httpClient;
     private readonly IConfiguration _configuration;
     private readonly ILogger<AiEmbeddingService> _logger;
@@ -81,15 +85,21 @@ public class AiEmbeddingService : IEmbeddingService
         var retries = priority == EmbeddingPriority.Background ? BackgroundRetries : InteractiveRetries;
         var longestWait = priority == EmbeddingPriority.Background ? BackgroundLongestWait : InteractiveLongestWait;
 
+        var interactiveTimeout = TimeSpan.FromSeconds(Math.Clamp(_configuration.GetValue("Ai:InteractiveEmbeddingTimeoutSeconds", DefaultInteractiveTimeoutSeconds), 1, 120));
+
         for (var attempt = 0; attempt <= retries; attempt++)
         {
             if (priority == EmbeddingPriority.Background)
                 await SpaceOutBackgroundCallAsync(settings, ct);
 
+            // One limit for the whole attempt (the answer and reading it), for a person's question only.
+            using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            if (priority == EmbeddingPriority.Interactive) limit.CancelAfter(interactiveTimeout);
+
             try
             {
                 using var request = BuildRequest(settings, text);
-                using var response = await _httpClient.SendAsync(request, ct);
+                using var response = await _httpClient.SendAsync(request, limit.Token);
 
                 if (response.StatusCode == HttpStatusCode.TooManyRequests)
                 {
@@ -109,13 +119,18 @@ public class AiEmbeddingService : IEmbeddingService
                     return null;
                 }
 
-                await using var stream = await response.Content.ReadAsStreamAsync(ct);
-                using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+                await using var stream = await response.Content.ReadAsStreamAsync(limit.Token);
+                using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: limit.Token);
                 return ReadVector(settings, doc.RootElement);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 throw; // the caller gave up (browser closed, "Stop" pressed): not an AI failure, and not worth a warning
+            }
+            catch (OperationCanceledException) when (limit.IsCancellationRequested)
+            {
+                _logger.LogWarning("[AI:TIMEOUT] The embedding provider did not answer within {Seconds} s; the question goes on without it.", interactiveTimeout.TotalSeconds);
+                return null;
             }
             catch (Exception ex)
             {

@@ -32,6 +32,13 @@ U četvrtom krugu su svi scenariji iz paketa testera ponovo izvedeni (uživo, u 
 - **Šabloni e-mailova** su sada na engleskom i bosanskom, prema jeziku koji je primalac izabrao u aplikaciji (`PreferredLanguage` na nalogu); novi nalog počinje na jeziku administratora koji ga pravi (IZVJESTAJ 9.21). Ostaju engleski za osobe koje nikad nisu otvorile aplikaciju na bosanskom.
 - **Migracija `RefreshTokenSessionBinding`** se primjenjuje pri startu aplikacije (ili `--migrate-only` kod `Migrate=false`); na svježe resetovanoj bazi nema posla.
 
+**Svjesni kompromisi (da tester ne prijavi kao nove greške):**
+
+- **Jedna prijava po osobi ima cijenu:** ko zna lozinku može ponavljanim prijavama izbacivati vlasnika naloga (zaštita je zaključavanje naloga i limit prijava), a uređaj koji je ostao iza zadržava važeći access token do isteka (`Jwt:AccessTokenMinutes`, kratko) i SignalR vezu do prvog zahtjeva koji traži novi token.
+- **Ista poruka dva puta u 10 s bez `Idempotency-Key`** dobija `409` s objašnjenjem (ne tiho `200`). Ekrani uvijek šalju ključ, pa se to dešava samo skriptama.
+- **Maskiranje za AI** pokriva e-mail adrese, brojeve telefona, tajne uz riječ koja ih imenuje, imena osoba na tiketu i naziv firme. Ne pokriva imena trećih osoba napisana u tekstu ni samo pitanje koje osoba postavlja AI-ju (ono prolazi kroz maskiranje e-maila i telefona). Imena kraća od tri slova se ne maskiraju; dio imena koji je i obična riječ maskira se svuda (bolje previše nego premalo).
+- **E-mailovi na bosanskom** idu osobama koje su aplikaciju otvorile na bosanskom; ostali dobijaju engleski. Obavijesti u zvoncu su u bazi na engleskom i prevode se pri prikazu (ne pri slanju).
+
 Isključeno odlukom vlasnika: **T-28 MFA**.
 
 ## 3. Djelimično (11 stavki)

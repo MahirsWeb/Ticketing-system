@@ -35,6 +35,8 @@ public sealed class TicketMessageService : ITicketMessageService
     /// <summary>How long the same text from the same person on the same ticket counts as the same message sent twice, when the request carries no Idempotency-Key.</summary>
     public static readonly TimeSpan RepeatWindow = TimeSpan.FromSeconds(10);
 
+    public const string RepeatedMessage = "This exact message was just sent. If you meant to send it again, wait a few seconds.";
+
     public TicketMessageService(
         AppDbContext db, ICurrentUserService currentUser, INotifier notifier,
         IKnowledgeBaseIndexQueue indexQueue, IHtmlSanitizerService html, ITicketQueries queries, ITicketIdempotency idempotency, TimeProvider time)
@@ -81,9 +83,9 @@ public sealed class TicketMessageService : ITicketMessageService
         {
             var since = _time.GetUtcNow().UtcDateTime - RepeatWindow;
             var repeated = await _db.TicketMessages.AsNoTracking()
-                .Where(m => m.TicketId == id && m.AuthorId == authorId && m.Type == request.Type && m.BodyHtml == body && m.CreatedAt >= since)
-                .OrderByDescending(m => m.CreatedAt).Select(m => (Guid?)m.Id).FirstOrDefaultAsync();
-            if (repeated is { } same) return Outcome<TicketMessageDto>.Ok(await _queries.BuildMessageAsync(same));
+                .AnyAsync(m => m.TicketId == id && m.AuthorId == authorId && m.Type == request.Type && m.BodyHtml == body && m.CreatedAt >= since);
+            // Said out loud, not swallowed: a person who sends "Hvala" twice in a moment is told the second was not sent, instead of being answered "done".
+            if (repeated) return Outcome<TicketMessageDto>.Conflict(RepeatedMessage);
         }
 
         var message = new TicketMessage

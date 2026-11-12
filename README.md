@@ -345,9 +345,9 @@ AI je podešavanje, ne ugrađena stavka. `Ai:Provider` bira davaoca:
 koji su potrebni za odgovor, uz ograničenja: pitanje najviše 2.000 znakova, jedan izvor 6.000, cijeli kontekst 60.000, a
 odgovor ima gornju granicu. **Email adrese, brojevi telefona i lozinke ili tokeni napisani uz riječ koja ih imenuje** (`lozinka: …`, `password=…`, `token: …`, `Bearer …`) **se maskiraju** prije slanja (`Ai:RedactPersonalData`) i **već pri upisu u bazu znanja**, pa se ni tamo ne čuvaju
 (`[email]`, `[phone]`, `lozinka: [secret]`; chunkovi koji su ranije upisani maskiraju se pri pokretanju). **Imena osoba na tiketu**
-(klijent, ko je tiket otvorio ili zatvorio, osoblje na njemu, autori bilješki) maskiraju se u `[name]` pri upisu u bazu znanja; imena koja niko
+(klijent, ko je tiket otvorio ili zatvorio, osoblje na njemu, autori bilješki) maskiraju se u `[name]`, a **naziv firme** u `[company]` pri upisu u bazu znanja; imena koja niko
 nije naveo i slobodan tekst iz tiketa ne. **Firma može isključiti slanje svojih tiketa AI pružaocu** (polje u uređivanju firme, `AiIndexingEnabled`):
-tiketi te firme se ne indeksiraju, ništa se ne embeduje ni ne čuva, a isključivanje briše i ono što je već sačuvano. Ključ ide u zaglavlje, nikad u adresu. Pitanje AI-ju čeka najviše 12 s na embedding i 60 s na odgovor (jedan pokušaj ponavljanja); ako AI ne odgovori, ekran to kaže drukčije nego kad AI nije podešen. Besplatni nivo Google AI Studija može koristiti
+tiketi te firme se ne indeksiraju, ništa se ne embeduje ni ne čuva, a isključivanje briše i ono što je već sačuvano. Ključ ide u zaglavlje, nikad u adresu. Pitanje AI-ju čeka najviše 12 s na embedding (`Ai:InteractiveEmbeddingTimeoutSeconds`) i 60 s na odgovor (jedan pokušaj ponavljanja); indeksiranje dugog dokumenta i masovno reindeksiranje nisu vezani za tih 12 s (do 40 s po pozivu), jer ih niko ne čeka na ekranu; ako AI ne odgovori, ekran to kaže drukčije nego kad AI nije podešen. Besplatni nivo Google AI Studija može koristiti
 poslani tekst za poboljšanje modela; za pravu upotrebu treba plaćeni nivo ili Vertex AI uz ugovor o obradi podataka, ili
 lokalni model, od kojeg ništa ne izlazi. Odluku o tome donosi vlasnik instalacije.
 

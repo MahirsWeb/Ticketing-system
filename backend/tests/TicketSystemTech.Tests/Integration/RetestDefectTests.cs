@@ -209,6 +209,9 @@ public class RetestDefectTests : IAsyncLifetime
 
     // ======================= TS-ARC-03.1: the same message sent twice =======================
 
+    private Task<ApiResponse> TryPostNoteAsync(Actor actor, Guid ticket, string text, string? key) =>
+        _world.Send(actor, HttpMethod.Post, $"/api/tickets/{ticket}/messages", new { type = "InternalNote", bodyHtml = $"<p>{text}</p>" }, key is null ? null : Key(key));
+
     private async Task<JsonElement> PostNoteAsync(Actor actor, Guid ticket, string text, string? key)
     {
         var response = await _world.Send(actor, HttpMethod.Post, $"/api/tickets/{ticket}/messages",
@@ -238,8 +241,10 @@ public class RetestDefectTests : IAsyncLifetime
 
         await PostNoteAsync(_world.EmpA1, ticket, "same text", "retest-msg-a");
         await PostNoteAsync(_world.EmpA1, ticket, "same text", "retest-msg-b"); // a person who means it twice says so with two keys
-        await PostNoteAsync(_world.EmpA1, ticket, "same text", null);           // the same text again, with no key, a moment later: the same message sent twice
+        var again = await TryPostNoteAsync(_world.EmpA1, ticket, "same text", null); // the same text again, with no key, a moment later: the same message sent twice
 
+        Assert.Equal(409, again.Code);
+        Assert.Contains("just sent", again.Text);
         Assert.Equal(2, await _world.Db(db => db.TicketMessages.CountAsync(m => m.TicketId == ticket && m.Type == MessageType.InternalNote)));
     }
 
@@ -266,19 +271,18 @@ public class RetestDefectTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task The_same_note_sent_twice_without_a_key_is_one_note_but_a_different_one_is_not_swallowed()
+    public async Task The_same_note_sent_twice_without_a_key_is_refused_out_loud_and_a_different_one_is_not_swallowed()
     {
         var ticket = await NewTicketAsync(TicketStatus.InProgress);
-        var note = new { type = "InternalNote", bodyHtml = "<p>restartovan servis, provjeriti sutra</p>" };
 
-        var first = await _world.Send(_world.EmpA1, HttpMethod.Post, $"/api/tickets/{ticket}/messages", note);
-        var again = await _world.Send(_world.EmpA1, HttpMethod.Post, $"/api/tickets/{ticket}/messages", note);
-        var other = await _world.Send(_world.EmpA1, HttpMethod.Post, $"/api/tickets/{ticket}/messages", new { type = "InternalNote", bodyHtml = "<p>nešto sasvim drugo</p>" });
+        var first = await TryPostNoteAsync(_world.EmpA1, ticket, "restartovan servis, provjeriti sutra", null);
+        var again = await TryPostNoteAsync(_world.EmpA1, ticket, "restartovan servis, provjeriti sutra", null);
+        var other = await TryPostNoteAsync(_world.EmpA1, ticket, "nešto sasvim drugo", null);
 
         Assert.Equal(200, first.Code);
-        Assert.Equal(200, again.Code);
+        Assert.Equal(409, again.Code); // not "200, done": the person is told that the second one was not sent
+        Assert.Contains("just sent", again.Text);
         Assert.Equal(200, other.Code);
-        Assert.Equal(System.Text.Json.JsonDocument.Parse(first.Text).RootElement.GetProperty("id").GetString(), System.Text.Json.JsonDocument.Parse(again.Text).RootElement.GetProperty("id").GetString());
         Assert.Equal(2, await _world.Db(db => db.TicketMessages.CountAsync(m => m.TicketId == ticket && m.Type == MessageType.InternalNote)));
     }
 

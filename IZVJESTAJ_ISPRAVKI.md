@@ -755,3 +755,14 @@ Po nalogu vlasnika: ispravljeno je sve što se može ispraviti kodom, a licenca 
 - **Već ispunjeno, bez izmjene:** TS-03.1 (`ForwardLimit = 1`, `KnownProxies/Networks`, limiter po osobi za AI, drugi limit prijave po nalogu), TS-10.3 (`ScrubNameFromGeneratedTextAsync` uklanja ime iz događaja i obavijesti pri anonimizaciji), TS-DEP-03.3 (ekran kaže „AI nedostupan“), TS-04.2 / TS-HOST-02.1 (u produkciji bez certifikata aplikacija ne starta; kopija ključeva je u README), TS-20.1 (jedna instanca je dokumentovano ograničenje, kako kriterij dopušta), TS-49.2 (README navodi da preview origin namjerno nije dozvoljen).
 - **Ne može kodom:** TS-12.1 (zaštita grane `main` je postavka na GitHubu; naredba je u `CONTRIBUTING.md`), TS-54.1 (jedan autor: ADR-ovi, `.mailmap` i CI postoje, ali drugog autora kod ne može napraviti). **Ne diram:** licence (TS-51.1 NPOI, TS-52.1).
 
+### 9.22 Ono što bi tester prijavio na ispravkama iz 9.21 (2026-11-12)
+
+Provjera sa stanovišta testera dala je pet stavki; četiri su ispravljene, peta je kompromis.
+
+- **Isključivanje firme iz AI-ja nije poništavalo indeks vektora u memoriji.** Brisali su se chunkovi, ali je kopija u memoriji nudila obrisano do isteka. `CompanyService` sada poziva `Invalidate()`. (`f66239a`)
+- **Ponovljena poruka se tiho gutala** (`200`, a druga nije poslana). Sada `409` s objašnjenjem, prevedenim na bosanski (`serverMessages.ts`). Testovi: izmijenjen postojeći, mutacija ubijena.
+- **12 s za embedding je važilo i za indeksiranje velikih dokumenata.** Sada ograničenje od 12 s ima samo pitanje osobe (`Ai:InteractiveEmbeddingTimeoutSeconds`, unutar `AiEmbeddingService`), a indeksiranje ima 30/40 s. Test s lažnim sporim provajderom dokazuje oba ponašanja; mutacija ubijena.
+- **Naziv firme ostajao je u isječku za AI.** Maskira se u `[company]` (cijela fraza, bilo koja veličina slova, samo kao cijela riječ). Testovi: jedinični i integracioni, mutacija ubijena.
+- **Frontend je javljao jezik serveru pri svakom učitavanju.** Sada jednom po osobi i jeziku u kartici (`sessionStorage`), uz test.
+- **Kompromisi** (jedna prijava po osobi, maskiranje samo osoba na tiketu i firme, e-mail na engleskom za one koji nisu birali jezik) zapisani su u `docs/OTVORENE-STAVKE.md`.
+- **Test ovisan o satu:** `A_day_that_has_not_happened_yet_...` padao je između ponoći i 02:00 po lokalnom vremenu jer je tražio dan po UTC-u, a aplikacija dan računa u poslovnoj zoni. Test sada koristi poslovnu zonu. (`affcfb8`)

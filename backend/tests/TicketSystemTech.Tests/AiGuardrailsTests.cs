@@ -19,6 +19,15 @@ public class AiGuardrailsTests
     }
 
     [Fact]
+    public void The_name_of_the_company_is_masked_as_a_whole_phrase_in_any_case_and_only_as_a_whole_word()
+    {
+        Assert.Equal("Javio se [company] i [company]; Alfabet ostaje.",
+            PiiRedactor.RedactCompany("Javio se Alfa d.o.o. i ALFA D.O.O.; Alfabet ostaje.", "Alfa d.o.o."));
+        Assert.Equal("Alfa je tu.", PiiRedactor.RedactCompany("Alfa je tu.", "Al"));
+        Assert.Equal("Alfa je tu.", PiiRedactor.RedactCompany("Alfa je tu.", null));
+    }
+
+    [Fact]
     public void A_text_with_no_names_listed_or_with_parts_too_short_to_mask_is_left_alone()
     {
         Assert.Equal("Ana i Al su zvali.", PiiRedactor.RedactNames("Ana i Al su zvali.", new[] { "Al Je" }));

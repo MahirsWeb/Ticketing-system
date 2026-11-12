@@ -19,6 +19,7 @@ public static partial class PiiRedactor
     public const string PhoneMask = "[phone]";
     public const string SecretMask = "[secret]";
     public const string NameMask = "[name]";
+    public const string CompanyMask = "[company]";
 
     [GeneratedRegex(@"[\w.+\-]+@[\w\-]+(?:\.[\w\-]+)+", RegexOptions.CultureInvariant)]
     private static partial Regex Email();
@@ -74,5 +75,19 @@ public static partial class PiiRedactor
 
         var pattern = @"(?<![\p{L}\p{N}])(?:" + string.Join("|", parts.Select(Regex.Escape)) + @")(?![\p{L}\p{N}])";
         return Regex.Replace(text, pattern, NameMask, RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    }
+
+    /// <summary>
+    /// Masks the name of the company a text is about, as a whole phrase ("Alfa d.o.o." is one thing, not "Alfa" and "d.o.o." separately), in any case and as a
+    /// whole word. A name shorter than three characters is left alone: it would mask half the text.
+    /// </summary>
+    public static string RedactCompany(string? text, string? companyName)
+    {
+        if (string.IsNullOrEmpty(text)) return text ?? string.Empty;
+        var name = companyName?.Trim();
+        if (string.IsNullOrEmpty(name) || name.Length < 3) return text;
+
+        var pattern = @"(?<![\p{L}\p{N}])" + Regex.Escape(name) + @"(?![\p{L}\p{N}])";
+        return Regex.Replace(text, pattern, CompanyMask, RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
     }
 }

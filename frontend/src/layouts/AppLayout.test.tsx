@@ -134,6 +134,7 @@ describe('signing out', () => {
 describe('telling the server which language the person uses', () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     vi.mocked(usersApi.setMyLanguage).mockClear();
     useAuthStore.setState({ accessToken: 't', user: employee });
   });
@@ -145,6 +146,16 @@ describe('telling the server which language the person uses', () => {
     await userEvent.click(screen.getAllByRole('button', { name: /bosanski|bs/i })[0]);
 
     await waitFor(() => expect(usersApi.setMyLanguage).toHaveBeenLastCalledWith('bs'));
+  });
+
+  it('does not tell the server again on a reload when the language has not changed', async () => {
+    const first = renderLayout();
+    await waitFor(() => expect(usersApi.setMyLanguage).toHaveBeenCalledTimes(1));
+    first.unmount();
+
+    renderLayout();
+    expect(await screen.findByText('the tasks')).toBeInTheDocument();
+    expect(usersApi.setMyLanguage).toHaveBeenCalledTimes(1);
   });
 
   it('is not bothered by the server being unable to take it', async () => {

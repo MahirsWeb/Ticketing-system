@@ -155,10 +155,26 @@ export default function AppLayout() {
 
   // E-mails are composed on the server, which does not know the language the browser shows: it is told, when the person signs in and
   // whenever they change it. A failure is not worth showing (the next load tells it again), so it is dropped.
+  // Told once per person and language in this tab (remembered in sessionStorage), not on every page: a reload of the same page changes nothing.
   const userId = user?.id;
   useEffect(() => {
     if (!userId) return;
-    usersApi.setMyLanguage(language).catch(() => undefined);
+    const key = `tst-language-reported:${userId}`;
+    try {
+      if (sessionStorage.getItem(key) === language) return;
+    } catch {
+      /* storage unavailable: tell the server, it does nothing when the language is already so */
+    }
+    usersApi
+      .setMyLanguage(language)
+      .then(() => {
+        try {
+          sessionStorage.setItem(key, language);
+        } catch {
+          /* not remembered: the next load tells it again */
+        }
+      })
+      .catch(() => undefined);
   }, [userId, language]);
 
   if (!user) return null;

@@ -63,7 +63,7 @@ public class KnowledgeBaseIndexer : IKnowledgeBaseIndexer
 
         // What is stored is what the search shows and what goes to the AI provider, so it is made safe here, once: an e-mail
         // address, a telephone number or a "password: ..." that somebody typed into a note must not be kept in the knowledge base.
-        var content = PiiRedactor.RedactNames(PiiRedactor.Redact(sb.ToString().Trim()), names);
+        var content = PiiRedactor.RedactCompany(PiiRedactor.RedactNames(PiiRedactor.Redact(sb.ToString().Trim()), names), ticket.Company?.Name);
         if (content.Length == 0) return false;
 
         var chunk = await _db.KnowledgeBaseChunks.FirstOrDefaultAsync(c => c.TicketId == ticketId, ct);
