@@ -87,7 +87,7 @@ public class UserAccountRulesTests : IAsyncLifetime
 
             Assert.Equal(200, made.Code);
             var mail = Assert.Single(await MailsTo(client.Email));
-            Assert.Equal("Your new temporary password — Ticket System Tech", mail.Subject);
+            Assert.Equal("Your new temporary password — Tix", mail.Subject);
             Assert.Contains(made.Json.GetProperty("temporaryPassword").GetString()!, mail.HtmlBody);
         }
         finally
@@ -107,7 +107,7 @@ public class UserAccountRulesTests : IAsyncLifetime
         try
         {
             var mail = Assert.Single(await MailsTo(email));
-            Assert.Equal("You've been invited to Ticket System Tech", mail.Subject);
+            Assert.Equal("You've been invited to Tix", mail.Subject);
             Assert.Contains(created.Json.GetProperty("temporaryPassword").GetString()!, mail.HtmlBody);
         }
         finally
@@ -130,7 +130,7 @@ public class UserAccountRulesTests : IAsyncLifetime
             // client sets their own). It is hidden from them and travels to the client's mailbox, exactly as regenerating one does.
             Assert.Equal(System.Text.Json.JsonValueKind.Null, created.Json.GetProperty("temporaryPassword").ValueKind);
             var mail = Assert.Single(await MailsTo(email));
-            Assert.Equal("You've been invited to Ticket System Tech", mail.Subject);
+            Assert.Equal("You've been invited to Tix", mail.Subject);
         }
         finally
         {

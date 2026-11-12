@@ -2,7 +2,7 @@ export type Language = 'en' | 'bs';
 
 export const translations = {
   en: {
-    appName: 'Ticket System Tech',
+    appName: 'Tix',
     signOut: 'Sign out',
     nav_dashboard: 'Dashboard',
     nav_tickets: 'Tickets',
@@ -803,7 +803,7 @@ export const translations = {
     error_reload: 'Reload the page',
   },
   bs: {
-    appName: 'Ticket System Tech',
+    appName: 'Tix',
     signOut: 'Odjava',
     nav_dashboard: 'Pregled',
     nav_tickets: 'Tiketi',

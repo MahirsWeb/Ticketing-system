@@ -48,6 +48,12 @@ public sealed class ApiWorld : IAsyncLifetime
 {
     public const string Password = "Authz-Test-Pass-2026!";
 
+    /// <summary>The keys of applications that read tickets (<c>/api/integration</c>); the application knows them only by their hashes, as in production.
+    /// Three, because the rate limit is counted per key: the test that uses one up has a key of its own, so it cannot take the others' allowance with it.</summary>
+    public const string IntegrationKey = "tix_integration-test-key-0123456789abcdef-main";
+    public const string IntegrationKeyOther = "tix_integration-test-key-0123456789abcdef-other";
+    public const string IntegrationKeyLimited = "tix_integration-test-key-0123456789abcdef-limited";
+
     private readonly Dictionary<string, string?> _savedEnvironment = new();
     private string _database = "";
     private HttpClient _client = null!;
@@ -101,6 +107,12 @@ public sealed class ApiWorld : IAsyncLifetime
         SetEnvironment("RateLimits__LoginPerAccountPerMinute", "5");
         // The per-address ceiling (15 a minute) would be hit by the tests of the per-account one, which share one address.
         SetEnvironment("RateLimits__AuthPerMinute", "1000");
+        SetEnvironment("Integration__Keys__0__Name", "test-app");
+        SetEnvironment("Integration__Keys__0__Sha256", TicketSystemTech.Api.Integration.IntegrationKeys.Hash(IntegrationKey));
+        SetEnvironment("Integration__Keys__1__Name", "other-app");
+        SetEnvironment("Integration__Keys__1__Sha256", TicketSystemTech.Api.Integration.IntegrationKeys.Hash(IntegrationKeyOther));
+        SetEnvironment("Integration__Keys__2__Name", "limited-app");
+        SetEnvironment("Integration__Keys__2__Sha256", TicketSystemTech.Api.Integration.IntegrationKeys.Hash(IntegrationKeyLimited));
 
         Factory = new ApiFactory();
         _client = Factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });

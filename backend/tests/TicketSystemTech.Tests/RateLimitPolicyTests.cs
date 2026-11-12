@@ -44,7 +44,16 @@ public class RateLimitPolicyTests
     [Fact]
     public void The_names_are_the_ones_that_were_in_use_before_they_were_written_once()
     {
-        Assert.Equal(new[] { "auth", "refresh", "ai", "ai-staff" }, RateLimitPolicies.All);
+        Assert.Equal(new[] { "auth", "refresh", "ai", "ai-staff", "integration" }, RateLimitPolicies.All);
+    }
+
+    [Fact]
+    public void The_integration_endpoints_have_a_limit_of_their_own_that_the_other_endpoints_do_not_share()
+    {
+        var names = NamesInUse().ToDictionary(n => n.Where, n => n.Policy);
+
+        Assert.Equal(RateLimitPolicies.Integration, names["IntegrationController"]);
+        Assert.All(names.Where(n => n.Key != "IntegrationController"), n => Assert.NotEqual(RateLimitPolicies.Integration, n.Value));
     }
 
     [Fact]

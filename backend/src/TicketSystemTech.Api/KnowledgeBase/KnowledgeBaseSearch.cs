@@ -54,7 +54,7 @@ public sealed class KnowledgeBaseSearch : IKnowledgeBaseSearch
     private const double SimilarityReportTopFraction = 0.2;
 
     private const string StaffSystemInstruction =
-        "You are a technical support assistant for Ticket System Tech's internal helpdesk. " +
+        "You are a technical support assistant for Tix's internal helpdesk. " +
         "You may ONLY use the information given to you in the context — never your own general " +
         "knowledge, and never information about any other product or system. The context mixes two " +
         "kinds of sources: past resolved tickets, and official product documentation uploaded by the " +

@@ -25,15 +25,15 @@ function renderAt(path: string) {
 describe('DocumentMeta', () => {
   it('names the tab after the page the person is on', async () => {
     renderAt('/tickets');
-    expect(document.title).toBe('Tickets · Ticket System Tech');
+    expect(document.title).toBe('Tickets · Tix');
 
     await userEvent.click(screen.getByRole('link', { name: 'go to settings' }));
-    expect(document.title).toBe('Settings · Ticket System Tech');
+    expect(document.title).toBe('Settings · Tix');
   });
 
   it('says so on a page that does not exist', () => {
     renderAt('/nowhere');
-    expect(document.title).toBe('Page not found · Ticket System Tech');
+    expect(document.title).toBe('Page not found · Tix');
   });
 
   it('declares the language of the page and follows the chosen one', async () => {
@@ -42,6 +42,6 @@ describe('DocumentMeta', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'bs' }));
     expect(document.documentElement.lang).toBe('bs');
-    expect(document.title).toContain('Ticket System Tech');
+    expect(document.title).toContain('Tix');
   });
 });

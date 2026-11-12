@@ -3,7 +3,7 @@ using System.Net;
 namespace TicketSystemTech.Api.Emails;
 
 /// <summary>
-/// Plain, dependency-free HTML email templates, branded for Ticket System Tech, in the language of the person who receives them
+/// Plain, dependency-free HTML email templates, branded for Tix, in the language of the person who receives them
 /// (<see cref="EmailLanguage"/>: English, or Bosnian when that is what they chose in the application).
 /// Every value that can be influenced by a user (names, ticket titles, company/branch names, reasons) goes
 /// through <see cref="E"/> before being interpolated: otherwise a ticket titled with markup would arrive in
@@ -28,8 +28,8 @@ public static class EmailTemplates
             : "";
 
         var footer = P(language,
-            "This is an automated message from Ticket System Tech. Please do not reply directly to this email.",
-            "Ovo je automatska poruka sistema Ticket System Tech. Molimo ne odgovarajte direktno na ovaj e-mail.");
+            "This is an automated message from Tix. Please do not reply directly to this email.",
+            "Ovo je automatska poruka sistema Tix. Molimo ne odgovarajte direktno na ovaj e-mail.");
 
         return $"""
         <!doctype html>
@@ -39,7 +39,7 @@ public static class EmailTemplates
             <tr><td align="center">
               <table width="480" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;">
                 <tr><td style="background:#1a2b4c;padding:20px 32px;">
-                  <span style="color:#ffffff;font-size:18px;font-weight:700;">Ticket System Tech</span>
+                  <span style="color:#ffffff;font-size:18px;font-weight:700;">Tix</span>
                 </td></tr>
                 <tr><td style="padding:32px;color:#222222;font-size:14px;line-height:1.6;">
                   <h2 style="margin-top:0;color:#1a2b4c;font-size:18px;">{title}</h2>
@@ -59,11 +59,11 @@ public static class EmailTemplates
 
     public static string Invite(string firstName, string email, string temporaryPassword, int validityMinutes, string loginUrl, string language = EmailLanguage.English) => Wrap(
         language,
-        P(language, "You've been invited to Ticket System Tech", "Pozvani ste u Ticket System Tech"),
+        P(language, "You've been invited to Tix", "Pozvani ste u Tix"),
         P(language,
             $"""
             <p>Hi {E(firstName)},</p>
-            <p>An account has been created for you on Ticket System Tech. Use the temporary password below to sign in
+            <p>An account has been created for you on Tix. Use the temporary password below to sign in
             — you'll be asked to choose your own password right away.</p>
             <p style="margin:20px 0;padding:14px 18px;background:#f2f4f7;border-radius:6px;font-size:13px;">
               <b>Email:</b> {E(email)}<br/>
@@ -74,7 +74,7 @@ public static class EmailTemplates
             """,
             $"""
             <p>Zdravo {E(firstName)},</p>
-            <p>Za vas je napravljen nalog u sistemu Ticket System Tech. Za prijavu koristite privremenu lozinku ispod
+            <p>Za vas je napravljen nalog u sistemu Tix. Za prijavu koristite privremenu lozinku ispod
             — odmah ćete biti zamoljeni da izaberete vlastitu lozinku.</p>
             <p style="margin:20px 0;padding:14px 18px;background:#f2f4f7;border-radius:6px;font-size:13px;">
               <b>Email:</b> {E(email)}<br/>
@@ -174,18 +174,18 @@ public static class EmailTemplates
 
     public static string BranchWelcome(string branchName, string adminEmail, string language = EmailLanguage.English) => Wrap(
         language,
-        P(language, "Welcome to Ticket System Tech", "Dobrodošli u Ticket System Tech"),
+        P(language, "Welcome to Tix", "Dobrodošli u Tix"),
         P(language,
             $"""
             <p>Hi,</p>
             <p>This mailbox has just been set up as the dedicated email for the <b>{E(branchName)}</b> branch on
-            Ticket System Tech. Tickets and internal notifications for this branch will reference this address.</p>
+            Tix. Tickets and internal notifications for this branch will reference this address.</p>
             <p>If you weren't expecting this message, please contact {E(adminEmail)}, the administrator who added it.</p>
             """,
             $"""
             <p>Zdravo,</p>
             <p>Ovaj sandučić je upravo podešen kao namjenski e-mail poslovnice <b>{E(branchName)}</b> u sistemu
-            Ticket System Tech. Tiketi i interna obavještenja ove poslovnice koristit će ovu adresu.</p>
+            Tix. Tiketi i interna obavještenja ove poslovnice koristit će ovu adresu.</p>
             <p>Ako niste očekivali ovu poruku, obratite se na {E(adminEmail)}, administratoru koji ju je dodao.</p>
             """));
 
@@ -196,12 +196,12 @@ public static class EmailTemplates
             $"""
             <p>Hi {E(recipientFirstName)},</p>
             <p>{E(assignedByName)} assigned you a task: <b>"{E(taskTitle)}"</b>.</p>
-            <p>Log in to Ticket System Tech to see the details and track your time on it.</p>
+            <p>Log in to Tix to see the details and track your time on it.</p>
             """,
             $"""
             <p>Zdravo {E(recipientFirstName)},</p>
             <p>{E(assignedByName)} vam je dodijelio/la zadatak: <b>„{E(taskTitle)}“</b>.</p>
-            <p>Prijavite se u Ticket System Tech da vidite detalje i bilježite vrijeme rada na njemu.</p>
+            <p>Prijavite se u Tix da vidite detalje i bilježite vrijeme rada na njemu.</p>
             """));
 
     public static string TicketTransferred(string recipientFirstName, string ticketNumber, string ticketTitle, string fromBranch, string toBranch, string transferredByName, string language = EmailLanguage.English) => Wrap(

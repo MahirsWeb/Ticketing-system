@@ -149,7 +149,7 @@ public sealed record SmtpSettings(
             section["Username"],
             section["Password"],
             section["FromAddress"]?.Trim(),
-            string.IsNullOrWhiteSpace(section["FromName"]) ? "Ticket System Tech" : section["FromName"]!.Trim(),
+            string.IsNullOrWhiteSpace(section["FromName"]) ? "Tix" : section["FromName"]!.Trim(),
             section["ReplyTo"]?.Trim(),
             Math.Clamp(section.GetValue("TimeoutSeconds", 20), 1, 300));
     }

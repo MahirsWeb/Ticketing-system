@@ -44,8 +44,8 @@ public class AccountMessagesTests
         var invitation = AccountMessages.Invite("Ana", "ana@x.test", "Temp-1234", 30, "https://x.test/login");
         var again = AccountMessages.NewTemporaryPassword("Ana", "ana@x.test", "Temp-1234", 30, "https://x.test/login");
 
-        Assert.Equal("You've been invited to Ticket System Tech", invitation.Subject);
-        Assert.Equal("Your new temporary password — Ticket System Tech", again.Subject);
+        Assert.Equal("You've been invited to Tix", invitation.Subject);
+        Assert.Equal("Your new temporary password — Tix", again.Subject);
         Assert.Equal(EmailTemplates.Invite("Ana", "ana@x.test", "Temp-1234", 30, "https://x.test/login"), invitation.Html);
         Assert.Equal(invitation.Html, again.Html);
         Assert.Contains("Temp-1234", invitation.Html);
@@ -56,7 +56,7 @@ public class AccountMessagesTests
     {
         var mail = AccountMessages.BranchWelcome("Mostar", "admin@x.test");
 
-        Assert.Equal("Welcome to Ticket System Tech", mail.Subject);
+        Assert.Equal("Welcome to Tix", mail.Subject);
         Assert.Equal(EmailTemplates.BranchWelcome("Mostar", "admin@x.test"), mail.Html);
         Assert.Contains("admin@x.test", mail.Html);
     }

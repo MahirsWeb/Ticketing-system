@@ -1,5 +1,6 @@
 
 using Microsoft.Extensions.Configuration;
+using TicketSystemTech.Api.Integration;
 using TicketSystemTech.Infrastructure.Services;
 
 namespace TicketSystemTech.Api.Configuration;
@@ -46,9 +47,29 @@ public static class StartupConfigurationValidator
 
         ValidateEmail(configuration, problems);
         ValidateAi(configuration, problems);
+        ValidateIntegration(configuration, problems);
         if (isProduction) ValidateProduction(configuration, problems);
 
         return problems;
+    }
+
+    /// <summary>A key that cannot be recognised (a typo in its hash) would only show up as the other application being refused, with nothing to say why.</summary>
+    private static void ValidateIntegration(IConfiguration configuration, List<string> problems)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        var number = 0;
+        foreach (var entry in configuration.GetSection("Integration:Keys").GetChildren())
+        {
+            number++;
+            var name = entry["Name"];
+            var hash = entry["Sha256"];
+            if (!IntegrationKeys.IsValidName(name))
+                problems.Add($"Integration:Keys entry {number} has no valid Name (letters, digits, '.', '-' and '_', at most 50 characters).");
+            else if (!names.Add(name!))
+                problems.Add($"Integration:Keys contains the name '{name}' twice.");
+            if (hash is not { Length: 64 } || !hash.All(Uri.IsHexDigit))
+                problems.Add($"Integration:Keys entry {number} ('{name}') has a Sha256 that is not 64 hexadecimal characters. Make a key with: dotnet TicketSystemTech.Api.dll --create-integration-key <name>.");
+        }
     }
 
     /// <summary>A half-configured mail server would only show up later as mail that silently never leaves the outbox.</summary>

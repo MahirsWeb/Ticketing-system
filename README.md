@@ -279,6 +279,8 @@ Posljedice koje treba znati:
 | `Email:Outbox:PollSeconds`, `BatchSize`, `LeaseSeconds` | Ne (5 / 20 / 120) | Koliko često radnik gleda ima li šta za slanje, koliko poruka uzme odjednom i koliko dugo se poruka koju šalje drži "zauzetom" (ako radnik pukne usred slanja, poruka se nakon toga ponovo nudi). |
 | `Email:Outbox:KeepSentDays`, `KeepFailedDays` | Ne (7 / 30) | Poslane i preskočene poruke se brišu nakon 7 dana, one koje se nisu mogle isporučiti nakon 30 (do tada se u `LastError` vidi zašto). |
 | `RateLimits:AuthPerMinute` / `LoginPerAccountPerMinute` / `AiStaffPerTenMinutes` | Ne (15 / 30 / 60) | Prijava i drugi nalog-endpointi po mrežnoj adresi; pokušaji prijave po nalogu (broji se ukucani email, postojao nalog ili ne); AI upiti osoblja po osobi u 10 minuta. Klijentski AI chat je zasebno ograničen na 8 upita u 5 minuta. |
+| `Integration:Keys` | Ne (prazno) | Ključevi drugih aplikacija koje čitaju tikete (`/api/integration`, vidi [docs/integration-api.md](docs/integration-api.md)): spisak `{ "Name": "…", "Sha256": "…" }`. Ključ se pravi naredbom `--create-integration-key <ime>` i ispiše se samo jednom; u postavkama je samo njegov otisak. Bez ijednog ključa niko ne može čitati tako. Neispravan red sprječava pokretanje. |
+| `RateLimits:IntegrationPerMinute` | Ne (120) | Koliko puta u minuti jedan ključ smije pitati `/api/integration`. |
 | `ForwardedHeaders:KnownProxies` / `KnownNetworks` | Samo iza reverse proxyja | Adrese (npr. `10.0.0.5`) ili mreže (`10.0.0.0/8`) proxyja kojem se vjeruje da kaže pravu adresu posjetioca. **Ništa nije povjereno po defaultu, ni ovaj računar**: bez ovoga se `X-Forwarded-*` zaglavlja ignorišu, pa zahtjev ne može sam izabrati svoju adresu. Proxy na istom računaru se mora navesti (`127.0.0.1` ili `::1`). |
 | `AllowedHosts` | Na serveru da | Imena po kojima se aplikacija smije zvati, odvojena sa `;`. Default `localhost;127.0.0.1;[::1]`: zahtjev s drugim `Host` imenom dobija `400`. Za rad na mreži upiši ime servera. Na serveru (`Production`) `*` nije dozvoljen. |
 | `Frontend:BaseUrl` | Na serveru da | Adresa na kojoj ljudi otvaraju aplikaciju; od nje se prave linkovi u email-ovima. Na serveru ne smije biti `localhost`. |
@@ -422,6 +424,10 @@ Ostalo što vrijedi znati:
   aplikacija oduzmi izmjenu i brisanje:
   `DENY UPDATE, DELETE ON dbo.AuditLogs TO [korisnik_aplikacije];` (ne važi za `dbo`/vlasnika baze, pa aplikacija na serveru
   ne treba da radi kao on).
+- **Druga aplikacija čita tikete** (npr. evidencija utrošenog vremena): `GET /api/integration/assignments` (ko je stavljen na koji tiket
+  od nekog vremena) i `GET /api/integration/tickets` (tiketi kakvi su sada, po e-mail adresi osobe). Prijava je API ključem u zaglavlju
+  `X-Api-Key`, samo za čitanje, a ključ vidi tikete svih poslovnica. Aplikacija se ne javlja sama drugim sistemima: druga strana pita
+  svakih nekoliko sekundi ili minuta. Ključ, polja odgovora, preporučeni način rada i ograničenja su u [docs/integration-api.md](docs/integration-api.md).
 - **Health**: `/health/live` (proces je živ), `/health/ready` (baza odgovara i šema je aktuelna). Docker slika ima
   `HEALTHCHECK` koji pita `/health/live`.
 - **Docker slika**: bazne slike su zakucane digestom (Dependabot predlaže nove), proces nije root, a volume treba na

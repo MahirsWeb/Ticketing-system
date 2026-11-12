@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Routing.Patterns;
 using Microsoft.Extensions.DependencyInjection;
+using TicketSystemTech.Api.Integration;
 using TicketSystemTech.Domain.Enums;
 
 namespace TicketSystemTech.Tests.Integration;
@@ -43,6 +44,8 @@ public class EndpointAuthorizationTests
         "GET /api/files/{key} => public",
         "GET /api/health => public",
         "GET /api/help-topics => any signed-in person",
+        "GET /api/integration/assignments => API key",
+        "GET /api/integration/tickets => API key",
         "GET /api/knowledge-base/documents => Admin+Employee",
         "GET /api/knowledge-base/reindex-status => Admin",
         "GET /api/knowledge-base/search => Admin+Employee",
@@ -141,7 +144,8 @@ public class EndpointAuthorizationTests
 
     public EndpointAuthorizationTests(ApiWorld world) => _world = world;
 
-    private sealed record Route(string Method, string Pattern, string Url, HashSet<UserRole>? AllowedRoles, bool RequiresSignIn)
+    /// <param name="ApiKey">Signed into by an API key (another application), not by a person's token: it has no roles.</param>
+    private sealed record Route(string Method, string Pattern, string Url, HashSet<UserRole>? AllowedRoles, bool RequiresSignIn, bool ApiKey = false)
     {
         public string Name => $"{Method} /{Pattern.TrimStart('/')}";
     }
@@ -161,6 +165,7 @@ public class EndpointAuthorizationTests
             var authorize = endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>();
             var anonymous = endpoint.Metadata.GetMetadata<IAllowAnonymous>() is not null;
             var requiresSignIn = !anonymous && authorize.Count > 0;
+            var apiKey = requiresSignIn && authorize.Any(a => a.AuthenticationSchemes == ApiKeyDefaults.Scheme);
 
             // Several [Authorize] attributes must ALL pass (class-level and method-level); inside one, the roles are alternatives.
             HashSet<UserRole>? allowed = null;
@@ -173,7 +178,7 @@ public class EndpointAuthorizationTests
 
             var pattern = endpoint.RoutePattern.RawText ?? "";
             foreach (var method in methods)
-                routes.Add(new Route(method, pattern, UrlFor(endpoint.RoutePattern), requiresSignIn ? allowed : null, requiresSignIn));
+                routes.Add(new Route(method, pattern, UrlFor(endpoint.RoutePattern), requiresSignIn ? allowed : null, requiresSignIn, apiKey));
         }
         return routes;
     }
@@ -203,6 +208,7 @@ public class EndpointAuthorizationTests
 
     private static string Describe(Route route) =>
         !route.RequiresSignIn ? "public"
+        : route.ApiKey ? "API key"
         : route.AllowedRoles is null ? "any signed-in person"
         : string.Join("+", route.AllowedRoles.OrderBy(r => r));
 

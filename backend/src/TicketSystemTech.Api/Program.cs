@@ -1,5 +1,6 @@
 using System.Text;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -27,6 +28,7 @@ Environment.SetEnvironmentVariable("DOTNET_hostBuilder__reloadConfigOnChange", "
 //   --healthcheck                                   asks the application in this container if it is alive (Docker HEALTHCHECK)
 //   --create-key-certificate <file.pfx> <password>  makes the certificate that protects the key ring (see DataProtection in the README)
 //   --rekey-data / --revoke-old-keys                writes encrypted data again under a new key / retires the old keys (README, DataProtection)
+//   --create-integration-key <name>                 makes a key for another application that reads tickets (docs/integration-api.md)
 if (args.Contains("--healthcheck"))
 {
     Environment.ExitCode = await TicketSystemTech.Api.Startup.ContainerHealthProbe.RunAsync();
@@ -35,6 +37,11 @@ if (args.Contains("--healthcheck"))
 if (args.Length >= 1 && args[0] == "--create-key-certificate")
 {
     Environment.ExitCode = TicketSystemTech.Api.Configuration.KeyRingProtection.RunCreateCommand(args, Console.Out, Console.Error);
+    return;
+}
+if (args.Length >= 1 && args[0] == "--create-integration-key")
+{
+    Environment.ExitCode = TicketSystemTech.Api.Integration.IntegrationKeys.RunCreateCommand(args, Console.Out, Console.Error);
     return;
 }
 
@@ -147,7 +154,12 @@ builder.Services.AddAuthentication(options =>
                 return Task.CompletedTask;
             }
         };
-    });
+    })
+    // The second way in, for another application that reads tickets: an API key in the header X-Api-Key, asked for by the integration
+    // endpoints alone (the default scheme above stays the people's token). Without any key in Integration:Keys nothing can sign in this way.
+    .AddScheme<AuthenticationSchemeOptions, TicketSystemTech.Api.Integration.ApiKeyAuthenticationHandler>(TicketSystemTech.Api.Integration.ApiKeyDefaults.Scheme, _ => { });
+builder.Services.AddSingleton<TicketSystemTech.Api.Integration.IntegrationKeyStore>();
+builder.Services.AddScoped<TicketSystemTech.Api.Integration.IIntegrationQueries, TicketSystemTech.Api.Integration.IntegrationQueries>();
 
 builder.Services.AddAuthorization();
 
@@ -210,6 +222,20 @@ builder.Services.AddRateLimiter(options =>
             {
                 PermitLimit = aiStaffLimit,
                 Window = TimeSpan.FromMinutes(10),
+                QueueLimit = 0
+            }));
+
+    // Another application reading tickets: counted per key (not per address: several keys may come from one server, and one key may come
+    // through a proxy). It asks every few seconds or minutes, so the ceiling is high; it only has to stop a loop that has gone wrong.
+    var integrationPerMinute = builder.Configuration.GetValue("RateLimits:IntegrationPerMinute", 120);
+    options.AddPolicy(TicketSystemTech.Api.Security.RateLimitPolicies.Integration, context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.User.FindFirst(TicketSystemTech.Api.Integration.ApiKeyDefaults.ClientClaim)?.Value
+                ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = integrationPerMinute,
+                Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0
             }));
 });

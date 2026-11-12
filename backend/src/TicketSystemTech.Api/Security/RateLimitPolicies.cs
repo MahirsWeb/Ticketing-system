@@ -21,5 +21,9 @@ public static class RateLimitPolicies
     /// <summary>The AI endpoints for staff (search, questions, similar tickets, the summary of a period), per person.</summary>
     public const string AiStaff = "ai-staff";
 
-    public static readonly IReadOnlyList<string> All = new[] { Auth, Refresh, Ai, AiStaff };
+    /// <summary>Another application reading tickets with an API key (<c>/api/integration</c>), per key. It asks again and again, so the ceiling is
+    /// generous for that and still stops a loop that has gone wrong.</summary>
+    public const string Integration = "integration";
+
+    public static readonly IReadOnlyList<string> All = new[] { Auth, Refresh, Ai, AiStaff, Integration };
 }

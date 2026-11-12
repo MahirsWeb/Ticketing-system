@@ -149,13 +149,13 @@ public class EmailOutboxTests : IAsyncLifetime
 
             var row = await OnlyRowAsync();
             Assert.Equal(address, row.ToEmail);
-            Assert.Equal("Welcome to Ticket System Tech", row.Subject);
+            Assert.Equal("Welcome to Tix", row.Subject);
             Assert.Empty(Transport.Calls); // the request is over and nothing has gone to the provider yet
 
             Assert.Equal(1, await Worker.ProcessOnceAsync(DateTime.UtcNow.AddSeconds(1)));
 
             var sent = Assert.Single(Transport.Calls);
-            Assert.Equal((address, "Welcome to Ticket System Tech"), sent);
+            Assert.Equal((address, "Welcome to Tix"), sent);
             Assert.Equal(EmailOutboxStatus.Sent, (await OnlyRowAsync()).Status);
         }
         finally

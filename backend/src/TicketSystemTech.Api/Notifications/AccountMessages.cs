@@ -27,15 +27,15 @@ public static class AccountMessages
 
     /// <summary>A new account: how to sign in the first time.</summary>
     public static EmailMessage Invite(string firstName, string email, string temporaryPassword, int validityMinutes, string loginUrl, string? language = null) =>
-        new(EmailLanguage.Pick(language, "You've been invited to Ticket System Tech", "Pozvani ste u Ticket System Tech"),
+        new(EmailLanguage.Pick(language, "You've been invited to Tix", "Pozvani ste u Tix"),
             EmailTemplates.Invite(firstName, email, temporaryPassword, validityMinutes, loginUrl, EmailLanguage.Normalize(language)));
 
     /// <summary>An existing account was given a new temporary password: the same page as the invitation, under another name.</summary>
     public static EmailMessage NewTemporaryPassword(string firstName, string email, string temporaryPassword, int validityMinutes, string loginUrl, string? language = null) =>
-        new(EmailLanguage.Pick(language, "Your new temporary password — Ticket System Tech", "Vaša nova privremena lozinka — Ticket System Tech"),
+        new(EmailLanguage.Pick(language, "Your new temporary password — Tix", "Vaša nova privremena lozinka — Tix"),
             EmailTemplates.Invite(firstName, email, temporaryPassword, validityMinutes, loginUrl, EmailLanguage.Normalize(language)));
 
     /// <summary>The address of a new branch is told it exists, and who to ask. Written in the language of the administrator who added it.</summary>
     public static EmailMessage BranchWelcome(string branchName, string adminEmail, string? language = null) =>
-        new(EmailLanguage.Pick(language, "Welcome to Ticket System Tech", "Dobrodošli u Ticket System Tech"), EmailTemplates.BranchWelcome(branchName, adminEmail, EmailLanguage.Normalize(language)));
+        new(EmailLanguage.Pick(language, "Welcome to Tix", "Dobrodošli u Tix"), EmailTemplates.BranchWelcome(branchName, adminEmail, EmailLanguage.Normalize(language)));
 }
