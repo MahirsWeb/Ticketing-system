@@ -5,6 +5,7 @@ using TicketSystemTech.Api.Emails;
 using TicketSystemTech.Api.Services;
 using TicketSystemTech.Application.Common;
 using TicketSystemTech.Application.Common.Interfaces;
+using TicketSystemTech.Application.Tickets;
 using TicketSystemTech.Domain.Entities;
 using TicketSystemTech.Domain.Enums;
 using TicketSystemTech.Domain.Workflow;
@@ -114,7 +115,7 @@ public sealed class TicketLifecycleService : ITicketLifecycleService
         var opened = new TicketOpenedEvent(ticket, client, assignee);
         _db.Notifications.AddRange(_notifier.InApp(opened));
         _db.EmailOutbox.AddRange(_notifier.Emails(opened));
-        _db.Audit(_currentUser.UserId, "TicketOpened", nameof(Ticket), ticket.Id, $"Assigned to {assignee.Id}; branch {ticket.DepartmentId}");
+        _db.Audit(_currentUser.UserId, "TicketOpened", nameof(Ticket), ticket.Id, TicketAuditDetails.Opened(assignee.Id, ticket.DepartmentId));
         await _db.SaveChangesAsync();
 
         await _notifier.DeliverAsync(opened);
@@ -235,7 +236,7 @@ public sealed class TicketLifecycleService : ITicketLifecycleService
         ticket.Status = request.Status;
         // Leaving Closed through this endpoint is a reopen like any other: the "closed by / closed at" facts no longer hold.
         if (from == TicketStatus.Closed) ClearClosedState(ticket);
-        _db.Audit(_currentUser.UserId, "TicketStatusChanged", nameof(Ticket), ticket.Id, $"{from} -> {request.Status}");
+        _db.Audit(_currentUser.UserId, "TicketStatusChanged", nameof(Ticket), ticket.Id, TicketAuditDetails.StatusChanged(from, request.Status));
 
         var changedBy = await _db.Users.FirstAsync(u => u.Id == _currentUser.UserId);
         _db.TicketMessages.Add(new TicketMessage

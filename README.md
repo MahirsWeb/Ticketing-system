@@ -425,7 +425,10 @@ Ostalo što vrijedi znati:
   `DENY UPDATE, DELETE ON dbo.AuditLogs TO [korisnik_aplikacije];` (ne važi za `dbo`/vlasnika baze, pa aplikacija na serveru
   ne treba da radi kao on).
 - **Druga aplikacija čita tikete** (npr. evidencija utrošenog vremena): `GET /api/integration/assignments` (ko je stavljen na koji tiket
-  od nekog vremena) i `GET /api/integration/tickets` (tiketi kakvi su sada, po e-mail adresi osobe). Prijava je API ključem u zaglavlju
+  od nekog vremena), `GET /api/integration/events` (šta se desilo s tiketima od nekog vremena: status, zatvaranje, skidanje osobe),
+  `GET /api/integration/tickets` (tiketi kakvi su sada, po e-mail adresi osobe) i `GET /api/integration/tickets/{id}` (jedan tiket).
+  Utrošeno vrijeme se šalje samo kad se traži (`includeWork=true`, ili `GET /api/integration/time-entries`: zapisi vremena za period,
+  na tiketima i zadacima). Prijava je API ključem u zaglavlju
   `X-Api-Key`, samo za čitanje, a ključ vidi tikete svih poslovnica. Aplikacija se ne javlja sama drugim sistemima: druga strana pita
   svakih nekoliko sekundi ili minuta. Ključ, polja odgovora, preporučeni način rada i ograničenja su u [docs/integration-api.md](docs/integration-api.md).
 - **Health**: `/health/live` (proces je živ), `/health/ready` (baza odgovara i šema je aktuelna). Docker slika ima

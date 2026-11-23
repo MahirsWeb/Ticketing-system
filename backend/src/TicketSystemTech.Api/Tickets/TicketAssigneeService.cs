@@ -5,6 +5,7 @@ using TicketSystemTech.Api.Emails;
 using TicketSystemTech.Api.Services;
 using TicketSystemTech.Application.Common;
 using TicketSystemTech.Application.Common.Interfaces;
+using TicketSystemTech.Application.Tickets;
 using TicketSystemTech.Application.WorkTime;
 using TicketSystemTech.Domain.Entities;
 using TicketSystemTech.Domain.Enums;
@@ -76,7 +77,7 @@ public sealed class TicketAssigneeService : ITicketAssigneeService
         var added = new TicketAssignedEvent(ticket, user);
         _db.Notifications.AddRange(_notifier.InApp(added));
         _db.EmailOutbox.AddRange(_notifier.Emails(added));
-        _db.Audit(_currentUser.UserId, "TicketAssigneeAdded", nameof(Ticket), ticket.Id, $"Added {user.Id}");
+        _db.Audit(_currentUser.UserId, "TicketAssigneeAdded", nameof(Ticket), ticket.Id, TicketAuditDetails.Added(user.Id));
         try
         {
             await _db.SaveChangesAsync();
@@ -110,7 +111,7 @@ public sealed class TicketAssigneeService : ITicketAssigneeService
         if (assignment is null) return Outcome<TicketDetailDto>.NotFound();
 
         _db.TicketAssignees.Remove(assignment);
-        _db.Audit(_currentUser.UserId, "TicketAssigneeRemoved", nameof(Ticket), ticket.Id, $"Removed {userId}");
+        _db.Audit(_currentUser.UserId, "TicketAssigneeRemoved", nameof(Ticket), ticket.Id, TicketAuditDetails.Removed(userId));
         await _db.EndRunningSessionsAsync(new[] { id }, userId, UtcNow); // the person stops working it
         if (assignment.IsPrimary)
         {

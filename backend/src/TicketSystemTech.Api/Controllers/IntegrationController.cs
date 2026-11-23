@@ -31,9 +31,37 @@ public class IntegrationController : ControllerBase
         [FromQuery] string? since, [FromQuery] Guid? afterId, [FromQuery] string? email, CancellationToken ct, [FromQuery] int limit = 100) =>
         this.ToActionResult(await _queries.AssignmentsAsync(since, afterId, email, limit, ct));
 
-    /// <summary>The tickets as they are now, newest first, optionally only those a person is on.</summary>
+    /// <summary>
+    /// What happened to tickets since a time (opened, somebody put on or taken off, status changed, closed, reopened, moved to another branch),
+    /// oldest first, at most <paramref name="limit"/> (500) at a time. It says THAT something happened and to whom; the ticket in the answer is as it is now.
+    /// </summary>
+    [HttpGet("events")]
+    public async Task<ActionResult<IntegrationEventPage>> Events(
+        [FromQuery] string? since, [FromQuery] Guid? afterId, CancellationToken ct, [FromQuery] int limit = 100) =>
+        this.ToActionResult(await _queries.EventsAsync(since, afterId, limit, ct));
+
+    /// <summary>
+    /// The tickets as they are now, newest first (by the time they were created), optionally only those a person is on and only those created in a
+    /// period (<c>createdFrom</c> included, <c>createdTo</c> not). <c>includeWork=true</c> adds who worked how long on each.
+    /// </summary>
     [HttpGet("tickets")]
     public async Task<ActionResult<IntegrationTicketPage>> Tickets(
-        [FromQuery] string? assigneeEmail, [FromQuery] string? state, CancellationToken ct, [FromQuery] int page = 1, [FromQuery] int pageSize = 50) =>
-        this.ToActionResult(await _queries.TicketsAsync(assigneeEmail, state, page, pageSize, ct));
+        [FromQuery] string? assigneeEmail, [FromQuery] string? state, [FromQuery] string? createdFrom, [FromQuery] string? createdTo, CancellationToken ct,
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 50, [FromQuery] bool includeWork = false) =>
+        this.ToActionResult(await _queries.TicketsAsync(assigneeEmail, state, createdFrom, createdTo, page, pageSize, includeWork, ct));
+
+    /// <summary>
+    /// Who worked, when and for how long: one entry per stretch of work of one person, on a ticket or on a task, by the day it started on. The period is
+    /// given as days (<c>from</c>, <c>to</c>, yyyy-MM-dd), at most 92. What is no longer in the period read again was deleted, or moved to another day.
+    /// </summary>
+    [HttpGet("time-entries")]
+    public async Task<ActionResult<IntegrationTimeEntryPage>> TimeEntries(
+        [FromQuery] string? from, [FromQuery] string? to, [FromQuery] string? email, CancellationToken ct,
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 100) =>
+        this.ToActionResult(await _queries.TimeEntriesAsync(from, to, email, page, pageSize, ct));
+
+    /// <summary>One ticket as it is now, whatever its status, or 404. To see why a ticket is no longer in somebody's list.</summary>
+    [HttpGet("tickets/{id:guid}")]
+    public async Task<ActionResult<IntegrationTicket>> Ticket(Guid id, CancellationToken ct, [FromQuery] bool includeWork = false) =>
+        this.ToActionResult(await _queries.TicketAsync(id, includeWork, ct));
 }

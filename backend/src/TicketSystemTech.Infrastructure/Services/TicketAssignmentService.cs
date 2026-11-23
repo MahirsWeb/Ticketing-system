@@ -2,6 +2,7 @@ using System.Net;
 using Microsoft.EntityFrameworkCore;
 using TicketSystemTech.Application.Common;
 using TicketSystemTech.Application.Common.Interfaces;
+using TicketSystemTech.Application.Tickets;
 using TicketSystemTech.Domain.Entities;
 using TicketSystemTech.Domain.Enums;
 using TicketSystemTech.Domain.Workflow;
@@ -48,6 +49,10 @@ public class TicketAssignmentService : ITicketAssignmentService
             var wasPrimary = ticket.Assignees.Any(a => a.UserId == userId && a.IsPrimary);
             foreach (var assignment in ticket.Assignees.Where(a => a.UserId == userId).ToList())
                 _db.TicketAssignees.Remove(assignment);
+
+            // The same record as when somebody is taken off a ticket by hand, so that whoever follows the tickets from outside (the feed of events
+            // of the integration API) learns of it: leaving the company is the commonest way of being taken off.
+            _db.Audit(actorUserId, "TicketAssigneeRemoved", nameof(Ticket), ticket.Id, TicketAuditDetails.Removed(userId));
 
             if (wasPrimary)
             {
