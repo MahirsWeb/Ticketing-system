@@ -1668,6 +1668,425 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reports/companies/branches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    companyId?: string;
+                    clientId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BranchCountDto"][];
+                        "text/json": components["schemas"]["BranchCountDto"][];
+                        "text/plain": components["schemas"]["BranchCountDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/companies/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    companyId?: string;
+                    clientId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BreakdownItemDto"][];
+                        "text/json": components["schemas"]["BreakdownItemDto"][];
+                        "text/plain": components["schemas"]["BreakdownItemDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/companies/clients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    companyId?: string;
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CompanyClientStatDto"][];
+                        "text/json": components["schemas"]["CompanyClientStatDto"][];
+                        "text/plain": components["schemas"]["CompanyClientStatDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/companies/closed-by": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    companyId?: string;
+                    clientId?: string;
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ClosedByDto"];
+                        "text/json": components["schemas"]["ClosedByDto"];
+                        "text/plain": components["schemas"]["ClosedByDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/companies/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    companyId?: string;
+                    clientId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/companies/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    search?: string;
+                    sort?: string;
+                    descending?: boolean;
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CompanyListPageDto"];
+                        "text/json": components["schemas"]["CompanyListPageDto"];
+                        "text/plain": components["schemas"]["CompanyListPageDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/companies/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    companyId?: string;
+                    clientId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CompanySummaryDto"];
+                        "text/json": components["schemas"]["CompanySummaryDto"];
+                        "text/plain": components["schemas"]["CompanySummaryDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/companies/timeseries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    companyId?: string;
+                    clientId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TimeSeriesPointDto"][];
+                        "text/json": components["schemas"]["TimeSeriesPointDto"][];
+                        "text/plain": components["schemas"]["TimeSeriesPointDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/companies/top": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TopCompaniesDto"];
+                        "text/json": components["schemas"]["TopCompaniesDto"];
+                        "text/plain": components["schemas"]["TopCompaniesDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/companies/topics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    companyId?: string;
+                    clientId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BreakdownItemDto"][];
+                        "text/json": components["schemas"]["BreakdownItemDto"][];
+                        "text/plain": components["schemas"]["BreakdownItemDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reports/export": {
         parameters: {
             query?: never;
@@ -4082,6 +4501,16 @@ export interface components {
             /** Format: int32 */
             totalOpen?: number;
         };
+        BranchCountDto: {
+            /** Format: int32 */
+            count?: number;
+            /** Format: uuid */
+            departmentId?: string | null;
+            name?: string | null;
+            /** Format: int32 */
+            noSubBranchCount?: number;
+            subBranches?: components["schemas"]["SubBranchCountDto"][];
+        };
         BranchGanttResponse: {
             /** Format: date-time */
             date?: string;
@@ -4089,6 +4518,14 @@ export interface components {
             departmentId?: string;
             departmentName?: string;
             users?: components["schemas"]["GanttResponse"][];
+        };
+        BreakdownItemDto: {
+            /** Format: int32 */
+            count?: number;
+            /** Format: uuid */
+            id?: string | null;
+            isActive?: boolean;
+            name?: string | null;
         };
         ChangeTicketStatusRequest: {
             status?: components["schemas"]["TicketStatus"];
@@ -4107,11 +4544,43 @@ export interface components {
         CloseTicketRequest: {
             resolutionSummary?: string;
         };
+        ClosedByDto: {
+            branches?: components["schemas"]["BranchCountDto"][];
+            people?: components["schemas"]["CloserStatDto"][];
+            /** Format: int32 */
+            totalClosed?: number;
+        };
+        CloserBranchDto: {
+            /** Format: int32 */
+            count?: number;
+            /** Format: uuid */
+            departmentId?: string | null;
+            name?: string | null;
+        };
+        CloserStatDto: {
+            branches?: components["schemas"]["CloserBranchDto"][];
+            /** Format: int32 */
+            closedCount?: number;
+            name?: string;
+            /** Format: uuid */
+            userId?: string;
+        };
         CompanyClientItem: {
             email?: string;
             /** Format: uuid */
             id?: string;
             name?: string;
+        };
+        CompanyClientStatDto: {
+            /** Format: uuid */
+            clientId?: string;
+            /** Format: int32 */
+            closed?: number;
+            name?: string;
+            /** Format: int32 */
+            open?: number;
+            /** Format: int32 */
+            total?: number;
         };
         CompanyItemFull: {
             address?: string | null;
@@ -4121,6 +4590,54 @@ export interface components {
             id?: string;
             isActive?: boolean;
             name?: string;
+        };
+        CompanyListPageDto: {
+            items?: components["schemas"]["CompanyRowDto"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            pageSize?: number;
+            /** Format: int32 */
+            totalCount?: number;
+            /** Format: int32 */
+            totalTickets?: number;
+        };
+        CompanyRowDto: {
+            /** Format: double */
+            avgResolutionHours?: number;
+            /** Format: int32 */
+            closed?: number;
+            /** Format: uuid */
+            companyId?: string;
+            name?: string;
+            /** Format: int32 */
+            new?: number;
+            /** Format: int32 */
+            open?: number;
+            /** Format: int32 */
+            previousTotal?: number;
+            /** Format: double */
+            sharePercent?: number;
+            /** Format: double */
+            slaComplianceRate?: number | null;
+            /** Format: int32 */
+            total?: number;
+        };
+        CompanySummaryDto: {
+            /** Format: double */
+            avgResolutionHours?: number;
+            /** Format: int32 */
+            closed?: number;
+            /** Format: int32 */
+            new?: number;
+            /** Format: int32 */
+            open?: number;
+            /** Format: int32 */
+            previousTotal?: number;
+            /** Format: double */
+            slaComplianceRate?: number | null;
+            /** Format: int32 */
+            total?: number;
         };
         ConnectEmailRequest: {
             code?: string;
@@ -4458,6 +4975,13 @@ export interface components {
             /** Format: int32 */
             resolutionTimeHours?: number;
         };
+        SubBranchCountDto: {
+            /** Format: int32 */
+            count?: number;
+            name?: string;
+            /** Format: uuid */
+            subBranchId?: string;
+        };
         SubBranchItemFull: {
             /** Format: uuid */
             departmentId?: string;
@@ -4613,6 +5137,15 @@ export interface components {
             date?: string;
             /** Format: int32 */
             opened?: number;
+        };
+        TopCompaniesDto: {
+            items?: components["schemas"]["CompanyRowDto"][];
+            /** Format: int32 */
+            topTickets?: number;
+            /** Format: int32 */
+            totalCompanies?: number;
+            /** Format: int32 */
+            totalTickets?: number;
         };
         TopIssueDto: {
             /** Format: int32 */
