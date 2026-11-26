@@ -372,6 +372,41 @@
         },
         "type": "object"
       },
+      "CompanyDependencyDto": {
+        "additionalProperties": false,
+        "properties": {
+          "closed": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "company": {
+            "type": "string"
+          },
+          "companyId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "high": {
+            "type": "boolean"
+          },
+          "person": {
+            "type": "string"
+          },
+          "personClosed": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "personId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "sharePercent": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
       "CompanyItemFull": {
         "additionalProperties": false,
         "properties": {
@@ -758,6 +793,28 @@
         },
         "type": "object"
       },
+      "DayHoursDto": {
+        "additionalProperties": false,
+        "properties": {
+          "day": {
+            "format": "date",
+            "type": "string"
+          },
+          "taskHours": {
+            "format": "double",
+            "type": "number"
+          },
+          "ticketHours": {
+            "format": "double",
+            "type": "number"
+          },
+          "totalHours": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
       "DepartmentItemFull": {
         "additionalProperties": false,
         "properties": {
@@ -773,6 +830,30 @@
           },
           "name": {
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DependencyDto": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CompanyDependencyDto"
+            },
+            "type": "array"
+          },
+          "minClosed": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "minSharePercent": {
+            "format": "double",
+            "type": "number"
+          },
+          "total": {
+            "format": "int32",
+            "type": "integer"
           }
         },
         "type": "object"
@@ -918,6 +999,65 @@
           },
           "userName": {
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "HoursDetailDto": {
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/DayHoursDto"
+            },
+            "type": "array"
+          },
+          "daysWithoutEntry": {
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "daysWithoutEntryApply": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "taskHours": {
+            "format": "double",
+            "type": "number"
+          },
+          "ticketHours": {
+            "format": "double",
+            "type": "number"
+          },
+          "totalHours": {
+            "format": "double",
+            "type": "number"
+          },
+          "userId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "weeks": {
+            "items": {
+              "$ref": "#/components/schemas/WeekHoursDto"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "HoursPeopleDto": {
+        "additionalProperties": false,
+        "properties": {
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/PersonHoursDto"
+            },
+            "type": "array"
           }
         },
         "type": "object"
@@ -1288,6 +1428,73 @@
         },
         "type": "object"
       },
+      "PersonHoursDto": {
+        "additionalProperties": false,
+        "properties": {
+          "branch": {
+            "nullable": true,
+            "type": "string"
+          },
+          "daysWithoutEntry": {
+            "format": "int32",
+            "nullable": true,
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "taskHours": {
+            "format": "double",
+            "type": "number"
+          },
+          "ticketHours": {
+            "format": "double",
+            "type": "number"
+          },
+          "totalHours": {
+            "format": "double",
+            "type": "number"
+          },
+          "userId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PersonLoadDto": {
+        "additionalProperties": false,
+        "properties": {
+          "branch": {
+            "nullable": true,
+            "type": "string"
+          },
+          "mainTickets": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "openTasks": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "openTickets": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "overdueTickets": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "userId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "QuietCompaniesDto": {
         "additionalProperties": false,
         "properties": {
@@ -1647,6 +1854,62 @@
           "resolutionTimeHours": {
             "format": "int32",
             "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "SpecializationDto": {
+        "additionalProperties": false,
+        "properties": {
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/SpecializationItemDto"
+            },
+            "type": "array"
+          },
+          "closedTotal": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "companies": {
+            "items": {
+              "$ref": "#/components/schemas/SpecializationItemDto"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "topics": {
+            "items": {
+              "$ref": "#/components/schemas/SpecializationItemDto"
+            },
+            "type": "array"
+          },
+          "userId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SpecializationItemDto": {
+        "additionalProperties": false,
+        "properties": {
+          "closed": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "hours": {
+            "format": "double",
+            "type": "number"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
           }
         },
         "type": "object"
@@ -2620,6 +2883,28 @@
         },
         "type": "object"
       },
+      "WeekHoursDto": {
+        "additionalProperties": false,
+        "properties": {
+          "taskHours": {
+            "format": "double",
+            "type": "number"
+          },
+          "ticketHours": {
+            "format": "double",
+            "type": "number"
+          },
+          "totalHours": {
+            "format": "double",
+            "type": "number"
+          },
+          "weekStart": {
+            "format": "date",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "WorkSessionRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2824,6 +3109,22 @@
           "Done"
         ],
         "type": "string"
+      },
+      "WorkloadDto": {
+        "additionalProperties": false,
+        "properties": {
+          "asOfUtc": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/PersonLoadDto"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -5610,6 +5911,305 @@
         },
         "tags": [
           "CompanyReports"
+        ]
+      }
+    },
+    "/api/reports/employees/dependency": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "minClosed",
+            "schema": {
+              "default": 5,
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "minShare",
+            "schema": {
+              "default": 50,
+              "format": "double",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyDto"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyDto"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "EmployeeReports"
+        ]
+      }
+    },
+    "/api/reports/employees/hours": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "departmentId",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoursPeopleDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoursPeopleDto"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoursPeopleDto"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "EmployeeReports"
+        ]
+      }
+    },
+    "/api/reports/employees/hours/{userId}": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoursDetailDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoursDetailDto"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoursDetailDto"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "EmployeeReports"
+        ]
+      }
+    },
+    "/api/reports/employees/specialization": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "userId",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecializationDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecializationDto"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecializationDto"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "EmployeeReports"
+        ]
+      }
+    },
+    "/api/reports/employees/timesheet": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "userId",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "year",
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "month",
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "language",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "EmployeeReports"
+        ]
+      }
+    },
+    "/api/reports/employees/workload": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "departmentId",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkloadDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkloadDto"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkloadDto"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "EmployeeReports"
         ]
       }
     },
@@ -9000,6 +9600,9 @@
     },
     {
       "name": "EmailIntegration"
+    },
+    {
+      "name": "EmployeeReports"
     },
     {
       "name": "Files"

@@ -618,3 +618,93 @@ export interface TransfersDto {
   edges: TransferEdgeDto[];
   items: TransferItemDto[];
 }
+
+// The reports about people (api/reports/employees). A day is a date ("2026-03-10") in the business time zone.
+export interface PersonLoadDto {
+  userId: string;
+  name: string;
+  branch: string | null;
+  openTickets: number;
+  mainTickets: number;
+  overdueTickets: number;
+  openTasks: number;
+}
+
+export interface WorkloadDto {
+  asOfUtc: string;
+  people: PersonLoadDto[];
+}
+
+export interface PersonHoursDto {
+  userId: string;
+  name: string;
+  branch: string | null;
+  ticketHours: number;
+  taskHours: number;
+  totalHours: number;
+  daysWithoutEntry: number | null;
+}
+
+export interface HoursPeopleDto {
+  people: PersonHoursDto[];
+}
+
+export interface DayHoursDto {
+  day: string;
+  ticketHours: number;
+  taskHours: number;
+  totalHours: number;
+}
+
+export interface WeekHoursDto {
+  weekStart: string;
+  ticketHours: number;
+  taskHours: number;
+  totalHours: number;
+}
+
+export interface HoursDetailDto {
+  userId: string;
+  name: string;
+  ticketHours: number;
+  taskHours: number;
+  totalHours: number;
+  days: DayHoursDto[];
+  weeks: WeekHoursDto[];
+  daysWithoutEntry: string[];
+  daysWithoutEntryApply: boolean;
+}
+
+export interface SpecializationItemDto {
+  id: string;
+  name: string;
+  closed: number;
+  hours: number;
+}
+
+export interface SpecializationDto {
+  userId: string;
+  name: string;
+  closedTotal: number;
+  topics: SpecializationItemDto[];
+  categories: SpecializationItemDto[];
+  companies: SpecializationItemDto[];
+}
+
+export interface CompanyDependencyDto {
+  companyId: string;
+  company: string;
+  closed: number;
+  personId: string;
+  person: string;
+  personClosed: number;
+  sharePercent: number;
+  high: boolean;
+}
+
+export interface DependencyDto {
+  total: number;
+  minClosed: number;
+  minSharePercent: number;
+  items: CompanyDependencyDto[];
+}

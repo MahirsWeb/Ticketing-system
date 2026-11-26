@@ -102,6 +102,17 @@ export type ContractChecks = [
   Expect<Conforms<S['TransferEdgeDto'], T.TransferEdgeDto>>,
   Expect<Conforms<S['TransferItemDto'], T.TransferItemDto>>,
   Expect<Conforms<S['TransfersDto'], T.TransfersDto>>,
+  Expect<Conforms<S['PersonLoadDto'], T.PersonLoadDto>>,
+  Expect<Conforms<S['WorkloadDto'], T.WorkloadDto>>,
+  Expect<Conforms<S['PersonHoursDto'], T.PersonHoursDto>>,
+  Expect<Conforms<S['HoursPeopleDto'], T.HoursPeopleDto>>,
+  Expect<Conforms<S['DayHoursDto'], T.DayHoursDto>>,
+  Expect<Conforms<S['WeekHoursDto'], T.WeekHoursDto>>,
+  Expect<Conforms<S['HoursDetailDto'], T.HoursDetailDto>>,
+  Expect<Conforms<S['SpecializationItemDto'], T.SpecializationItemDto>>,
+  Expect<Conforms<S['SpecializationDto'], T.SpecializationDto>>,
+  Expect<Conforms<S['CompanyDependencyDto'], T.CompanyDependencyDto>>,
+  Expect<Conforms<S['DependencyDto'], T.DependencyDto>>,
 
   // knowledge base, settings
   Expect<Conforms<S['KnowledgeBaseSearchResultDto'], T.KnowledgeBaseSearchResultDto>>,

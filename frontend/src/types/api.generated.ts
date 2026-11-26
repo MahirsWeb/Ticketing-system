@@ -2339,6 +2339,247 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reports/employees/dependency": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    minClosed?: number;
+                    minShare?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DependencyDto"];
+                        "text/json": components["schemas"]["DependencyDto"];
+                        "text/plain": components["schemas"]["DependencyDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/employees/hours": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    departmentId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["HoursPeopleDto"];
+                        "text/json": components["schemas"]["HoursPeopleDto"];
+                        "text/plain": components["schemas"]["HoursPeopleDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/employees/hours/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                };
+                header?: never;
+                path: {
+                    userId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["HoursDetailDto"];
+                        "text/json": components["schemas"]["HoursDetailDto"];
+                        "text/plain": components["schemas"]["HoursDetailDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/employees/specialization": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    userId?: string;
+                    from?: string;
+                    to?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SpecializationDto"];
+                        "text/json": components["schemas"]["SpecializationDto"];
+                        "text/plain": components["schemas"]["SpecializationDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/employees/timesheet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    userId?: string;
+                    year?: number;
+                    month?: number;
+                    language?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/employees/workload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    departmentId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["WorkloadDto"];
+                        "text/json": components["schemas"]["WorkloadDto"];
+                        "text/plain": components["schemas"]["WorkloadDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reports/export": {
         parameters: {
             query?: never;
@@ -5016,6 +5257,21 @@ export interface components {
             /** Format: int32 */
             total?: number;
         };
+        CompanyDependencyDto: {
+            /** Format: int32 */
+            closed?: number;
+            company?: string;
+            /** Format: uuid */
+            companyId?: string;
+            high?: boolean;
+            person?: string;
+            /** Format: int32 */
+            personClosed?: number;
+            /** Format: uuid */
+            personId?: string;
+            /** Format: double */
+            sharePercent?: number;
+        };
         CompanyItemFull: {
             address?: string | null;
             aiIndexingEnabled?: boolean;
@@ -5167,12 +5423,31 @@ export interface components {
             /** Format: uuid */
             userId?: string;
         };
+        DayHoursDto: {
+            /** Format: date */
+            day?: string;
+            /** Format: double */
+            taskHours?: number;
+            /** Format: double */
+            ticketHours?: number;
+            /** Format: double */
+            totalHours?: number;
+        };
         DepartmentItemFull: {
             email?: string;
             /** Format: uuid */
             id?: string;
             isActive?: boolean;
             name?: string;
+        };
+        DependencyDto: {
+            items?: components["schemas"]["CompanyDependencyDto"][];
+            /** Format: int32 */
+            minClosed?: number;
+            /** Format: double */
+            minSharePercent?: number;
+            /** Format: int32 */
+            total?: number;
         };
         EmailConnectionStatusDto: {
             connected?: boolean;
@@ -5227,6 +5502,24 @@ export interface components {
             /** Format: uuid */
             userId?: string;
             userName?: string;
+        };
+        HoursDetailDto: {
+            days?: components["schemas"]["DayHoursDto"][];
+            daysWithoutEntry?: string[];
+            daysWithoutEntryApply?: boolean;
+            name?: string;
+            /** Format: double */
+            taskHours?: number;
+            /** Format: double */
+            ticketHours?: number;
+            /** Format: double */
+            totalHours?: number;
+            /** Format: uuid */
+            userId?: string;
+            weeks?: components["schemas"]["WeekHoursDto"][];
+        };
+        HoursPeopleDto: {
+            people?: components["schemas"]["PersonHoursDto"][];
         };
         InboxMessageSummaryDto: {
             bodyPreview?: string;
@@ -5365,6 +5658,34 @@ export interface components {
             /** Format: date-time */
             periodStart?: string;
         };
+        PersonHoursDto: {
+            branch?: string | null;
+            /** Format: int32 */
+            daysWithoutEntry?: number | null;
+            name?: string;
+            /** Format: double */
+            taskHours?: number;
+            /** Format: double */
+            ticketHours?: number;
+            /** Format: double */
+            totalHours?: number;
+            /** Format: uuid */
+            userId?: string;
+        };
+        PersonLoadDto: {
+            branch?: string | null;
+            /** Format: int32 */
+            mainTickets?: number;
+            name?: string;
+            /** Format: int32 */
+            openTasks?: number;
+            /** Format: int32 */
+            openTickets?: number;
+            /** Format: int32 */
+            overdueTickets?: number;
+            /** Format: uuid */
+            userId?: string;
+        };
         QuietCompaniesDto: {
             items?: components["schemas"]["QuietCompanyDto"][];
             /** Format: int32 */
@@ -5497,6 +5818,25 @@ export interface components {
             name?: string;
             /** Format: int32 */
             resolutionTimeHours?: number;
+        };
+        SpecializationDto: {
+            categories?: components["schemas"]["SpecializationItemDto"][];
+            /** Format: int32 */
+            closedTotal?: number;
+            companies?: components["schemas"]["SpecializationItemDto"][];
+            name?: string;
+            topics?: components["schemas"]["SpecializationItemDto"][];
+            /** Format: uuid */
+            userId?: string;
+        };
+        SpecializationItemDto: {
+            /** Format: int32 */
+            closed?: number;
+            /** Format: double */
+            hours?: number;
+            /** Format: uuid */
+            id?: string;
+            name?: string;
         };
         SubBranchCountDto: {
             /** Format: int32 */
@@ -5848,6 +6188,16 @@ export interface components {
             /** Format: uuid */
             userId?: string;
         };
+        WeekHoursDto: {
+            /** Format: double */
+            taskHours?: number;
+            /** Format: double */
+            ticketHours?: number;
+            /** Format: double */
+            totalHours?: number;
+            /** Format: date */
+            weekStart?: string;
+        };
         WorkSessionRequest: {
             /** Format: date-time */
             endedAtUtc?: string | null;
@@ -5928,6 +6278,11 @@ export interface components {
         };
         /** @enum {string} */
         WorkTaskStatus: "Pending" | "InProgress" | "Done";
+        WorkloadDto: {
+            /** Format: date-time */
+            asOfUtc?: string;
+            people?: components["schemas"]["PersonLoadDto"][];
+        };
     };
     responses: never;
     parameters: never;

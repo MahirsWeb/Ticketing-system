@@ -47,6 +47,8 @@ const BS: Record<string, string> = {
   'Company not found.': 'Firma nije pronađena.',
   'Choose a company first.': 'Prvo izaberite firmu.',
   'The days without activity must be 2, 3 or 7.': 'Dani bez aktivnosti moraju biti 2, 3 ili 7.',
+  'Choose a person first.': 'Prvo izaberite osobu.',
+  'The month is not valid.': 'Mjesec nije ispravan.',
   'Branch not found.': 'Poslovnica nije pronađena.',
   'Your account is not linked to a company.': 'Vaš nalog nije povezan s firmom.',
   'This client is not linked to a company.': 'Ovaj klijent nije povezan s firmom.',
