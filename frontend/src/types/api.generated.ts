@@ -2512,6 +2512,169 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reports/tickets/attention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    departmentId?: string;
+                    inactiveDays?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AttentionDto"];
+                        "text/json": components["schemas"]["AttentionDto"];
+                        "text/plain": components["schemas"]["AttentionDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/tickets/first-response": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    departmentId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FirstResponseDto"];
+                        "text/json": components["schemas"]["FirstResponseDto"];
+                        "text/plain": components["schemas"]["FirstResponseDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/tickets/resolution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    departmentId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ResolutionTimeDto"];
+                        "text/json": components["schemas"]["ResolutionTimeDto"];
+                        "text/plain": components["schemas"]["ResolutionTimeDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/tickets/transfers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    departmentId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TransfersDto"];
+                        "text/json": components["schemas"]["TransfersDto"];
+                        "text/plain": components["schemas"]["TransfersDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reports/timeseries": {
         parameters: {
             query?: never;
@@ -4725,6 +4888,12 @@ export interface components {
             bodyHtml?: string;
             type?: components["schemas"]["MessageType"];
         };
+        AgeGroupDto: {
+            /** Format: int32 */
+            count?: number;
+            key?: string;
+            oldest?: components["schemas"]["TicketBriefDto"];
+        };
         AiInsightsRequest: {
             /** Format: uuid */
             agentId?: string | null;
@@ -4741,6 +4910,19 @@ export interface components {
         };
         AiInsightsResponseDto: {
             summary?: string;
+        };
+        AttentionDto: {
+            /** Format: int32 */
+            activeTotal?: number;
+            ages?: components["schemas"]["AgeGroupDto"][];
+            /** Format: date-time */
+            asOfUtc?: string;
+            dueSoon?: components["schemas"]["TicketBriefListDto"];
+            inactive?: components["schemas"]["TicketBriefListDto"];
+            /** Format: int32 */
+            inactiveDays?: number;
+            overdue?: components["schemas"]["TicketBriefListDto"];
+            unassigned?: components["schemas"]["TicketBriefListDto"];
         };
         BranchBreakdownEntryDto: {
             /** Format: uuid */
@@ -5008,6 +5190,20 @@ export interface components {
             receivedAtUtc?: string;
             subject?: string;
         };
+        FirstResponseDto: {
+            /** Format: int32 */
+            answered?: number;
+            /** Format: double */
+            averageHours?: number;
+            /** Format: double */
+            medianHours?: number;
+            /** Format: double */
+            p90Hours?: number;
+            /** Format: int32 */
+            tickets?: number;
+            /** Format: int32 */
+            unanswered?: number;
+        };
         ForgotPasswordRequest: {
             email?: string;
         };
@@ -5241,6 +5437,16 @@ export interface components {
             /** Format: uuid */
             userId?: string;
         };
+        ResolutionTimeDto: {
+            /** Format: double */
+            averageHours?: number;
+            /** Format: int32 */
+            count?: number;
+            /** Format: double */
+            medianHours?: number;
+            /** Format: double */
+            p90Hours?: number;
+        };
         RhythmDto: {
             byHour?: number[];
             byWeekday?: number[];
@@ -5322,6 +5528,26 @@ export interface components {
             fileUrl?: string;
             /** Format: uuid */
             id?: string;
+        };
+        TicketBriefDto: {
+            /** Format: int32 */
+            ageDays?: number;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            dueDateUtc?: string | null;
+            /** Format: uuid */
+            id?: string;
+            /** Format: date-time */
+            lastActivityUtc?: string | null;
+            status?: components["schemas"]["TicketStatus"];
+            ticketNumber?: string;
+            title?: string;
+        };
+        TicketBriefListDto: {
+            items?: components["schemas"]["TicketBriefDto"][];
+            /** Format: int32 */
+            total?: number;
         };
         TicketCountsDto: {
             /** Format: int32 */
@@ -5481,11 +5707,41 @@ export interface components {
             count?: number;
             helpTopicName?: string;
         };
+        TransferEdgeDto: {
+            /** Format: int32 */
+            count?: number;
+            /** Format: uuid */
+            fromId?: string | null;
+            fromName?: string | null;
+            /** Format: uuid */
+            toId?: string;
+            toName?: string;
+        };
+        TransferItemDto: {
+            /** Format: date-time */
+            atUtc?: string;
+            /** Format: uuid */
+            fromId?: string | null;
+            fromName?: string | null;
+            /** Format: uuid */
+            ticketId?: string;
+            ticketNumber?: string;
+            title?: string;
+            /** Format: uuid */
+            toId?: string;
+            toName?: string;
+        };
         TransferTicketBranchRequest: {
             /** Format: uuid */
             departmentId?: string;
             /** Format: uuid */
             subBranchId?: string | null;
+        };
+        TransfersDto: {
+            edges?: components["schemas"]["TransferEdgeDto"][];
+            items?: components["schemas"]["TransferItemDto"][];
+            /** Format: int32 */
+            total?: number;
         };
         UpdateCompanyRequest: {
             address?: string | null;

@@ -10,6 +10,7 @@ const RULES: { test: (path: string) => boolean; key: TranslationKey }[] = [
   { test: (p) => /^\/tickets\/[^/]+$/.test(p), key: 'title_ticket' },
   { test: (p) => p === '/tickets', key: 'nav_tickets' },
   { test: (p) => p === '/tasks', key: 'nav_task' },
+  { test: (p) => p === '/reports', key: 'nav_reports' },
   { test: (p) => /^\/users\/[^/]+$/.test(p), key: 'title_user' },
   { test: (p) => p === '/users', key: 'nav_users' },
   { test: (p) => p.startsWith('/companies/'), key: 'title_company' },

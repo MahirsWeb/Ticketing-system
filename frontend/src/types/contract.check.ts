@@ -93,6 +93,15 @@ export type ContractChecks = [
   Expect<Conforms<S['RhythmDto'], T.RhythmDto>>,
   Expect<Conforms<S['RepeatedTopicsDto'], T.RepeatedTopicsDto>>,
   Expect<Conforms<S['QuietCompaniesDto'], T.QuietCompaniesDto>>,
+  Expect<Conforms<S['TicketBriefDto'], T.TicketBriefDto>>,
+  Expect<Conforms<S['TicketBriefListDto'], T.TicketBriefListDto>>,
+  Expect<Conforms<S['AgeGroupDto'], T.AgeGroupDto>>,
+  Expect<Conforms<S['AttentionDto'], T.AttentionDto>>,
+  Expect<Conforms<S['ResolutionTimeDto'], T.ResolutionTimeDto>>,
+  Expect<Conforms<S['FirstResponseDto'], T.FirstResponseDto>>,
+  Expect<Conforms<S['TransferEdgeDto'], T.TransferEdgeDto>>,
+  Expect<Conforms<S['TransferItemDto'], T.TransferItemDto>>,
+  Expect<Conforms<S['TransfersDto'], T.TransfersDto>>,
 
   // knowledge base, settings
   Expect<Conforms<S['KnowledgeBaseSearchResultDto'], T.KnowledgeBaseSearchResultDto>>,

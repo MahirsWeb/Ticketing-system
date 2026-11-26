@@ -23,6 +23,22 @@
         },
         "type": "object"
       },
+      "AgeGroupDto": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "key": {
+            "type": "string"
+          },
+          "oldest": {
+            "$ref": "#/components/schemas/TicketBriefDto"
+          }
+        },
+        "type": "object"
+      },
       "AiInsightsRequest": {
         "additionalProperties": false,
         "properties": {
@@ -62,6 +78,42 @@
         "properties": {
           "summary": {
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AttentionDto": {
+        "additionalProperties": false,
+        "properties": {
+          "activeTotal": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "ages": {
+            "items": {
+              "$ref": "#/components/schemas/AgeGroupDto"
+            },
+            "type": "array"
+          },
+          "asOfUtc": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "dueSoon": {
+            "$ref": "#/components/schemas/TicketBriefListDto"
+          },
+          "inactive": {
+            "$ref": "#/components/schemas/TicketBriefListDto"
+          },
+          "inactiveDays": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "overdue": {
+            "$ref": "#/components/schemas/TicketBriefListDto"
+          },
+          "unassigned": {
+            "$ref": "#/components/schemas/TicketBriefListDto"
           }
         },
         "type": "object"
@@ -772,6 +824,36 @@
         },
         "type": "object"
       },
+      "FirstResponseDto": {
+        "additionalProperties": false,
+        "properties": {
+          "answered": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "averageHours": {
+            "format": "double",
+            "type": "number"
+          },
+          "medianHours": {
+            "format": "double",
+            "type": "number"
+          },
+          "p90Hours": {
+            "format": "double",
+            "type": "number"
+          },
+          "tickets": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "unanswered": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "ForgotPasswordRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1392,6 +1474,28 @@
         },
         "type": "object"
       },
+      "ResolutionTimeDto": {
+        "additionalProperties": false,
+        "properties": {
+          "averageHours": {
+            "format": "double",
+            "type": "number"
+          },
+          "count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "medianHours": {
+            "format": "double",
+            "type": "number"
+          },
+          "p90Hours": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
       "RhythmDto": {
         "additionalProperties": false,
         "properties": {
@@ -1620,6 +1724,59 @@
           "id": {
             "format": "uuid",
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TicketBriefDto": {
+        "additionalProperties": false,
+        "properties": {
+          "ageDays": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "dueDateUtc": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "lastActivityUtc": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TicketStatus"
+          },
+          "ticketNumber": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TicketBriefListDto": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TicketBriefDto"
+            },
+            "type": "array"
+          },
+          "total": {
+            "format": "int32",
+            "type": "integer"
           }
         },
         "type": "object"
@@ -2064,6 +2221,68 @@
         },
         "type": "object"
       },
+      "TransferEdgeDto": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "fromId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "fromName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "toId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "toName": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TransferItemDto": {
+        "additionalProperties": false,
+        "properties": {
+          "atUtc": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "fromId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "fromName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "ticketId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "ticketNumber": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "toId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "toName": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "TransferTicketBranchRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2075,6 +2294,28 @@
             "format": "uuid",
             "nullable": true,
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TransfersDto": {
+        "additionalProperties": false,
+        "properties": {
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/TransferEdgeDto"
+            },
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TransferItemDto"
+            },
+            "type": "array"
+          },
+          "total": {
+            "format": "int32",
+            "type": "integer"
           }
         },
         "type": "object"
@@ -5697,6 +5938,219 @@
         ]
       }
     },
+    "/api/reports/tickets/attention": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "departmentId",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "inactiveDays",
+            "schema": {
+              "default": 3,
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttentionDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttentionDto"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttentionDto"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "TicketInsights"
+        ]
+      }
+    },
+    "/api/reports/tickets/first-response": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "departmentId",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FirstResponseDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FirstResponseDto"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/FirstResponseDto"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "TicketInsights"
+        ]
+      }
+    },
+    "/api/reports/tickets/resolution": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "departmentId",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolutionTimeDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolutionTimeDto"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolutionTimeDto"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "TicketInsights"
+        ]
+      }
+    },
+    "/api/reports/tickets/transfers": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "departmentId",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransfersDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransfersDto"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransfersDto"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "TicketInsights"
+        ]
+      }
+    },
     "/api/reports/timeseries": {
       "get": {
         "parameters": [
@@ -8564,6 +9018,9 @@
     },
     {
       "name": "Settings"
+    },
+    {
+      "name": "TicketInsights"
     },
     {
       "name": "Tickets"

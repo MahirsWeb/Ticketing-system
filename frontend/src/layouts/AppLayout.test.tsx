@@ -190,6 +190,26 @@ describe('the button for a new ticket', () => {
     expect(await screen.findByRole('button', { name: /new ticket/i })).toBeInTheDocument();
   });
 
+  it('has the reports among the links for staff, after the tasks, and not at the right end; a client has none', async () => {
+    useAuthStore.setState({ accessToken: 't', user: employee });
+    const first = renderLayout();
+    const link = await screen.findByRole('link', { name: 'Reports' });
+    expect(link).toHaveAttribute('href', '/reports');
+    expect(screen.getByRole('navigation').contains(link)).toBe(true);
+    expect(link.className).not.toContain('ml-auto');
+    first.unmount();
+
+    useAuthStore.setState({ accessToken: 't', user: admin });
+    const second = renderLayout();
+    expect(await screen.findByRole('link', { name: 'Reports' })).toBeInTheDocument();
+    second.unmount();
+
+    useAuthStore.setState({ accessToken: 't', user: client });
+    renderLayout();
+    await screen.findByRole('navigation');
+    expect(screen.queryByRole('link', { name: 'Reports' })).not.toBeInTheDocument();
+  });
+
   it('is not there in the Tickets section, nor on the new-on-behalf page', async () => {
     useAuthStore.setState({ accessToken: 't', user: employee });
     const list = renderLayout('/tickets');

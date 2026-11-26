@@ -541,3 +541,80 @@ export interface QuietCompaniesDto {
   total: number;
   items: QuietCompanyDto[];
 }
+
+// The reports of the "Tickets" tab (api/reports/tickets).
+export interface TicketBriefDto {
+  id: string;
+  ticketNumber: string;
+  title: string;
+  status: TicketStatus;
+  createdAt: string;
+  dueDateUtc: string | null;
+  lastActivityUtc: string | null;
+  ageDays: number;
+}
+
+export interface TicketBriefListDto {
+  total: number;
+  items: TicketBriefDto[];
+}
+
+export type AgeGroupKey = 'upTo2Days' | 'upTo7Days' | 'upTo30Days' | 'older';
+
+export interface AgeGroupDto {
+  key: string;
+  count: number;
+  oldest: TicketBriefDto | null;
+}
+
+export interface AttentionDto {
+  asOfUtc: string;
+  activeTotal: number;
+  ages: AgeGroupDto[];
+  inactiveDays: number;
+  inactive: TicketBriefListDto;
+  unassigned: TicketBriefListDto;
+  dueSoon: TicketBriefListDto;
+  overdue: TicketBriefListDto;
+}
+
+export interface ResolutionTimeDto {
+  count: number;
+  averageHours: number;
+  medianHours: number;
+  p90Hours: number;
+}
+
+export interface FirstResponseDto {
+  tickets: number;
+  answered: number;
+  unanswered: number;
+  averageHours: number;
+  medianHours: number;
+  p90Hours: number;
+}
+
+export interface TransferEdgeDto {
+  fromId: string | null;
+  fromName: string | null;
+  toId: string;
+  toName: string;
+  count: number;
+}
+
+export interface TransferItemDto {
+  ticketId: string;
+  ticketNumber: string;
+  title: string;
+  atUtc: string;
+  fromId: string | null;
+  fromName: string | null;
+  toId: string;
+  toName: string;
+}
+
+export interface TransfersDto {
+  total: number;
+  edges: TransferEdgeDto[];
+  items: TransferItemDto[];
+}

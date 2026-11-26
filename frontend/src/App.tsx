@@ -19,6 +19,7 @@ import { useLanguage } from './i18n/LanguageContext';
 // download, and a client who only files tickets never needs the dashboard.
 const DashboardPage = lazy(() => import('./pages/dashboard/DashboardShell'));
 const CompaniesPage = lazy(() => import('./pages/dashboard/companies/CompaniesPage'));
+const ReportsPage = lazy(() => import('./pages/reports/ReportsPage'));
 const TicketsListPage = lazy(() => import('./pages/tickets/TicketsListPage'));
 const TicketDetailPage = lazy(() => import('./pages/tickets/TicketDetailPage'));
 const NewTicketPage = lazy(() => import('./pages/tickets/NewTicketPage'));
@@ -98,6 +99,14 @@ export default function App() {
                 element={
                   <RequireRole roles={['Admin', 'Employee']}>
                     <CompaniesPage />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/reports"
+                element={
+                  <RequireRole roles={['Admin', 'Employee']}>
+                    <ReportsPage />
                   </RequireRole>
                 }
               />
