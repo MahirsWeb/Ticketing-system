@@ -272,6 +272,7 @@ builder.Services.AddScoped<TicketSystemTech.Api.Notifications.INotifier, TicketS
 builder.Services.AddScoped<TicketSystemTech.Api.Settings.IOverdueSettingsService, TicketSystemTech.Api.Settings.OverdueSettingsService>();
 builder.Services.AddScoped<TicketSystemTech.Api.Auth.IAuthService, TicketSystemTech.Api.Auth.AuthService>();
 builder.Services.AddScoped<TicketSystemTech.Api.Reports.IReportService, TicketSystemTech.Api.Reports.ReportService>();
+builder.Services.AddScoped<TicketSystemTech.Api.Integration.IAuditTrailReader, TicketSystemTech.Api.Integration.AuditTrailReader>();
 builder.Services.AddScoped<TicketSystemTech.Api.Reports.ICompanyReportService, TicketSystemTech.Api.Reports.CompanyReportService>();
 builder.Services.AddScoped<TicketSystemTech.Api.WorkTasks.IWorkTaskQueries, TicketSystemTech.Api.WorkTasks.WorkTaskQueries>();
 builder.Services.AddScoped<TicketSystemTech.Api.WorkTasks.IWorkTaskService, TicketSystemTech.Api.WorkTasks.WorkTaskService>();

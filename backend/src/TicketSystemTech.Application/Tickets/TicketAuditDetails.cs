@@ -19,6 +19,20 @@ public static class TicketAuditDetails
 
     public static string StatusChanged(TicketStatus from, TicketStatus to) => $"{from} -> {to}";
 
+    /// <summary>A transfer between branches (departments, <c>Ticket.DepartmentId</c>; NOT sub-branches). A ticket that had no branch is "-".</summary>
+    public static string Transferred(Guid? fromDepartmentId, Guid toDepartmentId) => $"Branch {fromDepartmentId?.ToString() ?? "-"} -> {toDepartmentId}";
+
+    /// <summary>The department a ticket left (null: it had none) and the one it went to. Anything else, including a destination that is not an id, is not understood.</summary>
+    public static (Guid? From, Guid To)? Transfer(string? details)
+    {
+        const string prefix = "Branch ";
+        if (details is null || !details.StartsWith(prefix, StringComparison.Ordinal)) return null;
+        var parts = details[prefix.Length..].Split(" -> ", 2, StringSplitOptions.TrimEntries);
+        if (parts is not { Length: 2 } || !Guid.TryParse(parts[1], out var to)) return null;
+        if (parts[0] == "-") return (null, to);
+        return Guid.TryParse(parts[0], out var from) ? (from, to) : null;
+    }
+
     public static Guid? AddedUser(string? details) => GuidAfter(details, "Added ");
 
     public static Guid? RemovedUser(string? details) => GuidAfter(details, "Removed ");
