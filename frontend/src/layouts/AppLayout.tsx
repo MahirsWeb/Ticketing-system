@@ -183,6 +183,7 @@ export default function AppLayout() {
 
   if (!user) return null;
   const nav = navByRole[user.role] ?? [];
+  const inTicketsSection = location.pathname === '/tickets' || location.pathname.startsWith('/tickets/');
 
   return (
     <div className="min-h-screen bg-slate-200">
@@ -241,7 +242,8 @@ export default function AppLayout() {
             )}
           </nav>
           {/* The only item at the right, outside the row that scrolls on a narrow screen, so that it is always there; staff only, on every page. */}
-          {user.role !== 'Client' && (
+          {/* Not in the Tickets section (list, ticket, new-on-behalf): there the ticket is made from its own page. */}
+          {user.role !== 'Client' && !inTicketsSection && (
             <button
               type="button"
               onClick={() => setQuickOpen(true)}

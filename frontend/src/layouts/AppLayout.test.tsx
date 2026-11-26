@@ -31,14 +31,15 @@ vi.mock('../lib/notificationsHub', () => ({
 
 const employee = { id: 'u1', firstName: 'Amra', lastName: 'H', role: 'Employee', phoneNumberPrompted: true } as UserSummary;
 
-function renderLayout() {
+function renderLayout(path = '/tasks') {
   return renderWithQuery(
     <LanguageProvider>
-      <MemoryRouter initialEntries={['/tasks']}>
+      <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route element={<AppLayout />}>
             <Route path="/tasks" element={<p>the tasks</p>} />
             <Route path="/tickets" element={<p>the tickets</p>} />
+            <Route path="/tickets/new-on-behalf" element={<p>the new on behalf</p>} />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -187,6 +188,18 @@ describe('the button for a new ticket', () => {
     useAuthStore.setState({ accessToken: 't', user: admin });
     renderLayout();
     expect(await screen.findByRole('button', { name: /new ticket/i })).toBeInTheDocument();
+  });
+
+  it('is not there in the Tickets section, nor on the new-on-behalf page', async () => {
+    useAuthStore.setState({ accessToken: 't', user: employee });
+    const list = renderLayout('/tickets');
+    await screen.findByText('the tickets');
+    expect(screen.queryByRole('button', { name: /new ticket/i })).not.toBeInTheDocument();
+    list.unmount();
+
+    renderLayout('/tickets/new-on-behalf');
+    await screen.findByText('the new on behalf');
+    expect(screen.queryByRole('button', { name: /new ticket/i })).not.toBeInTheDocument();
   });
 
   it('is not there for a client, who has a form of their own', async () => {
