@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useId, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { useAuthStore } from '../store/authStore';
@@ -11,6 +11,9 @@ import { useTicketCounts } from '../api/ticketQueries';
 import { authApi } from '../api/auth';
 import { usersApi } from '../api/users';
 import clsx from 'clsx';
+
+// The dialog brings the rich text editor with it: it is fetched when somebody asks for it.
+const QuickTicketDialog = lazy(() => import('../pages/tickets/QuickTicketDialog').then((m) => ({ default: m.QuickTicketDialog })));
 
 function useNavByRole(): Record<string, { to: string; label: string; ticketsDropdown?: boolean }[]> {
   const { t } = useLanguage();
@@ -152,6 +155,7 @@ export default function AppLayout() {
   const navByRole = useNavByRole();
   const [signingOut, setSigningOut] = useState(false);
   const [signOutFailed, setSignOutFailed] = useState(false);
+  const [quickOpen, setQuickOpen] = useState(false);
 
   // E-mails are composed on the server, which does not know the language the browser shows: it is told, when the person signs in and
   // whenever they change it. A failure is not worth showing (the next load tells it again), so it is dropped.
@@ -224,17 +228,31 @@ export default function AppLayout() {
           </div>
         </div>
 
-        <nav aria-label={t('common_mainNav')} className="mx-auto flex max-w-5xl gap-1 px-4 max-sm:overflow-x-auto">
-          {nav.map((item) =>
-            item.ticketsDropdown ? (
-              <TicketsNavItem key={item.to} to={item.to} label={item.label} />
-            ) : (
-              <NavLink key={item.to} to={item.to} end={item.to === '/'} className={navLinkClass}>
-                {item.label}
-              </NavLink>
-            )
+        <div className="mx-auto flex max-w-5xl items-center gap-2 px-4">
+          <nav aria-label={t('common_mainNav')} className="flex min-w-0 flex-1 gap-1 max-sm:overflow-x-auto">
+            {nav.map((item) =>
+              item.ticketsDropdown ? (
+                <TicketsNavItem key={item.to} to={item.to} label={item.label} />
+              ) : (
+                <NavLink key={item.to} to={item.to} end={item.to === '/'} className={navLinkClass}>
+                  {item.label}
+                </NavLink>
+              )
+            )}
+          </nav>
+          {/* The only item at the right, outside the row that scrolls on a narrow screen, so that it is always there; staff only, on every page. */}
+          {user.role !== 'Client' && (
+            <button
+              type="button"
+              onClick={() => setQuickOpen(true)}
+              aria-haspopup="dialog"
+              className="ml-auto shrink-0 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-500"
+            >
+              <span aria-hidden>+ </span>
+              {t('quick_button')}
+            </button>
           )}
-        </nav>
+        </div>
       </header>
 
       {signOutFailed && (
@@ -244,6 +262,12 @@ export default function AppLayout() {
       )}
 
       {user.role === 'Client' && <PhoneNumberBanner />}
+
+      {quickOpen && (
+        <Suspense fallback={null}>
+          <QuickTicketDialog onClose={() => setQuickOpen(false)} />
+        </Suspense>
+      )}
 
       <main className="mx-auto max-w-5xl px-4 py-6">
         {/* Only the page area waits for a screen's code; the header and navigation stay put. */}

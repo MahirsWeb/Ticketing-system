@@ -1,5 +1,6 @@
 import clsx from 'clsx';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Input } from './ui';
 
 export interface ComboboxOption {
@@ -61,6 +62,8 @@ export function Combobox({
   const [active, setActive] = useState(0);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const ownChange = useRef(false);
+  // Where the list is drawn: it is drawn on the page, over everything (a dialog that scrolls would cut it off), next to the box.
+  const [place, setPlace] = useState<{ left: number; width: number; top?: number; bottom?: number; maxHeight: number } | null>(null);
 
   // The choice changed from outside (a form that was reset, a company that changed): the box follows it. A change this component made itself is not
   // followed, or the text that is being typed would be wiped the moment the choice was cleared.
@@ -72,6 +75,26 @@ export function Combobox({
     setText(selected?.label ?? '');
     setQuery('');
   }, [selected?.id, selected?.label]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    function measure() {
+      const box = wrapperRef.current?.getBoundingClientRect();
+      if (!box) return;
+      const below = window.innerHeight - box.bottom - 12;
+      const above = box.top - 12;
+      // Under the box, unless there is little room there and more above it.
+      if (below < 160 && above > below) setPlace({ left: box.left, width: box.width, bottom: window.innerHeight - box.top + 4, maxHeight: Math.min(240, above) });
+      else setPlace({ left: box.left, width: box.width, top: box.bottom + 4, maxHeight: Math.max(120, Math.min(240, below)) });
+    }
+    measure();
+    window.addEventListener('resize', measure);
+    window.addEventListener('scroll', measure, true); // a scroll of anything the box is in
+    return () => {
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('scroll', measure, true);
+    };
+  }, [open]);
 
   const shown = useMemo(() => {
     const needle = plain(query);
@@ -171,8 +194,17 @@ export function Combobox({
         onClick={() => setOpen(true)}
         onKeyDown={onKeyDown}
       />
-      {open && !disabled && (
-        <div id={listId} role="listbox" className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-slate-300 bg-white py-1 shadow-lg">
+      {open && !disabled && place &&
+        createPortal(
+        <div
+          id={listId}
+          role="listbox"
+          tabIndex={-1}
+          // the box keeps the focus when the list is pressed (its scroll bar included): leaving the box would settle the text before an item is chosen
+          onMouseDown={(e) => e.preventDefault()}
+          style={{ position: 'fixed', left: place.left, width: place.width, top: place.top, bottom: place.bottom, maxHeight: place.maxHeight }}
+          className="z-[60] overflow-auto rounded-md border border-slate-300 bg-white py-1 shadow-lg"
+        >
           {shown.length === 0 ? (
             <div role="presentation" className="px-3 py-2 text-sm text-slate-600">
               {noResultsText}
@@ -198,7 +230,8 @@ export function Combobox({
               </div>
             ))
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

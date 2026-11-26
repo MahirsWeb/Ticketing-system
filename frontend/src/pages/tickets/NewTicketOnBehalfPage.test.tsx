@@ -12,9 +12,9 @@ import { renderWithQuery } from '../../test/renderWithQuery';
 import type { UserSummary } from '../../types';
 
 vi.mock('../../api/lookups', () => ({
-  lookupsApi: { helpTopics: vi.fn(), departments: vi.fn(), slaPlans: vi.fn(), ticketCategories: vi.fn(), subBranches: vi.fn() },
+  lookupsApi: { companies: vi.fn(), helpTopics: vi.fn(), departments: vi.fn(), slaPlans: vi.fn(), ticketCategories: vi.fn(), subBranches: vi.fn() },
 }));
-vi.mock('../../api/users', () => ({ usersApi: { list: vi.fn(), lookupByEmail: vi.fn() } }));
+vi.mock('../../api/users', () => ({ usersApi: { list: vi.fn(), lookupByEmail: vi.fn(), companyClientChoices: vi.fn() } }));
 vi.mock('../../api/tickets', () => ({ ticketsApi: { createOnBehalf: vi.fn(), uploadAttachments: vi.fn() } }));
 vi.mock('../../api/emailIntegration', () => ({ emailIntegrationApi: { getPrefill: vi.fn(), completeTicket: vi.fn() } }));
 
@@ -31,7 +31,19 @@ vi.mock('../../components/RichTextEditor', () => ({
 const admin = { id: 'admin', firstName: 'Ad', lastName: 'Min', role: 'Admin' } as UserSummary;
 const staff = { id: 'staff', firstName: 'Dino', lastName: 'Dinić', role: 'Employee', departmentId: 'a', departmentName: 'Branch A' } as UserSummary;
 
+// What the e-mail lookup finds for the sender of an e-mail (the form picks them in the two boxes), and what the boxes offer.
 const klijent = { id: 'c1', firstName: 'Klijent', lastName: 'Klijentić', email: 'k@x.test', phoneNumber: '+38761000001', companyId: 'co', companyName: 'Acme' };
+const COMPANIES = [
+  { id: 'co', name: 'Acme', isActive: true },
+  { id: 'co2', name: 'Beta Trgovina', isActive: true },
+];
+const PEOPLE: Record<string, { id: string; name: string; email: string }[]> = {
+  co: [
+    { id: 'c1', name: 'Klijent Klijentić', email: 'k@x.test' },
+    { id: 'c2', name: 'Maja Majić', email: 'maja@x.test' },
+  ],
+  co2: [{ id: 'c3', name: 'Dario Darić', email: 'd@beta.test' }],
+};
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -62,16 +74,19 @@ function renderPage(address = '/tickets/new-on-behalf') {
   );
 }
 
-/** Finds the client, which brings the form. */
-async function findClient(email = 'k@x.test') {
-  await userEvent.type(screen.getByPlaceholderText('client@company.com'), email);
-  await userEvent.click(screen.getByRole('button', { name: 'Find client' }));
+/** Chooses the company and then a person of it, which brings the form. */
+async function chooseClient(company = 'Acme', person = 'Klijent Klijentić') {
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('combobox', { name: 'Company' }));
+  await user.click(await screen.findByRole('option', { name: company }));
+  await waitFor(() => expect(screen.getByRole('combobox', { name: 'Company employee' })).toBeEnabled());
+  await user.click(screen.getByRole('combobox', { name: 'Company employee' }));
+  await user.click(await screen.findByRole('option', { name: new RegExp(`^${person}`) }));
 }
 
 async function open() {
-  vi.mocked(usersApi.lookupByEmail).mockResolvedValue(klijent as never);
   renderPage();
-  await findClient();
+  await chooseClient();
   await screen.findByLabelText('Title *');
 }
 
@@ -102,64 +117,94 @@ describe('opening a ticket on behalf of a client', () => {
       { id: 'e3', firstName: 'Dino', lastName: 'Dinić', role: 'Employee', departmentId: 'a', subBranchId: null },
     ] as never);
     vi.mocked(usersApi.lookupByEmail).mockReset();
+    vi.mocked(lookupsApi.companies).mockReset().mockResolvedValue(COMPANIES as never);
+    vi.mocked(usersApi.companyClientChoices).mockReset().mockImplementation(async (companyId: string) => PEOPLE[companyId] ?? []);
     vi.mocked(ticketsApi.createOnBehalf).mockReset().mockResolvedValue(created());
     vi.mocked(ticketsApi.uploadAttachments).mockReset().mockResolvedValue([]);
     vi.mocked(emailIntegrationApi.getPrefill).mockReset();
     vi.mocked(emailIntegrationApi.completeTicket).mockReset().mockResolvedValue(undefined);
   });
 
-  describe('finding the client', () => {
-    it('shows who was found, and the form only after somebody was', async () => {
-      vi.mocked(usersApi.lookupByEmail).mockResolvedValue(klijent as never);
+  describe('choosing the client', () => {
+    it('offers the people of a company only after the company is chosen, and the form only after a person was', async () => {
+      const user = userEvent.setup();
       renderPage();
       expect(screen.queryByLabelText('Title *')).not.toBeInTheDocument();
+      expect(await screen.findByRole('combobox', { name: 'Company employee' })).toBeDisabled();
+      expect(vi.mocked(usersApi.companyClientChoices)).not.toHaveBeenCalled();
 
-      await findClient();
+      await user.click(screen.getByRole('combobox', { name: 'Company' }));
+      await user.click(await screen.findByRole('option', { name: 'Acme' }));
 
-      expect(await screen.findByText('Klijent Klijentić')).toBeInTheDocument();
-      expect(screen.getByText('Acme')).toBeInTheDocument();
-      expect(screen.getByText('+38761000001')).toBeInTheDocument();
-      expect(vi.mocked(usersApi.lookupByEmail).mock.calls).toEqual([['k@x.test']]);
+      await waitFor(() => expect(screen.getByRole('combobox', { name: 'Company employee' })).toBeEnabled());
+      expect(vi.mocked(usersApi.companyClientChoices).mock.calls.map((c) => c[0])).toEqual(['co']);
+      expect(screen.queryByLabelText('Title *')).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('combobox', { name: 'Company employee' }));
+      await user.click(await screen.findByRole('option', { name: /^Maja Majić/ }));
+
       expect(await screen.findByLabelText('Title *')).toBeInTheDocument();
     });
 
-    it('says plainly when there is no company or phone number on file', async () => {
-      vi.mocked(usersApi.lookupByEmail).mockResolvedValue({ ...klijent, companyName: null, phoneNumber: null } as never);
-      renderPage();
-
-      await findClient();
-
-      expect(await screen.findByText('No company on file')).toBeInTheDocument();
-      expect(screen.getByText('No phone number on file')).toBeInTheDocument();
-    });
-
-    it('says what the server said when nobody was found, and plainly when it said nothing, and takes a client that was found away', async () => {
+    it('offers only the people of the company that is chosen, and tells those of the same name apart by the address', async () => {
       const user = userEvent.setup();
-      vi.mocked(usersApi.lookupByEmail).mockResolvedValueOnce(klijent as never).mockRejectedValueOnce({ response: { data: { message: 'That account is not a client.' } } }).mockRejectedValueOnce(new Error('network'));
       renderPage();
-      await findClient();
-      await screen.findByLabelText('Title *');
+      await user.click(await screen.findByRole('combobox', { name: 'Company' }));
+      await user.click(await screen.findByRole('option', { name: 'Beta Trgovina' }));
+      await waitFor(() => expect(screen.getByRole('combobox', { name: 'Company employee' })).toBeEnabled());
 
-      await user.clear(screen.getByPlaceholderText('client@company.com'));
-      await user.type(screen.getByPlaceholderText('client@company.com'), 'x@x.test');
-      await user.click(screen.getByRole('button', { name: 'Find client' }));
-      expect(await screen.findByText('That account is not a client.')).toBeInTheDocument();
-      expect(screen.queryByLabelText('Title *')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('combobox', { name: 'Company employee' }));
 
-      await user.click(screen.getByRole('button', { name: 'Find client' }));
-      expect(await screen.findByText('No client found with that email.')).toBeInTheDocument();
+      expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Dario Darićd@beta.test']);
     });
 
-    it('cannot be asked twice at once', async () => {
-      const pending = deferred<never>();
-      vi.mocked(usersApi.lookupByEmail).mockReturnValue(pending.promise);
+    it('shows the address of the person that was chosen', async () => {
       renderPage();
+      await chooseClient('Acme', 'Maja Majić');
 
-      await findClient();
+      expect(await screen.findByText('maja@x.test')).toBeInTheDocument();
+    });
 
-      expect(screen.getByRole('button', { name: 'Looking…' })).toBeDisabled();
-      await act(async () => pending.resolve(klijent as never));
-      expect(await screen.findByRole('button', { name: 'Find client' })).toBeEnabled();
+    it('lets go of the person, and of the form, when another company is chosen, and does not lose what was typed in the meantime', async () => {
+      const user = userEvent.setup();
+      await open();
+      await user.type(screen.getByLabelText('Title *'), 'Printer ne radi');
+
+      await user.click(screen.getByRole('combobox', { name: 'Company' }));
+      await user.click(await screen.findByRole('option', { name: 'Beta Trgovina' }));
+
+      expect(screen.queryByLabelText('Title *')).not.toBeInTheDocument();
+      expect(screen.getByRole('combobox', { name: 'Company employee' })).toHaveValue('');
+
+      await user.click(await screen.findByRole('combobox', { name: 'Company employee' }));
+      await user.click(await screen.findByRole('option', { name: /^Dario Darić/ }));
+      expect(await screen.findByLabelText('Title *')).toHaveValue('Printer ne radi');
+    });
+
+    it('makes nothing of a company that does not exist: what was typed is dropped, and the person box stays shut', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await user.type(await screen.findByRole('combobox', { name: 'Company' }), 'Gama');
+      await user.tab();
+
+      expect(screen.getByRole('combobox', { name: 'Company' })).toHaveValue('');
+      expect(screen.getByRole('combobox', { name: 'Company employee' })).toBeDisabled();
+    });
+
+    it('says so when the companies could not be loaded, and when the people of a company could not', async () => {
+      vi.mocked(lookupsApi.companies).mockRejectedValue(new Error('offline'));
+      const first = renderPage();
+      expect(await screen.findByText('The companies could not be loaded.')).toBeInTheDocument();
+      first.unmount();
+
+      vi.mocked(lookupsApi.companies).mockResolvedValue(COMPANIES as never);
+      vi.mocked(usersApi.companyClientChoices).mockRejectedValue(new Error('offline'));
+      renderPage();
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole('combobox', { name: 'Company' }));
+      await user.click(await screen.findByRole('option', { name: 'Acme' }));
+
+      expect(await screen.findByText('The employees of the company could not be loaded.')).toBeInTheDocument();
     });
   });
 
@@ -175,8 +220,10 @@ describe('opening a ticket on behalf of a client', () => {
       expect(await screen.findByDisplayValue('Printer ne radi')).toBeInTheDocument();
       expect(screen.getByRole('textbox', { name: 'Description' })).toHaveValue('<p>Od klijenta</p>');
       expect(screen.getByLabelText('Ticket source')).toHaveValue('Email');
-      expect(screen.getByDisplayValue('k@x.test')).toBeInTheDocument();
-      expect(await screen.findByText('Klijent Klijentić')).toBeInTheDocument();
+      // the sender is found by the address of the e-mail, and both boxes start with them: their company, and the person
+      await waitFor(() => expect(screen.getByRole('combobox', { name: 'Company' })).toHaveValue('Acme'));
+      await waitFor(() => expect(screen.getByRole('combobox', { name: 'Company employee' })).toHaveValue('Klijent Klijentić'));
+      expect(await screen.findByText('k@x.test')).toBeInTheDocument();
       expect(screen.getByText(/pulled from the marked email/)).toBeInTheDocument();
       expect(screen.getByText(/Its attachments will be added to the ticket automatically/)).toBeInTheDocument();
       expect(vi.mocked(emailIntegrationApi.getPrefill).mock.calls).toEqual([['m1']]);
@@ -194,14 +241,39 @@ describe('opening a ticket on behalf of a client', () => {
       expect(screen.queryByText(/attachments will be added/)).not.toBeInTheDocument();
     });
 
-    it('says that the client has to be searched for by hand when no account was found for the sender', async () => {
+    it('says that the client has to be chosen by hand when no account was found for the sender', async () => {
       vi.mocked(emailIntegrationApi.getPrefill).mockResolvedValue(prefill);
       vi.mocked(usersApi.lookupByEmail).mockRejectedValue(new Error('not found'));
 
       renderPage('/tickets/new-on-behalf?fromEmail=m1');
 
-      expect(await screen.findByText('Could not automatically find a client account for this email — search manually below.')).toBeInTheDocument();
+      expect(await screen.findByText('No client account was found for the sender of this e-mail: choose the company and the employee below.')).toBeInTheDocument();
       expect(screen.queryByLabelText('Title *')).not.toBeInTheDocument();
+    });
+
+    it('says so too when the sender has an account in a company that cannot be chosen, and chooses nobody', async () => {
+      vi.mocked(emailIntegrationApi.getPrefill).mockResolvedValue(prefill);
+      vi.mocked(usersApi.lookupByEmail).mockResolvedValue({ ...klijent, companyId: 'switched-off' } as never);
+
+      renderPage('/tickets/new-on-behalf?fromEmail=m1');
+
+      expect(await screen.findByText(/No client account was found for the sender of this e-mail/)).toBeInTheDocument();
+      expect(screen.getByRole('combobox', { name: 'Company' })).toHaveValue('');
+    });
+
+    it('lets go of the sender for good once the person has chosen somebody by hand', async () => {
+      const user = userEvent.setup();
+      const sender = deferred<never>();
+      vi.mocked(emailIntegrationApi.getPrefill).mockResolvedValue(prefill);
+      vi.mocked(usersApi.lookupByEmail).mockReturnValue(sender.promise as never);
+
+      renderPage('/tickets/new-on-behalf?fromEmail=m1');
+      await chooseClient('Beta Trgovina', 'Dario Darić');
+      await act(async () => sender.resolve(klijent as never)); // the answer arrives after the choice
+
+      expect(screen.getByRole('combobox', { name: 'Company' })).toHaveValue('Beta Trgovina');
+      expect(screen.getByRole('combobox', { name: 'Company employee' })).toHaveValue('Dario Darić');
+      await user.tab(); // nothing to wait for: the page has not been moved back to the sender
     });
   });
 
@@ -580,14 +652,13 @@ describe('opening a ticket on behalf of a client', () => {
       expect(await screen.findByText(/The staff could not be loaded/)).toBeInTheDocument();
     });
 
-    it('says that the e-mail could not be loaded, and still lets the client be searched for by hand', async () => {
+    it('says that the e-mail could not be loaded, and still lets the client be chosen by hand', async () => {
       vi.mocked(emailIntegrationApi.getPrefill).mockRejectedValue(new Error('network'));
 
       renderPage('/tickets/new-on-behalf?fromEmail=m1');
 
       expect(await screen.findByText(/The e-mail could not be loaded/)).toBeInTheDocument();
-      expect(screen.getByPlaceholderText('client@company.com')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Find client' })).toBeEnabled();
+      expect(screen.getByRole('combobox', { name: 'Company' })).toBeEnabled();
     });
 
     it('says that something is on its way while the e-mail is being loaded, and not that nothing was pulled from it', async () => {

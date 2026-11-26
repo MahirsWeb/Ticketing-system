@@ -65,6 +65,22 @@ describe('the combobox', () => {
     expect(box()).toHaveAttribute('aria-controls', screen.getByRole('listbox').id);
   });
 
+  it('draws its list on the page itself, not inside the element the box sits in, so that a dialog which scrolls cannot cut it off', async () => {
+    const user = userEvent.setup();
+    render(
+      <div style={{ overflow: 'auto', maxHeight: 40 }} data-testid="clipping-parent">
+        <Harness />
+      </div>
+    );
+
+    await user.click(box());
+
+    const list = screen.getByRole('listbox');
+    expect(screen.getByTestId('clipping-parent').contains(list)).toBe(false);
+    expect(list.parentElement).toBe(document.body);
+    expect(list.style.position).toBe('fixed');
+  });
+
   it('narrows the list by what is typed, without regard to case or accents', async () => {
     const user = userEvent.setup();
     render(<Harness />);

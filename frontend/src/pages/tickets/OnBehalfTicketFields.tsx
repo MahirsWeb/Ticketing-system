@@ -6,14 +6,14 @@ import type { OnBehalfTicket } from './useOnBehalfTicket';
 import { useLanguage } from '../../i18n/LanguageContext';
 import type { TranslationKey } from '../../i18n/translations';
 
-/** The second step: describe the issue and say where the ticket goes. All of it is drawn from the model, which keeps what was typed. */
-export function OnBehalfTicketFields({ model }: { model: OnBehalfTicket }) {
+/** The second step: describe the issue and say where the ticket goes. All of it is drawn from the model, which keeps what was typed. `bare`: without a card and a heading of its own, for a dialog that has them. */
+export function OnBehalfTicketFields({ model, bare = false }: { model: OnBehalfTicket; bare?: boolean }) {
   const { t } = useLanguage();
   const { values, set, lists, subBranches, employeesByDepartment } = model;
 
-  return (
-    <Card className="p-5">
-      <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-600">{t('onbehalf_heading')}</h2>
+  const content = (
+    <>
+      {!bare && <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-600">{t('onbehalf_heading')}</h2>}
       <form onSubmit={model.submit} className="space-y-4">
         {lists.failed && <ErrorText>{t('onbehalf_listsFail')}</ErrorText>}
         <Field>
@@ -111,6 +111,7 @@ export function OnBehalfTicketFields({ model }: { model: OnBehalfTicket }) {
           {model.loading ? t('onbehalf_creating') : t('onbehalf_submit')}
         </Button>
       </form>
-    </Card>
+    </>
   );
+  return bare ? content : <Card className="p-5">{content}</Card>;
 }

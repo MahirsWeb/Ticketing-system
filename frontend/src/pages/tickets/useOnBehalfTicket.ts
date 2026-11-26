@@ -8,7 +8,7 @@ import { useAuthStore } from '../../store/authStore';
 import { newIdempotencyKey } from '../../lib/idempotency';
 import { isBlankHtml } from '../../lib/htmlText';
 import { finishNewTicket } from '../../lib/finishNewTicket';
-import type { ClientLookupResult, TicketPriority, TicketSource, UserListItemDto } from '../../types';
+import type { TicketPriority, TicketSource, UserListItemDto } from '../../types';
 import { dueDateToUtc } from './ticketOptions';
 import { useTicketLists } from './useTicketLists';
 import { useLanguage } from '../../i18n/LanguageContext';
@@ -20,7 +20,18 @@ const NO_ITEMS: never[] = [];
  * the person who gets the ticket follow one another, and the sending of it. It lives above the form, not in it, so that what was typed is not lost
  * when the search for another client fails and the form goes away for a moment.
  */
-export function useOnBehalfTicket({ client, prefill, emailMessageId }: { client: ClientLookupResult | null; prefill: EmailPrefillDto | undefined; emailMessageId: string | null }) {
+export function useOnBehalfTicket({
+  clientId,
+  prefill,
+  emailMessageId,
+  onCreated,
+}: {
+  clientId: string | null;
+  prefill: EmailPrefillDto | undefined;
+  emailMessageId: string | null;
+  /** What to do when the ticket is made: a dialog stays where the person is and says so. Without it the person is taken to the new ticket. */
+  onCreated?: (ticket: { id: string; ticketNumber: string }) => void;
+}) {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
@@ -98,7 +109,7 @@ export function useOnBehalfTicket({ client, prefill, emailMessageId }: { client:
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!client) return;
+    if (!clientId) return;
     if (!title.trim() || isBlankHtml(description)) {
       setError(t('newTicket_titleDescRequired'));
       return;
@@ -116,7 +127,7 @@ export function useOnBehalfTicket({ client, prefill, emailMessageId }: { client:
     try {
       ticket = await ticketsApi.createOnBehalf(
         {
-          clientId: client.id,
+          clientId,
           title: title.trim(),
           description,
           source,
@@ -144,7 +155,8 @@ export function useOnBehalfTicket({ client, prefill, emailMessageId }: { client:
         upload: ticketsApi.uploadAttachments,
         complete: emailIntegrationApi.completeTicket,
       });
-      navigate(`/tickets/${ticket.id}`);
+      if (onCreated) onCreated({ id: ticket.id, ticketNumber: ticket.ticketNumber });
+      else navigate(`/tickets/${ticket.id}`);
     } catch (err: any) {
       // The ticket exists by now. Saying "could not create" here sent people to try again; the same idempotency key means that
       // sending the form again does not make a second ticket, it only repeats the part that failed.
@@ -154,7 +166,11 @@ export function useOnBehalfTicket({ client, prefill, emailMessageId }: { client:
     }
   }
 
+  /** Whether the person has put anything in that would be lost: text or files (what is chosen from a list is quickly chosen again). */
+  const isDirty = title.trim() !== '' || !isBlankHtml(description) || files.length > 0;
+
   return {
+    isDirty,
     isAdmin,
     ownBranchName: user?.departmentName ?? null,
     lists,

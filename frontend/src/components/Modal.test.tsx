@@ -84,6 +84,86 @@ describe('Modal', () => {
   });
 });
 
+describe('Modal, one inside another', () => {
+  it('lets only the one on top hear Escape: a question asked from inside a dialog closes alone', async () => {
+    const under = vi.fn();
+    const top = vi.fn();
+    render(
+      <>
+        <Modal title="Below" onClose={under}>
+          <button>Below ok</button>
+        </Modal>
+        <Modal title="On top" onClose={top}>
+          <button>Top ok</button>
+        </Modal>
+      </>
+    );
+
+    await userEvent.keyboard('{Escape}');
+
+    expect(top).toHaveBeenCalledTimes(1);
+    expect(under).not.toHaveBeenCalled();
+  });
+
+  it('is heard again by the one below when the one on top is gone', async () => {
+    const under = vi.fn();
+    function Both() {
+      const [showTop, setShowTop] = useState(true);
+      return (
+        <>
+          <Modal title="Below" onClose={under}>
+            <button>Below ok</button>
+          </Modal>
+          {showTop && (
+            <Modal title="On top" onClose={() => setShowTop(false)}>
+              <button>Top ok</button>
+            </Modal>
+          )}
+        </>
+      );
+    }
+    render(<Both />);
+
+    await userEvent.keyboard('{Escape}'); // closes the one on top
+    expect(screen.queryByRole('dialog', { name: 'On top' })).not.toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+
+    expect(under).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Modal that is longer than the screen', () => {
+  it('scrolls inside itself when it is asked to, and does not otherwise', () => {
+    const { rerender } = render(
+      <Modal title="Form" onClose={() => {}} scroll>
+        <p>long</p>
+      </Modal>
+    );
+    expect(screen.getByRole('dialog').parentElement?.className).toContain('overflow-y-auto');
+
+    rerender(
+      <Modal title="Form" onClose={() => {}}>
+        <p>short</p>
+      </Modal>
+    );
+    expect(screen.getByRole('dialog').parentElement?.className).not.toContain('overflow-y-auto');
+  });
+
+  it('shows what it is given at the end of the title row, which is a way to close it that the keyboard also reaches', async () => {
+    const onClose = vi.fn();
+    render(
+      <Modal title="Form" onClose={onClose} headerAction={<button onClick={onClose}>Close it</button>}>
+        <p>body</p>
+      </Modal>
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close it' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('dialog', { name: 'Form' })).toBeInTheDocument();
+  });
+});
+
 describe('ConfirmDialog', () => {
   it('confirms and cancels', async () => {
     const onConfirm = vi.fn();

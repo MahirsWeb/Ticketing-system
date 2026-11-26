@@ -15,6 +15,14 @@ vi.mock('../api/tickets', () => ({
   ticketsApi: { counts: vi.fn().mockResolvedValue({ total: 4, mine: 1, opened: 2, closed: 1, new: 1 }) },
 }));
 vi.mock('../api/auth', () => ({ authApi: { logout: vi.fn() } }));
+// What the button opens is tested on its own (QuickTicketDialog.test.tsx); here it is only a stand-in that says it was opened.
+vi.mock('../pages/tickets/QuickTicketDialog', () => ({
+  QuickTicketDialog: ({ onClose }: { onClose: () => void }) => (
+    <div role="dialog" aria-label="the new ticket dialog">
+      <button onClick={onClose}>shut the dialog</button>
+    </div>
+  ),
+}));
 vi.mock('../api/users', () => ({ usersApi: { setMyLanguage: vi.fn().mockResolvedValue({}), setMyPhone: vi.fn(), skipPhonePrompt: vi.fn() } }));
 vi.mock('../api/notifications', () => ({ notificationsApi: { list: vi.fn().mockResolvedValue([]), markRead: vi.fn() } }));
 vi.mock('../lib/notificationsHub', () => ({
@@ -162,5 +170,56 @@ describe('telling the server which language the person uses', () => {
     vi.mocked(usersApi.setMyLanguage).mockRejectedValueOnce(new Error('offline'));
     renderLayout();
     expect(await screen.findByText('the tasks')).toBeInTheDocument();
+  });
+});
+
+// A ticket can be opened for a client from any page, by staff, from a button at the right end of the navigation.
+describe('the button for a new ticket', () => {
+  const admin = { id: 'a1', firstName: 'Ad', lastName: 'Min', role: 'Admin', phoneNumberPrompted: true } as UserSummary;
+  const client = { id: 'k1', firstName: 'Kli', lastName: 'Jent', role: 'Client', phoneNumberPrompted: true } as UserSummary;
+
+  it('is there for an employee and for an administrator, on any page', async () => {
+    useAuthStore.setState({ accessToken: 't', user: employee });
+    const first = renderLayout();
+    expect(await screen.findByRole('button', { name: /new ticket/i })).toBeInTheDocument();
+    first.unmount();
+
+    useAuthStore.setState({ accessToken: 't', user: admin });
+    renderLayout();
+    expect(await screen.findByRole('button', { name: /new ticket/i })).toBeInTheDocument();
+  });
+
+  it('is not there for a client, who has a form of their own', async () => {
+    useAuthStore.setState({ accessToken: 't', user: client });
+    renderLayout();
+
+    await screen.findByRole('navigation');
+    expect(screen.queryByRole('button', { name: /new ticket/i })).not.toBeInTheDocument();
+  });
+
+  it('is the only thing at the right end, and sits outside the row of links that scrolls on a narrow screen', async () => {
+    useAuthStore.setState({ accessToken: 't', user: employee });
+    renderLayout();
+
+    const button = await screen.findByRole('button', { name: /new ticket/i });
+    const nav = screen.getByRole('navigation');
+
+    expect(button.className).toContain('ml-auto');
+    expect(nav.contains(button)).toBe(false); // a part that scrolls would carry it out of sight
+    expect(button.parentElement).toBe(nav.parentElement);
+    expect(nav.className).not.toContain('ml-auto');
+    expect(Array.from(nav.querySelectorAll('a, button')).filter((el) => el.className.includes('ml-auto'))).toHaveLength(0);
+  });
+
+  it('opens the dialog where the person is, and the dialog goes away again without the page changing', async () => {
+    useAuthStore.setState({ accessToken: 't', user: employee });
+    renderLayout();
+
+    await userEvent.click(await screen.findByRole('button', { name: /new ticket/i }));
+    expect(await screen.findByRole('dialog', { name: 'the new ticket dialog' })).toBeInTheDocument();
+    expect(screen.getByText('the tasks')).toBeInTheDocument(); // still on the page it was opened from
+
+    await userEvent.click(screen.getByRole('button', { name: 'shut the dialog' }));
+    expect(screen.queryByRole('dialog', { name: 'the new ticket dialog' })).not.toBeInTheDocument();
   });
 });

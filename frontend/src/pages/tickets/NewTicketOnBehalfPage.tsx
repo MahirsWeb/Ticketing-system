@@ -3,8 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useEmailPrefill } from '../../api/emailQueries';
 import type { EmailPrefillDto } from '../../api/emailIntegration';
 import { ErrorText } from '../../components/ui';
-import type { ClientLookupResult } from '../../types';
-import { ClientLookupCard } from './ClientLookupCard';
+import { ClientPicker, type ClientPick } from './ClientPicker';
 import { OnBehalfTicketFields } from './OnBehalfTicketFields';
 import { useOnBehalfTicket } from './useOnBehalfTicket';
 import { useLanguage } from '../../i18n/LanguageContext';
@@ -12,8 +11,8 @@ import { useLanguage } from '../../i18n/LanguageContext';
 /** The two steps, with what the model keeps between them: the client, and what has been typed about the issue. */
 function OnBehalfFlow({ prefill, emailMessageId }: { prefill: EmailPrefillDto | undefined; emailMessageId: string | null }) {
   const { t } = useLanguage();
-  const [client, setClient] = useState<ClientLookupResult | null>(null);
-  const model = useOnBehalfTicket({ client, prefill, emailMessageId });
+  const [pick, setPick] = useState<ClientPick>({ companyId: null, clientId: null });
+  const model = useOnBehalfTicket({ clientId: pick.clientId, prefill, emailMessageId });
 
   return (
     <>
@@ -23,8 +22,8 @@ function OnBehalfFlow({ prefill, emailMessageId }: { prefill: EmailPrefillDto | 
           {prefill.hasAttachments && t('onbehalf_prefillAttachments')}
         </p>
       )}
-      <ClientLookupCard client={client} onClient={setClient} initialEmail={prefill?.clientEmail} autoLookupEmail={prefill?.clientEmail} />
-      {client && <OnBehalfTicketFields model={model} />}
+      <ClientPicker value={pick} onChange={setPick} autoLookupEmail={prefill?.clientEmail} />
+      {pick.clientId && <OnBehalfTicketFields model={model} />}
     </>
   );
 }
