@@ -9,7 +9,8 @@ const BACKEND = resolve(__dirname, '../../../backend/src/TicketSystemTech.Api');
 function sources(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
-    if (name === 'obj' || name === 'bin' || name === 'Migrations') return [];
+    // `Integration` is the API for another application (machine clients, English only by design): its sentences are never shown on a screen of this one.
+    if (name === 'obj' || name === 'bin' || name === 'Migrations' || name === 'Integration') return [];
     return statSync(path).isDirectory() ? sources(path) : path.endsWith('.cs') ? [path] : [];
   });
 }
