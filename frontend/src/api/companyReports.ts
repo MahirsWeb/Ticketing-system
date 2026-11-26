@@ -6,6 +6,12 @@ import type {
   CompanyClientStatDto,
   CompanyListPageDto,
   CompanySummaryDto,
+  ConversationDto,
+  OpenAgeDto,
+  QuietCompaniesDto,
+  RepeatedTopicsDto,
+  RhythmDto,
+  TimeSpentDto,
   TimeSeriesPointDto,
   TopCompaniesDto,
 } from '../types';
@@ -42,6 +48,13 @@ export const companyReportsApi = {
   branches: (params: CompanyReportParams) => apiClient.get<BranchCountDto[]>(`${base}/branches`, { params }).then((r) => r.data),
   closedBy: (params: CompanyReportParams) => apiClient.get<ClosedByDto>(`${base}/closed-by`, { params }).then((r) => r.data),
   timeSeries: (params: CompanyReportParams) => apiClient.get<TimeSeriesPointDto[]>(`${base}/timeseries`, { params }).then((r) => r.data),
+
+  openAge: (params: CompanyReportParams) => apiClient.get<OpenAgeDto>(`${base}/open-age`, { params }).then((r) => r.data),
+  timeSpent: (params: CompanyReportParams) => apiClient.get<TimeSpentDto>(`${base}/time-spent`, { params }).then((r) => r.data),
+  conversation: (params: CompanyReportParams) => apiClient.get<ConversationDto>(`${base}/conversation`, { params }).then((r) => r.data),
+  rhythm: (params: CompanyReportParams) => apiClient.get<RhythmDto>(`${base}/rhythm`, { params }).then((r) => r.data),
+  repeatedTopics: (params: CompanyReportParams) => apiClient.get<RepeatedTopicsDto>(`${base}/repeated-topics`, { params }).then((r) => r.data),
+  quiet: (params: { from?: string; to?: string }) => apiClient.get<QuietCompaniesDto>(`${base}/quiet`, { params }).then((r) => r.data),
 
   /// Downloads the workbook of the same figures as the screen shows for the same choice.
   exportXlsx: async (params: CompanyReportParams) => {

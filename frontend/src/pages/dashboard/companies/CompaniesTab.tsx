@@ -7,8 +7,14 @@ import {
   useCompanyCategories,
   useCompanyClientStats,
   useCompanyClosedBy,
+  useCompanyConversation,
+  useCompanyOpenAge,
+  useCompanyRepeated,
+  useCompanyRhythm,
   useCompanySummary,
+  useCompanyTimeSpent,
   useCompanyTopics,
+  useQuietCompanies,
   useTopCompanies,
 } from '../../../api/companyReportQueries';
 import { useCompanies } from '../../../api/lookupQueries';
@@ -19,6 +25,7 @@ import { Button, ErrorText } from '../../../components/ui';
 import { useLanguage } from '../../../i18n/LanguageContext';
 import { BranchesCard, BreakdownCard, ClientsCard, ClosedByCard, TopCompaniesCard } from './CompanyCards';
 import { CompanyFigures } from './CompanyFigures';
+import { ConversationCard, OpenAgeCard, QuietCard, RepeatedCard, RhythmCard, TimeSpentCard } from './InsightCards';
 
 function ExportButton({ params }: { params: { from: string; to: string; companyId?: string; clientId?: string } }) {
   const { t } = useLanguage();
@@ -65,8 +72,14 @@ export function CompaniesTab() {
   const categories = useCompanyCategories(params);
   const branches = useCompanyBranches(params);
   const closedBy = useCompanyClosedBy(params);
+  const openAge = useCompanyOpenAge(params);
+  const timeSpent = useCompanyTimeSpent(params);
+  const conversation = useCompanyConversation(params);
+  const rhythm = useCompanyRhythm(params);
+  const repeated = useCompanyRepeated(params);
+  const quiet = useQuietCompanies(range, !companyId);
 
-  const failed = [top, summary, people, topics, categories, branches, closedBy].some((q) => q.isError);
+  const failed = [top, summary, people, topics, categories, branches, closedBy, openAge, timeSpent, conversation, rhythm, repeated, quiet].some((q) => q.isError);
   const seeMore = (
     <Link className="text-sm font-medium text-blue-700 hover:underline" to={`/dashboard/companies?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`}>
       {t('co_seeMore')} →
@@ -140,6 +153,12 @@ export function CompaniesTab() {
         {topics.data && <BreakdownCard title={t('co_byTopic')} items={topics.data} />}
         {categories.data && <BreakdownCard title={t('co_byCategory')} items={categories.data} />}
         {companyId && branches.data && <BranchesCard items={branches.data} />}
+        {openAge.data && <OpenAgeCard data={openAge.data} />}
+        {timeSpent.data && <TimeSpentCard data={timeSpent.data} />}
+        {conversation.data && <ConversationCard data={conversation.data} />}
+        {repeated.data && <RepeatedCard data={repeated.data} />}
+        {rhythm.data && <RhythmCard data={rhythm.data} />}
+        {!companyId && quiet.data && <QuietCard data={quiet.data} />}
       </div>
     </div>
   );

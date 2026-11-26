@@ -65,6 +65,36 @@ public class CompanyReportsController : ControllerBase
     public async Task<ActionResult<List<TimeSeriesPointDto>>> TimeSeries(DateTime? from, DateTime? to, Guid? companyId, Guid? clientId, CancellationToken ct) =>
         this.ToActionResult(await _reports.TimeSeriesAsync(Filter(from, to, companyId, clientId), ct));
 
+    /// <summary>The tickets not closed now, by age: up to 2 days, up to 7, up to 30, older, and how old the oldest is. Whatever the period.</summary>
+    [HttpGet("open-age")]
+    public async Task<ActionResult<OpenAgeDto>> OpenAge(DateTime? from, DateTime? to, Guid? companyId, Guid? clientId, CancellationToken ct) =>
+        this.ToActionResult(await _reports.OpenAgeAsync(Filter(from, to, companyId, clientId), ct));
+
+    /// <summary>The time written down on tickets: work sessions that started in the period.</summary>
+    [HttpGet("time-spent")]
+    public async Task<ActionResult<TimeSpentDto>> TimeSpent(DateTime? from, DateTime? to, Guid? companyId, Guid? clientId, CancellationToken ct) =>
+        this.ToActionResult(await _reports.TimeSpentAsync(Filter(from, to, companyId, clientId), ct));
+
+    /// <summary>Replies per ticket, and the time from the report to the pick-up, for the tickets created in the period.</summary>
+    [HttpGet("conversation")]
+    public async Task<ActionResult<ConversationDto>> Conversation(DateTime? from, DateTime? to, Guid? companyId, Guid? clientId, CancellationToken ct) =>
+        this.ToActionResult(await _reports.ConversationAsync(Filter(from, to, companyId, clientId), ct));
+
+    /// <summary>When the tickets of the period were created: by weekday and by hour, in the business time zone.</summary>
+    [HttpGet("rhythm")]
+    public async Task<ActionResult<RhythmDto>> Rhythm(DateTime? from, DateTime? to, Guid? companyId, Guid? clientId, CancellationToken ct) =>
+        this.ToActionResult(await _reports.RhythmAsync(Filter(from, to, companyId, clientId), ct));
+
+    /// <summary>The same person reporting the same topic more than once in the period.</summary>
+    [HttpGet("repeated-topics")]
+    public async Task<ActionResult<RepeatedTopicsDto>> RepeatedTopics(DateTime? from, DateTime? to, Guid? companyId, Guid? clientId, int limit = 10, CancellationToken ct = default) =>
+        this.ToActionResult(await _reports.RepeatedTopicsAsync(Filter(from, to, companyId, clientId), limit, ct));
+
+    /// <summary>The companies that had tickets in the period right before this one and have none in this one.</summary>
+    [HttpGet("quiet")]
+    public async Task<ActionResult<QuietCompaniesDto>> Quiet(DateTime? from, DateTime? to, int limit = 10, CancellationToken ct = default) =>
+        Ok(await _reports.QuietCompaniesAsync(Filter(from, to), limit, ct));
+
     /// <summary>The workbook of the same figures: what is on the screen for the same choice.</summary>
     [HttpGet("export")]
     public async Task<IActionResult> Export(DateTime? from, DateTime? to, Guid? companyId, Guid? clientId, CancellationToken ct)

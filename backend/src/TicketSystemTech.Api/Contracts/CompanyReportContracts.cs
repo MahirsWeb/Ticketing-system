@@ -42,3 +42,27 @@ public record CloserStatDto(Guid UserId, string Name, int ClosedCount, List<Clos
 
 /// <summary>Who closed the tickets that were closed in the period, and in which branches those tickets were.</summary>
 public record ClosedByDto(List<CloserStatDto> People, List<BranchCountDto> Branches, int TotalClosed);
+
+// ---- the extra statistics. Each says which tickets it counts.
+
+/// <summary>The tickets that are not closed NOW, by how long ago they were created, whatever the period (the company or person chosen decides whose; with none, the ten companies with the most tickets in the period). The oldest one is given as its age and its company, never as a ticket.</summary>
+public record OpenAgeDto(int Total, int UpTo2Days, int UpTo7Days, int UpTo30Days, int Older, int OldestDays, string? OldestCompany);
+
+/// <summary>The time written down on tickets: the work sessions that STARTED in the period, on the tickets of the company (or person) chosen. A session still running has no end yet and is counted apart, not in the hours.</summary>
+public record TimeSpentDto(double TotalHours, int Sessions, int Tickets, double AvgHoursPerTicket, int RunningSessions);
+
+/// <summary>Of the tickets created in the period: replies in the conversation (client-visible responses, not internal notes or system events) per ticket, and the time from the report to the moment staff picked the ticket up.</summary>
+public record ConversationDto(int Tickets, double AvgMessagesPerTicket, int PickedUp, double AvgHoursToPickup, int NotPickedUp);
+
+/// <summary>When tickets of the period were created, by weekday (Monday first) and by hour of the day, in the business time zone.</summary>
+public record RhythmDto(int Total, List<int> ByWeekday, List<int> ByHour, string TimeZone);
+
+/// <summary>The same person reporting the same topic more than once in the period.</summary>
+public record RepeatedTopicDto(Guid ClientId, string ClientName, Guid TopicId, string TopicName, int Count);
+
+public record RepeatedTopicsDto(int Groups, int Tickets, List<RepeatedTopicDto> Items);
+
+/// <summary>A company that had tickets in the period right before and has none in this one.</summary>
+public record QuietCompanyDto(Guid CompanyId, string Name, int PreviousTotal, DateTime? LastTicketAtUtc);
+
+public record QuietCompaniesDto(int Total, List<QuietCompanyDto> Items);

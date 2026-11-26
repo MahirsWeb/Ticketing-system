@@ -9,7 +9,7 @@ import { usersApi } from '../../../api/users';
 import { renderWithQuery } from '../../../test/renderWithQuery';
 
 vi.mock('../../../api/companyReports', () => ({
-  companyReportsApi: { top: vi.fn(), list: vi.fn(), summary: vi.fn(), clients: vi.fn(), topics: vi.fn(), categories: vi.fn(), branches: vi.fn(), closedBy: vi.fn(), timeSeries: vi.fn(), exportXlsx: vi.fn() },
+  companyReportsApi: { top: vi.fn(), list: vi.fn(), summary: vi.fn(), clients: vi.fn(), topics: vi.fn(), categories: vi.fn(), branches: vi.fn(), closedBy: vi.fn(), timeSeries: vi.fn(), openAge: vi.fn(), timeSpent: vi.fn(), conversation: vi.fn(), rhythm: vi.fn(), repeatedTopics: vi.fn(), quiet: vi.fn(), exportXlsx: vi.fn() },
 }));
 vi.mock('../../../api/lookups', () => ({ lookupsApi: { companies: vi.fn() } }));
 vi.mock('../../../api/users', () => ({ usersApi: { companyClientChoices: vi.fn() } }));
@@ -44,6 +44,12 @@ beforeEach(() => {
   ]);
   vi.mocked(companyReportsApi.categories).mockResolvedValue([{ id: 'g1', name: 'Hardver', count: 5, isActive: true }]);
   vi.mocked(companyReportsApi.branches).mockResolvedValue([{ departmentId: 'd1', name: 'IT', count: 5, noSubBranchCount: 2, subBranches: [{ subBranchId: 's1', name: 'Mreža', count: 3 }] }]);
+  vi.mocked(companyReportsApi.openAge).mockResolvedValue({ total: 5, upTo2Days: 1, upTo7Days: 2, upTo30Days: 1, older: 1, oldestDays: 60, oldestCompany: 'Alfa' });
+  vi.mocked(companyReportsApi.timeSpent).mockResolvedValue({ totalHours: 4, sessions: 3, tickets: 2, avgHoursPerTicket: 2, runningSessions: 1 });
+  vi.mocked(companyReportsApi.conversation).mockResolvedValue({ tickets: 3, avgMessagesPerTicket: 1.5, pickedUp: 2, avgHoursToPickup: 2.5, notPickedUp: 1 });
+  vi.mocked(companyReportsApi.rhythm).mockResolvedValue({ total: 4, byWeekday: [3, 0, 0, 0, 0, 0, 1], byHour: Array.from({ length: 24 }, (_, h) => (h === 9 ? 3 : h === 13 ? 1 : 0)), timeZone: 'Europe/Sarajevo' });
+  vi.mocked(companyReportsApi.repeatedTopics).mockResolvedValue({ groups: 2, tickets: 5, items: [{ clientId: 'k1', clientName: 'Klijent Prvi', topicId: 't1', topicName: 'Printer', count: 3 }] });
+  vi.mocked(companyReportsApi.quiet).mockResolvedValue({ total: 1, items: [{ companyId: 'c9', name: 'Utihla d.o.o.', previousTotal: 6, lastTicketAtUtc: '2026-10-05T09:00:00Z' }] });
   vi.mocked(companyReportsApi.closedBy).mockResolvedValue({ people: [{ userId: 'u1', name: 'Amra Amić', closedCount: 2, branches: [{ departmentId: 'd1', name: 'IT', count: 2 }] }], branches: [], totalClosed: 2 });
 });
 
@@ -61,13 +67,73 @@ async function chooseCompany(user: ReturnType<typeof userEvent.setup>, name = 'A
 }
 
 describe('the second tab of the dashboard: companies', () => {
+  it('shows the extra statistics, each saying which tickets it counts, with their figures', async () => {
+    renderTab();
+
+    expect(await screen.findByText('Open tickets by age')).toBeInTheDocument();
+    expect(screen.getByText('Counts the tickets that are not closed now, whatever the period; the age is from when they were created.')).toBeInTheDocument();
+    expect(screen.getByText('Open now: 5')).toBeInTheDocument();
+    expect(screen.getByText('Oldest: 60 days, Alfa')).toBeInTheDocument();
+    expect(await screen.findByText('4 h written down')).toBeInTheDocument();
+    expect(screen.getByText('3 work sessions on 2 tickets')).toBeInTheDocument();
+    expect(screen.getByText('1 still running (not in the hours)')).toBeInTheDocument();
+    expect(await screen.findByText('1.5 replies per ticket')).toBeInTheDocument();
+    expect(screen.getByText('Average time to pick-up: 2.5 h')).toBeInTheDocument();
+    expect(screen.getByText('2 of 3 tickets picked up; 1 not yet')).toBeInTheDocument();
+    expect(await screen.findByText('Reported again and again')).toBeInTheDocument();
+    expect(screen.getByText('2 repeated reports, 5 tickets in all')).toBeInTheDocument();
+    expect(screen.getByText('Counts the tickets created in the period, by the day and the hour in Europe/Sarajevo.')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /Mon: 3.*Sun: 1/ })).toBeInTheDocument();
+  });
+
+  it('lists the companies that went quiet only when no company is chosen', async () => {
+    const user = userEvent.setup();
+    renderTab();
+
+    expect(await screen.findByText('Utihla d.o.o.')).toBeInTheDocument();
+    expect(screen.getByText(/last ticket: 05\.10\.2026/)).toBeInTheDocument();
+    expect(screen.getByText('Companies gone quiet: 1')).toBeInTheDocument();
+    await chooseCompany(user);
+    await screen.findByText('Employees of the company');
+
+    expect(screen.queryByText('Utihla d.o.o.')).not.toBeInTheDocument();
+    expect(companyReportsApi.quiet).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks the extra statistics for the company and person that are chosen', async () => {
+    const user = userEvent.setup();
+    renderTab();
+    await chooseCompany(user);
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Employee of the company' })).toBeEnabled());
+    await user.click(screen.getByRole('combobox', { name: 'Employee of the company' }));
+    await user.click(await screen.findByRole('option', { name: /^Klijent Prvi/ }));
+
+    await waitFor(() => expect(vi.mocked(companyReportsApi.repeatedTopics).mock.calls.at(-1)?.[0]).toMatchObject({ companyId: 'c1', clientId: 'k1' }));
+    for (const call of [companyReportsApi.openAge, companyReportsApi.timeSpent, companyReportsApi.conversation, companyReportsApi.rhythm]) {
+      expect(vi.mocked(call).mock.calls.at(-1)?.[0]).toMatchObject({ companyId: 'c1', clientId: 'k1' });
+    }
+  });
+
+  it('says that nothing is open or written down instead of showing zeros that look like data', async () => {
+    vi.mocked(companyReportsApi.openAge).mockResolvedValue({ total: 0, upTo2Days: 0, upTo7Days: 0, upTo30Days: 0, older: 0, oldestDays: 0, oldestCompany: null });
+    vi.mocked(companyReportsApi.timeSpent).mockResolvedValue({ totalHours: 0, sessions: 0, tickets: 0, avgHoursPerTicket: 0, runningSessions: 0 });
+    vi.mocked(companyReportsApi.repeatedTopics).mockResolvedValue({ groups: 0, tickets: 0, items: [] });
+    vi.mocked(companyReportsApi.quiet).mockResolvedValue({ total: 0, items: [] });
+    renderTab();
+
+    expect(await screen.findByText('Nothing is open.')).toBeInTheDocument();
+    expect(await screen.findByText('No time written down in this period.')).toBeInTheDocument();
+    expect(await screen.findByText('Nobody reported the same topic twice in this period.')).toBeInTheDocument();
+    expect(await screen.findByText('No company went quiet.')).toBeInTheDocument();
+  });
+
   it('with nothing chosen shows the ten top companies, who solves, topics and categories, each saying which tickets it counts', async () => {
     renderTab();
 
     expect(await screen.findByText('Companies with the most tickets')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Alfa' })).toBeInTheDocument();
     expect(screen.getByText('8 tickets · 80%')).toBeInTheDocument();
-    expect(screen.getByText('Together: 10 of 10 tickets of the period. Companies with tickets: 2.')).toBeInTheDocument();
+    expect(screen.getByText('Together: 10 of 10 tickets of the period (100%). Companies with tickets: 2.')).toBeInTheDocument();
     expect(await screen.findByText('Who solves them')).toBeInTheDocument();
     expect(await screen.findByText('By topic')).toBeInTheDocument();
     expect(await screen.findByText('By category')).toBeInTheDocument();

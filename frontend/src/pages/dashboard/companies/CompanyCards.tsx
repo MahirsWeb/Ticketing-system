@@ -4,18 +4,18 @@ import { useLanguage } from '../../../i18n/LanguageContext';
 import type { BranchCountDto, BreakdownItemDto, ClosedByDto, CompanyClientStatDto, CompanyRowDto, TopCompaniesDto } from '../../../types';
 import { Change } from './Change';
 
-/** The title of a card with, under it, which tickets it counts: the ones created in the period or the ones closed in it. */
-export function CardHeading({ title, cohort }: { title: string; cohort: 'created' | 'closed' }) {
+/** The title of a card with, under it, which tickets it counts: the ones created in the period, the ones closed in it, or (`note`) a group of its own, said in words. */
+export function CardHeading({ title, cohort, note }: { title: string; cohort?: 'created' | 'closed'; note?: string }) {
   const { t } = useLanguage();
   return (
     <div className="mb-4">
       <h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">{title}</h2>
-      <p className="text-xs text-slate-600">{cohort === 'created' ? t('co_cohortCreated') : t('co_cohortClosed')}</p>
+      <p className="text-xs text-slate-600">{note ?? (cohort === 'closed' ? t('co_cohortClosed') : t('co_cohortCreated'))}</p>
     </div>
   );
 }
 
-function Bar({ value, max }: { value: number; max: number }) {
+export function Bar({ value, max }: { value: number; max: number }) {
   const width = max > 0 ? Math.max(2, Math.round((value / max) * 100)) : 0;
   return (
     <div className="h-1.5 w-full rounded bg-slate-100" aria-hidden>
@@ -54,7 +54,7 @@ export function TopCompaniesCard({ data, onPick, seeMore }: { data: TopCompanies
               </li>
             ))}
           </ol>
-          <p className="mt-4 text-xs text-slate-600">{t('co_topTogether', { top: data.topTickets, total: data.totalTickets, companies: data.totalCompanies })}</p>
+          <p className="mt-4 text-xs text-slate-600">{t('co_topTogether', { top: data.topTickets, total: data.totalTickets, percent: data.totalTickets > 0 ? Math.round((data.topTickets / data.totalTickets) * 1000) / 10 : 0, companies: data.totalCompanies })}</p>
         </>
       )}
       <div className="mt-3">{seeMore}</div>

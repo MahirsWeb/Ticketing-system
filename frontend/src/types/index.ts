@@ -480,3 +480,64 @@ export interface ClosedByDto {
   branches: BranchCountDto[];
   totalClosed: number;
 }
+
+// ---- the extra statistics of the companies
+
+export interface OpenAgeDto {
+  total: number;
+  upTo2Days: number;
+  upTo7Days: number;
+  upTo30Days: number;
+  older: number;
+  oldestDays: number;
+  oldestCompany: string | null;
+}
+
+export interface TimeSpentDto {
+  totalHours: number;
+  sessions: number;
+  tickets: number;
+  avgHoursPerTicket: number;
+  runningSessions: number;
+}
+
+export interface ConversationDto {
+  tickets: number;
+  avgMessagesPerTicket: number;
+  pickedUp: number;
+  avgHoursToPickup: number;
+  notPickedUp: number;
+}
+
+export interface RhythmDto {
+  total: number;
+  byWeekday: number[];
+  byHour: number[];
+  timeZone: string;
+}
+
+export interface RepeatedTopicDto {
+  clientId: string;
+  clientName: string;
+  topicId: string;
+  topicName: string;
+  count: number;
+}
+
+export interface RepeatedTopicsDto {
+  groups: number;
+  tickets: number;
+  items: RepeatedTopicDto[];
+}
+
+export interface QuietCompanyDto {
+  companyId: string;
+  name: string;
+  previousTotal: number;
+  lastTicketAtUtc: string | null;
+}
+
+export interface QuietCompaniesDto {
+  total: number;
+  items: QuietCompanyDto[];
+}

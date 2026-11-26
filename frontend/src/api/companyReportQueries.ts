@@ -12,6 +12,12 @@ export const companyReportKeys = {
   branches: (p: CompanyReportParams) => ['company-reports', 'branches', p] as const,
   closedBy: (p: CompanyReportParams) => ['company-reports', 'closed-by', p] as const,
   timeSeries: (p: CompanyReportParams) => ['company-reports', 'time-series', p] as const,
+  openAge: (p: CompanyReportParams) => ['company-reports', 'open-age', p] as const,
+  timeSpent: (p: CompanyReportParams) => ['company-reports', 'time-spent', p] as const,
+  conversation: (p: CompanyReportParams) => ['company-reports', 'conversation', p] as const,
+  rhythm: (p: CompanyReportParams) => ['company-reports', 'rhythm', p] as const,
+  repeated: (p: CompanyReportParams) => ['company-reports', 'repeated-topics', p] as const,
+  quiet: (p: object) => ['company-reports', 'quiet', p] as const,
 };
 
 const FIGURES = { gcTime: 0, placeholderData: keepPreviousData } as const;
@@ -55,4 +61,29 @@ export function useCompanyClosedBy(params: CompanyReportParams) {
 
 export function useCompanyTimeSeries(params: CompanyReportParams) {
   return useQuery({ queryKey: companyReportKeys.timeSeries(params), queryFn: () => companyReportsApi.timeSeries(params), ...FIGURES });
+}
+
+export function useCompanyOpenAge(params: CompanyReportParams) {
+  return useQuery({ queryKey: companyReportKeys.openAge(params), queryFn: () => companyReportsApi.openAge(params), ...FIGURES });
+}
+
+export function useCompanyTimeSpent(params: CompanyReportParams) {
+  return useQuery({ queryKey: companyReportKeys.timeSpent(params), queryFn: () => companyReportsApi.timeSpent(params), ...FIGURES });
+}
+
+export function useCompanyConversation(params: CompanyReportParams) {
+  return useQuery({ queryKey: companyReportKeys.conversation(params), queryFn: () => companyReportsApi.conversation(params), ...FIGURES });
+}
+
+export function useCompanyRhythm(params: CompanyReportParams) {
+  return useQuery({ queryKey: companyReportKeys.rhythm(params), queryFn: () => companyReportsApi.rhythm(params), ...FIGURES });
+}
+
+export function useCompanyRepeated(params: CompanyReportParams) {
+  return useQuery({ queryKey: companyReportKeys.repeated(params), queryFn: () => companyReportsApi.repeatedTopics(params), ...FIGURES });
+}
+
+/** Companies gone quiet: over all companies, so only asked for while no company is chosen. */
+export function useQuietCompanies(range: { from?: string; to?: string }, enabled = true) {
+  return useQuery({ queryKey: companyReportKeys.quiet(range), queryFn: () => companyReportsApi.quiet(range), enabled, ...FIGURES });
 }

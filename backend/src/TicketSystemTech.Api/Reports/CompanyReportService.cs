@@ -47,9 +47,24 @@ public interface ICompanyReportService
     Task<Outcome<List<TimeSeriesPointDto>>> TimeSeriesAsync(CompanyReportFilter filter, CancellationToken ct);
 
     Task<Outcome<ExportFile>> ExportAsync(CompanyReportFilter filter, CancellationToken ct);
+
+    // ---- the extra statistics (CompanyReportService.Insights.cs)
+
+    Task<Outcome<OpenAgeDto>> OpenAgeAsync(CompanyReportFilter filter, CancellationToken ct);
+
+    Task<Outcome<TimeSpentDto>> TimeSpentAsync(CompanyReportFilter filter, CancellationToken ct);
+
+    Task<Outcome<ConversationDto>> ConversationAsync(CompanyReportFilter filter, CancellationToken ct);
+
+    Task<Outcome<RhythmDto>> RhythmAsync(CompanyReportFilter filter, CancellationToken ct);
+
+    Task<Outcome<RepeatedTopicsDto>> RepeatedTopicsAsync(CompanyReportFilter filter, int limit, CancellationToken ct);
+
+    /// <summary>Companies that went quiet: tickets in the previous period, none in this one. Over all companies; a company or client in the filter is ignored.</summary>
+    Task<QuietCompaniesDto> QuietCompaniesAsync(CompanyReportFilter filter, int limit, CancellationToken ct);
 }
 
-public sealed class CompanyReportService : ICompanyReportService
+public sealed partial class CompanyReportService : ICompanyReportService
 {
     /// <summary>"Top" is ten companies at most: a longer list is the page of all companies.</summary>
     public const int MostTop = 10;
