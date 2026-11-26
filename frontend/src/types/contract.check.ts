@@ -79,6 +79,14 @@ export type ContractChecks = [
   Expect<Conforms<S['BranchBreakdownEntryDto'], T.BranchBreakdownEntryDto>>,
   Expect<Conforms<S['PeriodComparisonPointDto'], T.PeriodComparisonPointDto>>,
   Expect<Conforms<S['TopIssueDto'], T.TopIssueDto>>,
+  Expect<Conforms<S['CompanyRowDto'], T.CompanyRowDto>>,
+  Expect<Conforms<S['TopCompaniesDto'], T.TopCompaniesDto>>,
+  Expect<Conforms<S['CompanyListPageDto'], T.CompanyListPageDto>>,
+  Expect<Conforms<S['CompanySummaryDto'], T.CompanySummaryDto>>,
+  Expect<Conforms<S['CompanyClientStatDto'], T.CompanyClientStatDto>>,
+  Expect<Conforms<S['BreakdownItemDto'], T.BreakdownItemDto>>,
+  Expect<Conforms<S['BranchCountDto'], T.BranchCountDto>>,
+  Expect<Conforms<S['ClosedByDto'], T.ClosedByDto>>,
 
   // knowledge base, settings
   Expect<Conforms<S['KnowledgeBaseSearchResultDto'], T.KnowledgeBaseSearchResultDto>>,

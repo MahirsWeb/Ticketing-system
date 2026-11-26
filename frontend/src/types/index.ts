@@ -391,3 +391,92 @@ export interface BranchGanttResponse {
   date: string;
   users: GanttResponse[];
 }
+
+// ---- the statistics of the companies (second tab of the dashboard)
+
+export interface CompanyRowDto {
+  companyId: string;
+  name: string;
+  total: number;
+  new: number;
+  open: number;
+  closed: number;
+  avgResolutionHours: number;
+  slaComplianceRate: number | null;
+  previousTotal: number;
+  sharePercent: number;
+}
+
+export interface TopCompaniesDto {
+  items: CompanyRowDto[];
+  totalTickets: number;
+  topTickets: number;
+  totalCompanies: number;
+}
+
+export interface CompanyListPageDto {
+  items: CompanyRowDto[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalTickets: number;
+}
+
+export interface CompanySummaryDto {
+  total: number;
+  new: number;
+  open: number;
+  closed: number;
+  avgResolutionHours: number;
+  slaComplianceRate: number | null;
+  previousTotal: number;
+}
+
+export interface CompanyClientStatDto {
+  clientId: string;
+  name: string;
+  total: number;
+  open: number;
+  closed: number;
+}
+
+/** `id` null is "none": a ticket that has not been given a topic / category yet. */
+export interface BreakdownItemDto {
+  id: string | null;
+  name: string | null;
+  count: number;
+  isActive: boolean;
+}
+
+export interface SubBranchCountDto {
+  subBranchId: string;
+  name: string;
+  count: number;
+}
+
+export interface BranchCountDto {
+  departmentId: string | null;
+  name: string | null;
+  count: number;
+  noSubBranchCount: number;
+  subBranches: SubBranchCountDto[];
+}
+
+export interface CloserBranchDto {
+  departmentId: string | null;
+  name: string | null;
+  count: number;
+}
+
+export interface CloserStatDto {
+  userId: string;
+  name: string;
+  closedCount: number;
+  branches: CloserBranchDto[];
+}
+
+export interface ClosedByDto {
+  people: CloserStatDto[];
+  branches: BranchCountDto[];
+  totalClosed: number;
+}

@@ -17,7 +17,8 @@ import { useLanguage } from './i18n/LanguageContext';
 
 // Each screen is its own chunk, loaded when it is first opened. The charts and the rich-text editor alone are most of the
 // download, and a client who only files tickets never needs the dashboard.
-const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage'));
+const DashboardPage = lazy(() => import('./pages/dashboard/DashboardShell'));
+const CompaniesPage = lazy(() => import('./pages/dashboard/companies/CompaniesPage'));
 const TicketsListPage = lazy(() => import('./pages/tickets/TicketsListPage'));
 const TicketDetailPage = lazy(() => import('./pages/tickets/TicketDetailPage'));
 const NewTicketPage = lazy(() => import('./pages/tickets/NewTicketPage'));
@@ -92,6 +93,14 @@ export default function App() {
               }
             >
               <Route path="/" element={<HomeRoute />} />
+              <Route
+                path="/dashboard/companies"
+                element={
+                  <RequireRole roles={['Admin', 'Employee']}>
+                    <CompaniesPage />
+                  </RequireRole>
+                }
+              />
               <Route path="/tickets" element={<TicketsListPage />} />
               <Route path="/my-notifications" element={<NotificationPreferencesPage />} />
               <Route path="/tickets/:id" element={<TicketDetailPage />} />

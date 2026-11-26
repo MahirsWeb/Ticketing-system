@@ -45,6 +45,7 @@ const BS: Record<string, string> = {
   'A company must be selected for Client accounts.': 'Za klijentske naloge mora se izabrati firma.',
   'A branch must be selected for Employee accounts.': 'Za naloge zaposlenika mora se izabrati poslovnica.',
   'Company not found.': 'Firma nije pronađena.',
+  'Choose a company first.': 'Prvo izaberite firmu.',
   'Branch not found.': 'Poslovnica nije pronađena.',
   'Your account is not linked to a company.': 'Vaš nalog nije povezan s firmom.',
   'This client is not linked to a company.': 'Ovaj klijent nije povezan s firmom.',
