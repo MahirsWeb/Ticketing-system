@@ -3093,6 +3093,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/users/company-clients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    companyId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CompanyClientItem"][];
+                        "text/json": components["schemas"]["CompanyClientItem"][];
+                        "text/plain": components["schemas"]["CompanyClientItem"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users/employees": {
         parameters: {
             query?: never;
@@ -4068,6 +4107,12 @@ export interface components {
         CloseTicketRequest: {
             resolutionSummary?: string;
         };
+        CompanyClientItem: {
+            email?: string;
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+        };
         CompanyItemFull: {
             address?: string | null;
             aiIndexingEnabled?: boolean;
@@ -4121,7 +4166,8 @@ export interface components {
             assignedToUserId?: string;
             /** Format: uuid */
             categoryId?: string | null;
-            clientEmail?: string;
+            /** Format: uuid */
+            clientId?: string;
             /** Format: uuid */
             departmentId?: string;
             description?: string;

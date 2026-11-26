@@ -40,6 +40,10 @@ public interface IUserQueries
     /// on behalf of a client who called/reported the issue verbally (not through the client portal).
     /// </summary>
     Task<Outcome<ClientLookupResult>> LookupByEmailAsync(string email, CancellationToken ct);
+
+    /// <summary>The active clients of one active company, for the pickers of the form for a new ticket. Staff of every branch get the same list: opening a ticket for a
+    /// client who has not written to this branch yet is the point of it (a deliberate exception to the isolation of branches, narrow: one company at a time, three fields).</summary>
+    Task<Outcome<List<CompanyClientItem>>> CompanyClientsAsync(Guid companyId, CancellationToken ct);
 }
 
 public sealed class UserQueries : IUserQueries
@@ -210,5 +214,23 @@ public sealed class UserQueries : IUserQueries
 
         return Outcome<ClientLookupResult>.Ok(new ClientLookupResult(user.Id, user.FirstName, user.LastName, user.Email!,
             inMyBranch ? user.PhoneNumber : null, user.CompanyId, companyName));
+    }
+
+    /// <summary>The most clients of one company that are offered at once; a firm with more than this is narrowed by what is typed in the picker.</summary>
+    private const int MostCompanyClients = 1000;
+
+    public async Task<Outcome<List<CompanyClientItem>>> CompanyClientsAsync(Guid companyId, CancellationToken ct)
+    {
+        if (!await _db.Companies.AnyAsync(c => c.Id == companyId && c.IsActive, ct))
+            return Outcome<List<CompanyClientItem>>.NotFound("Company not found.");
+
+        var clients = await _userManager.Users
+            .Where(u => u.Role == UserRole.Client && u.CompanyId == companyId && u.IsActive)
+            .OrderBy(u => u.FirstName).ThenBy(u => u.LastName)
+            .Select(u => new { u.Id, u.FirstName, u.LastName, u.Email })
+            .Take(MostCompanyClients)
+            .ToListAsync(ct);
+
+        return Outcome<List<CompanyClientItem>>.Ok(clients.Select(u => new CompanyClientItem(u.Id, $"{u.FirstName} {u.LastName}".Trim(), u.Email ?? string.Empty)).ToList());
     }
 }

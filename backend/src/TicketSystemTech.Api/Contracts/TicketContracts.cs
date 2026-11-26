@@ -19,7 +19,7 @@ public record CreateTicketRequest(
 
 /// <summary>Staff creates + opens a ticket in one step on behalf of a client who reported the issue verbally (e.g. by phone).</summary>
 public record CreateTicketOnBehalfRequest(
-    [Required, EmailAddress] string ClientEmail,
+    [Required] Guid ClientId, // The client the ticket is for: an account that exists, is active and belongs to an active company (the server checks it, not only the screen).
     [Required, MaxLength(300)] string Title,
     [Required, MaxLength(Limits.HtmlBody)] string Description,
     [Required] TicketSource Source,

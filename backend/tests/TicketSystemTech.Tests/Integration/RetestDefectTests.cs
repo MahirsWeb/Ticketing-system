@@ -500,7 +500,7 @@ public class RetestDefectTests : IAsyncLifetime
         });
         var onBehalf = await _world.Post(_world.Admin, "/api/tickets/on-behalf", new
         {
-            clientEmail = _world.CliZ.Email,
+            clientId = _world.CliZ.Id,
             title = "Phone call",
             description = "<p>x</p>",
             source = "Phone",

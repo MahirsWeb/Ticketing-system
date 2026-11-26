@@ -76,7 +76,7 @@ public class TicketFromEmailTests : IAsyncLifetime
     private Task<ApiResponse> CreateAsync(string title, string key) =>
         _world.Send(_world.EmpA1, HttpMethod.Post, "/api/tickets/on-behalf", new
         {
-            clientEmail = _world.CliX.Email,
+            clientId = _world.CliX.Id,
             title,
             description = "<p>iz maila</p>",
             source = "Email",

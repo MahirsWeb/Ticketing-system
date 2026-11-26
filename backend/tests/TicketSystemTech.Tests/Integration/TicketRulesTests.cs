@@ -99,7 +99,7 @@ public class TicketRulesTests : IAsyncLifetime
 
         var onBehalf = await _world.Post(_world.Admin, "/api/tickets/on-behalf", new
         {
-            clientEmail = _world.CliX.Email,
+            clientId = _world.CliX.Id,
             title = "prazan opis",
             description = "<p>&nbsp;</p>",
             source = "Phone",

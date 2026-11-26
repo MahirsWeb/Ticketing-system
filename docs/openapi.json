@@ -164,6 +164,22 @@
         },
         "type": "object"
       },
+      "CompanyClientItem": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "CompanyItemFull": {
         "additionalProperties": false,
         "properties": {
@@ -317,7 +333,8 @@
             "nullable": true,
             "type": "string"
           },
-          "clientEmail": {
+          "clientId": {
+            "format": "uuid",
             "type": "string"
           },
           "departmentId": {
@@ -5893,6 +5910,54 @@
               "text/plain": {
                 "schema": {
                   "$ref": "#/components/schemas/CreatedUserResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/api/users/company-clients": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "companyId",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CompanyClientItem"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CompanyClientItem"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CompanyClientItem"
+                  },
+                  "type": "array"
                 }
               }
             },

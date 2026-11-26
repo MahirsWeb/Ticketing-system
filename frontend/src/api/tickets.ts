@@ -55,7 +55,8 @@ export const ticketsApi = {
 
   createOnBehalf: (
     payload: {
-      clientEmail: string;
+      /** The client the ticket is for: an account that exists, is active and is in an active company (the server checks it). */
+      clientId: string;
       title: string;
       description: string;
       source: TicketSource;

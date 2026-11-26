@@ -44,6 +44,9 @@ public record CreatedUserResponse(
     DateTime TemporaryPasswordExpiresAtUtc
 );
 
+/// <summary>One client of a company, as the pickers of the ticket form offer it: who, and the address that tells two people of the same name apart. Nothing else of the person.</summary>
+public record CompanyClientItem(Guid Id, string Name, string Email);
+
 public record ClientLookupResult(
     Guid Id,
     string FirstName,

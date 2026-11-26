@@ -126,7 +126,7 @@ public class AssigneeListTests : IAsyncLifetime
 
         var created = await _world.Post(_world.Admin, "/api/tickets/on-behalf", new
         {
-            clientEmail = _world.CliX.Email,
+            clientId = _world.CliX.Id,
             title = "on behalf",
             description = "<p>x</p>",
             source = "Phone",

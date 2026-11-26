@@ -1,7 +1,7 @@
 import { apiClient } from './client';
 import { queryClient } from './queryClient';
 import { userKeys } from './userKeys';
-import type { ClientLookupResult, CreatedUserResponse, UserListItemDto, UserPageDto, UserRole } from '../types';
+import type { ClientLookupResult, CompanyClientItem, CreatedUserResponse, UserListItemDto, UserPageDto, UserRole } from '../types';
 
 /** A new account changes the lists on screen (and the totals in their tabs), so they are asked again. */
 function accountMade<T>(request: Promise<T>): Promise<T> {
@@ -18,6 +18,10 @@ export interface NotificationPreference {
 }
 
 export const usersApi = {
+  /** The active clients of one company, whatever branch the person asking is in: what the second picker of the ticket form offers. */
+  companyClientChoices: (companyId: string, signal?: AbortSignal) =>
+    apiClient.get<CompanyClientItem[]>('/api/users/company-clients', { params: { companyId }, signal }).then((r) => r.data),
+
   lookupByEmail: (email: string, signal?: AbortSignal) =>
     apiClient.get<ClientLookupResult>('/api/users/lookup-by-email', { params: { email }, signal }).then((r) => r.data),
 

@@ -116,7 +116,7 @@ export function useOnBehalfTicket({ client, prefill, emailMessageId }: { client:
     try {
       ticket = await ticketsApi.createOnBehalf(
         {
-          clientEmail: client.email,
+          clientId: client.id,
           title: title.trim(),
           description,
           source,

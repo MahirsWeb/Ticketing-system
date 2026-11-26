@@ -406,7 +406,7 @@ describe('opening a ticket on behalf of a client', () => {
       expect(await screen.findByText('the ticket page')).toBeInTheDocument();
       const [payload, key] = vi.mocked(ticketsApi.createOnBehalf).mock.calls[0];
       expect(payload).toEqual({
-        clientEmail: 'k@x.test',
+        clientId: 'c1',
         title: 'Printer ne radi',
         description: '<p>Ne stampa</p>',
         source: 'Email',

@@ -127,6 +127,12 @@ public class UsersController : ControllerBase
     /// Looks up a Client account by email so staff can pre-fill their info when opening a ticket
     /// on behalf of a client who called/reported the issue verbally (not through the client portal).
     /// </summary>
+    /// <summary>The active clients of one company: what the two pickers of the form for a new ticket offer (firm first, then a person of it).</summary>
+    [HttpGet("company-clients")]
+    [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
+    public async Task<ActionResult<List<CompanyClientItem>>> CompanyClients([FromQuery] Guid companyId, CancellationToken ct) =>
+        this.ToActionResult(await _queries.CompanyClientsAsync(companyId, ct));
+
     [HttpGet("lookup-by-email")]
     [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Employee)}")]
     public async Task<ActionResult<ClientLookupResult>> LookupByEmail([FromQuery] string email, CancellationToken ct) =>

@@ -128,7 +128,7 @@ public class NotificationDeliveryTests : IAsyncLifetime
 
         var created = await _world.Post(_world.Admin, "/api/tickets/on-behalf", new
         {
-            clientEmail = _world.CliX.Email,
+            clientId = _world.CliX.Id,
             title = Marker + "phone",
             description = "<p>x</p>",
             source = "Phone",

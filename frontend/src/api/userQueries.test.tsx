@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithQuery } from '../test/renderWithQuery';
-import { useEmployees, useUserPage } from './userQueries';
+import { useCompanyClientChoices, useEmployees, useUserPage } from './userQueries';
 import { userKeys } from './userKeys';
 import { usersApi } from './users';
 import { queryClient } from './queryClient';
@@ -178,5 +178,54 @@ describe('the account data the screens share (T-17)', () => {
 
       expect(asked()).toHaveLength(1);
     });
+  });
+});
+
+// The second picker of the ticket form: the people of the company that was chosen, the same for staff of every branch.
+describe('the clients a company offers to the picker of the ticket form', () => {
+  const choicesOf = (id: string) => (id === 'alfa' ? [{ id: 'p1', name: 'Mirza H', email: 'm@alfa.test' }] : [{ id: 'p2', name: 'Dario K', email: 'd@beta.test' }]);
+
+  function Choices({ companyId }: { companyId: string | null }) {
+    const q = useCompanyClientChoices(companyId);
+    return <p data-testid="choices">{q.data ? q.data.map((c) => c.name).join(',') : 'none'}</p>;
+  }
+
+  beforeEach(() => {
+    queryClient.clear();
+    get.mockReset();
+    get.mockImplementation(async (url: string, config?: { params?: unknown }) => {
+      const companyId = (config?.params as { companyId?: string } | undefined)?.companyId ?? '';
+      return { data: url === '/api/users/company-clients' ? choicesOf(companyId) : [] } as never;
+    });
+  });
+
+  it('asks for nothing while no company is chosen, which is why the second picker cannot be used before the first', () => {
+    renderWithQuery(<Choices companyId={null} />);
+
+    expect(screen.getByTestId('choices')).toHaveTextContent('none');
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it('asks for the people of the company that is chosen, and for those of another when another is chosen', async () => {
+    const user = userEvent.setup();
+    function Pick() {
+      const [id, setId] = useState<string | null>(null);
+      return (
+        <>
+          <button onClick={() => setId('alfa')}>alfa</button>
+          <button onClick={() => setId('beta')}>beta</button>
+          <Choices companyId={id} />
+        </>
+      );
+    }
+    renderWithQuery(<Pick />);
+
+    await user.click(screen.getByRole('button', { name: 'alfa' }));
+    await waitFor(() => expect(screen.getByTestId('choices')).toHaveTextContent('Mirza H'));
+    expect(get).toHaveBeenCalledWith('/api/users/company-clients', expect.objectContaining({ params: { companyId: 'alfa' } }));
+
+    await user.click(screen.getByRole('button', { name: 'beta' }));
+    await waitFor(() => expect(screen.getByTestId('choices')).toHaveTextContent('Dario K'));
+    expect(screen.getByTestId('choices')).not.toHaveTextContent('Mirza H');
   });
 });

@@ -34,7 +34,6 @@ public sealed class TicketCreationService : ITicketCreationService
     private readonly ICurrentUserService _currentUser;
     private readonly ITicketNumberGenerator _ticketNumberGenerator;
     private readonly INotifier _notifier;
-    private readonly IPiiProtector _piiProtector;
     private readonly IHtmlSanitizerService _html;
     private readonly ITicketQueries _queries;
     private readonly ITicketRouting _routing;
@@ -45,7 +44,7 @@ public sealed class TicketCreationService : ITicketCreationService
     private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
 
     public TicketCreationService(
-        AppDbContext db, ICurrentUserService currentUser, ITicketNumberGenerator ticketNumberGenerator, INotifier notifier, IPiiProtector piiProtector, IHtmlSanitizerService html, ITicketQueries queries,
+        AppDbContext db, ICurrentUserService currentUser, ITicketNumberGenerator ticketNumberGenerator, INotifier notifier, IHtmlSanitizerService html, ITicketQueries queries,
         ITicketRouting routing, ITicketIdempotency idempotency, IEmailIntegrationService mailbox, IFileStorage fileStorage, TimeProvider time)
     {
         _mailbox = mailbox;
@@ -54,7 +53,6 @@ public sealed class TicketCreationService : ITicketCreationService
         _currentUser = currentUser;
         _ticketNumberGenerator = ticketNumberGenerator;
         _notifier = notifier;
-        _piiProtector = piiProtector;
         _html = html;
         _queries = queries;
         _routing = routing;
@@ -132,10 +130,14 @@ public sealed class TicketCreationService : ITicketCreationService
             if (already is { } existing) return Outcome<TicketDetailDto>.Ok(await _queries.BuildDetailAsync(existing));
         }
 
-        var clientEmailHash = _piiProtector.Hash(request.ClientEmail);
-        var client = await _db.Users.FirstOrDefaultAsync(u => u.NormalizedEmail == clientEmailHash && u.Role == UserRole.Client);
-        if (client is null) return Outcome<TicketDetailDto>.NotFound("No client account found with that email.");
+        // Only a client that exists can be chosen, and the choice is checked here, whatever a screen offered: the account has to be a client's, switched on,
+        // and in a company that is switched on as well (a ticket for a switched-off firm would be work for nobody to see).
+        var client = await _db.Users.FirstOrDefaultAsync(u => u.Id == request.ClientId && u.Role == UserRole.Client);
+        if (client is null) return Outcome<TicketDetailDto>.NotFound("No client account found.");
+        if (!client.IsActive) return Outcome<TicketDetailDto>.Invalid("This client's account is not active.");
         if (client.CompanyId is null) return Outcome<TicketDetailDto>.Invalid("This client is not linked to a company.");
+        if (!await _db.Companies.AnyAsync(c => c.Id == client.CompanyId && c.IsActive))
+            return Outcome<TicketDetailDto>.Invalid("This client's company is not active.");
 
         // Non-admin staff can only route a ticket into their own branch; moving it elsewhere later requires an explicit transfer.
         if (_currentUser.Role != UserRole.Admin && request.DepartmentId != _currentUser.DepartmentId)

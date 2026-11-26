@@ -9,6 +9,8 @@ export const userKeys = {
   tickets: (role: string, id: string) => ['users', 'tickets', role, id] as const,
   /** The clients of one company, for the page of the company. */
   companyClients: (companyId: string) => ['users', 'company-clients', companyId] as const,
+  /** The clients of one company for the second picker of the ticket form (every branch sees the same list; not the list of the company's page). */
+  companyClientChoices: (companyId: string) => ['users', 'company-client-choices', companyId] as const,
   /** Every page of the list of accounts, whatever it is for. */
   pages: ['users', 'page'] as const,
   page: (params: object) => ['users', 'page', params] as const,

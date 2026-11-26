@@ -21,6 +21,19 @@ export function useClientByEmail(email: string | undefined) {
   });
 }
 
+/**
+ * The people of one company that the second picker of the ticket form offers: asked for when a company is chosen (nothing without one), cancelled when another
+ * is chosen in the meantime, and forgotten with the form, because accounts are made and switched off all the time.
+ */
+export function useCompanyClientChoices(companyId: string | null) {
+  return useQuery({
+    queryKey: userKeys.companyClientChoices(companyId ?? ''),
+    queryFn: ({ signal }) => usersApi.companyClientChoices(companyId!, signal),
+    enabled: !!companyId,
+    gcTime: 0,
+  });
+}
+
 /** The clients of one company: asked for when the company is opened and forgotten when it is left. */
 export function useCompanyClients(companyId: string) {
   return useQuery({ queryKey: userKeys.companyClients(companyId), queryFn: () => usersApi.list({ role: 'Client', companyId }), gcTime: 0 });

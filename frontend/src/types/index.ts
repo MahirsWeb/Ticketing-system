@@ -76,6 +76,13 @@ export interface SlaPlanItemFull {
   isActive: boolean;
 }
 
+/** A client of a company as the pickers of the ticket form offer them: the name, and the address that tells two people of the same name apart. */
+export interface CompanyClientItem {
+  id: string;
+  name: string;
+  email: string;
+}
+
 export interface ClientLookupResult {
   id: string;
   firstName: string;
