@@ -29,6 +29,7 @@ Environment.SetEnvironmentVariable("DOTNET_hostBuilder__reloadConfigOnChange", "
 //   --create-key-certificate <file.pfx> <password>  makes the certificate that protects the key ring (see DataProtection in the README)
 //   --rekey-data / --revoke-old-keys                writes encrypted data again under a new key / retires the old keys (README, DataProtection)
 //   --create-integration-key <name>                 makes a key for another application that reads tickets (docs/integration-api.md)
+//   --import-package <folder> [--dry-run]           carries the history of another ticket system into an empty database (LegacyImport)
 if (args.Contains("--healthcheck"))
 {
     Environment.ExitCode = await TicketSystemTech.Api.Startup.ContainerHealthProbe.RunAsync();
@@ -441,6 +442,17 @@ if (args.Contains("--rekey-data") || args.Contains("--revoke-old-keys"))
     Environment.ExitCode = await TicketSystemTech.Api.Startup.DataRekey.RunAsync(
         app.Services, builder.Configuration, rewrite: args.Contains("--rekey-data"), revokeOldKeys: args.Contains("--revoke-old-keys"),
         allowUnprotected: args.Contains("--allow-unprotected-keys"), allowRunning: args.Contains("--allow-running"), Console.Out);
+    await Log.CloseAndFlushAsync();
+    return;
+}
+
+// `--import-package <folder> [--dry-run]` fills an empty database from an import package (see LegacyImport) and exits. Nothing is sent to anybody.
+var importAt = Array.IndexOf(args, "--import-package");
+if (importAt >= 0)
+{
+    using var importScope = app.Services.CreateScope();
+    Environment.ExitCode = await TicketSystemTech.Api.Startup.LegacyImport.RunAsync(
+        importScope.ServiceProvider, importAt + 1 < args.Length ? args[importAt + 1] : null, args.Contains("--dry-run"), Console.Out);
     await Log.CloseAndFlushAsync();
     return;
 }
