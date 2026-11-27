@@ -255,15 +255,29 @@ public sealed class IntegrationQueries : IIntegrationQueries
             .Where(s => s.StartedAtUtc >= startUtc && s.StartedAtUtc < endUtc && (personId == null || s.UserId == personId))
             .Select(s => new TimeRow
             {
-                Kind = "Ticket", Id = s.Id, TicketId = s.TicketId, TicketNumber = s.Ticket!.TicketNumber, TaskId = null, TaskTitle = null,
-                UserId = s.UserId, StartedAtUtc = s.StartedAtUtc, EndedAtUtc = s.EndedAtUtc
+                Kind = "Ticket",
+                Id = s.Id,
+                TicketId = s.TicketId,
+                TicketNumber = s.Ticket!.TicketNumber,
+                TaskId = null,
+                TaskTitle = null,
+                UserId = s.UserId,
+                StartedAtUtc = s.StartedAtUtc,
+                EndedAtUtc = s.EndedAtUtc
             });
         var onTasks = _db.WorkTaskSessions.AsNoTracking()
             .Where(s => s.StartedAtUtc >= startUtc && s.StartedAtUtc < endUtc && (personId == null || s.UserId == personId))
             .Select(s => new TimeRow
             {
-                Kind = "Task", Id = s.Id, TicketId = null, TicketNumber = null, TaskId = s.WorkTaskId, TaskTitle = s.WorkTask!.Title,
-                UserId = s.UserId, StartedAtUtc = s.StartedAtUtc, EndedAtUtc = s.EndedAtUtc
+                Kind = "Task",
+                Id = s.Id,
+                TicketId = null,
+                TicketNumber = null,
+                TaskId = s.WorkTaskId,
+                TaskTitle = s.WorkTask!.Title,
+                UserId = s.UserId,
+                StartedAtUtc = s.StartedAtUtc,
+                EndedAtUtc = s.EndedAtUtc
             });
         var all = onTickets.Concat(onTasks);
 
