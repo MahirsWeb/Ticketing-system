@@ -102,6 +102,9 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // so it wins over Identity's default TryAddScoped<ILookupNormalizer, UpperInvariantLookupNormalizer>().
 builder.Services.AddSingleton<IPiiProtector, PiiProtector>();
 builder.Services.AddSingleton<ILookupNormalizer, PiiLookupNormalizer>();
+// Registered before AddIdentity() for the same reason: Identity only adds its own hasher when none is there. This one is Identity's, plus a recognition of the bcrypt
+// hashes of a system that was replaced, which are replaced with Identity's own by the first sign-in (see LegacyPasswordHasher).
+builder.Services.AddSingleton<IPasswordHasher<ApplicationUser>, LegacyPasswordHasher>();
 
 // ---- Identity ----
 builder.Services

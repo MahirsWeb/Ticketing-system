@@ -26,7 +26,7 @@ public static class LegacyImport
 
     public sealed record Result(
         bool DryRun, IReadOnlyList<string> Problems, int Companies, int Departments, int HelpTopics, int SlaPlans, int Categories, int UsersCreated, int UsersReused,
-        int Tickets, int Messages, int Assignees, long? NumbersContinueAt, int TicketsOfAnotherCompanyThanTheirClient);
+        int Tickets, int Messages, int Assignees, long? NumbersContinueAt, int TicketsOfAnotherCompanyThanTheirClient, int PeopleWithTheirOldPassword = 0);
 
     public static async Task<int> RunAsync(IServiceProvider services, string? folder, bool dryRun, TextWriter output, CancellationToken ct = default)
     {
@@ -48,13 +48,13 @@ public static class LegacyImport
 
             await output.WriteLineAsync(dryRun ? "DRY RUN: the package is fit to be imported. Nothing was written. It would write:" : "Imported:");
             await output.WriteLineAsync($"  companies {result.Companies}, branches {result.Departments}, help topics {result.HelpTopics}, SLA plans {result.SlaPlans}, categories {result.Categories}");
-            await output.WriteLineAsync($"  people {result.UsersCreated} made, {result.UsersReused} already there");
+            await output.WriteLineAsync($"  people {result.UsersCreated} made, {result.UsersReused} already there; {result.PeopleWithTheirOldPassword} of them with the password they had before");
             await output.WriteLineAsync($"  tickets {result.Tickets}, messages {result.Messages} (and the first message of each ticket as its description), assignees {result.Assignees}");
             if (!dryRun)
             {
                 await output.WriteLineAsync($"  tickets of a company other than their client's: {result.TicketsOfAnotherCompanyThanTheirClient} (must be 0)");
                 await output.WriteLineAsync($"  numbers of new tickets continue at {result.NumbersContinueAt}");
-                await output.WriteLineAsync("Nobody has a password yet: an administrator gives each person a temporary one (Users, or --reset-admin-password <email> for an Admin).");
+                await output.WriteLineAsync("A person who had a password before signs in with it (and it is replaced by the first sign-in). The others have none: an administrator gives them a temporary one (Users, or --reset-admin-password <email> for an Admin).");
             }
 
             return result.TicketsOfAnotherCompanyThanTheirClient == 0 ? 0 : 1;
@@ -96,7 +96,7 @@ public static class LegacyImport
 
         if (dryRun)
             return new Result(true, [], package.Companies.Count, package.Departments.Count, package.HelpTopics.Count, package.SlaPlans.Count, package.Categories.Count,
-                package.Users.Count, 0, checkedPackage.Tickets, checkedPackage.Messages, checkedPackage.Assignees, null, 0);
+                package.Users.Count, 0, checkedPackage.Tickets, checkedPackage.Messages, checkedPackage.Assignees, null, 0, package.Users.Count(u => u.PasswordHash is not null));
 
         var now = time.GetUtcNow().UtcDateTime;
 
@@ -141,7 +141,7 @@ public static class LegacyImport
 
         // ---- people, through the user manager: the address is encrypted and hashed with this installation's keys. Nobody gets a password.
         var personIds = new Dictionary<string, Guid>(StringComparer.Ordinal);
-        int made = 0, reused = 0;
+        int made = 0, reused = 0, withOldPassword = 0;
         foreach (var u in package.Users)
         {
             var existing = await users.FindByEmailAsync(u.Email);
@@ -158,8 +158,13 @@ public static class LegacyImport
                 Id = Guid.NewGuid(),
                 UserName = u.Email,
                 Email = u.Email,
-                // As in the application: employees are made by a trusted administrator, only clients are asked to verify their address.
-                EmailConfirmed = role != UserRole.Client,
+                // As in the application: employees are made by a trusted administrator, only clients are asked to verify their address, unless the other
+                // system had confirmed it (a client who is asked to verify an address cannot sign in, and nothing can be sent to them to do it).
+                EmailConfirmed = u.EmailConfirmed ?? role != UserRole.Client,
+                // The password the person had there, as it was: the first sign-in with it is accepted and replaces it (LegacyPasswordHasher). A person who has
+                // it has nothing to change; one who has none is given a temporary one by an administrator, and changes it.
+                PasswordHash = u.PasswordHash,
+                MustChangePassword = u.PasswordHash is null,
                 FirstName = u.FirstName,
                 LastName = u.LastName,
                 PhoneNumber = string.IsNullOrWhiteSpace(u.Phone) ? null : u.Phone,
@@ -169,10 +174,10 @@ public static class LegacyImport
                 DepartmentId = u.DepartmentKey is null ? null : departmentIds[u.DepartmentKey],
                 IsActive = u.IsActive,
                 CreatedAtUtc = u.CreatedAtUtc ?? now,
-                MustChangePassword = true,
                 PreferredLanguage = "bs",
             };
             var created = await users.CreateAsync(person);
+            if (created.Succeeded && person.PasswordHash is not null) withOldPassword++;
             if (!created.Succeeded)
                 throw new InvalidOperationException($"The person {u.Key} could not be made: " + string.Join(" ", created.Errors.Select(e => e.Description)));
             personIds[u.Key] = person.Id;
@@ -275,7 +280,7 @@ public static class LegacyImport
         // ---- what was written is read again: no ticket may belong to a company other than its client's
         var strays = await db.Tickets.AsNoTracking().CountAsync(t => db.Users.Any(u => u.Id == t.ClientId && u.CompanyId != t.CompanyId), ct);
         return new Result(false, [], package.Companies.Count, package.Departments.Count, package.HelpTopics.Count, package.SlaPlans.Count, package.Categories.Count, made, reused,
-            written, checkedPackage.Messages, checkedPackage.Assignees, continueAt, strays);
+            written, checkedPackage.Messages, checkedPackage.Assignees, continueAt, strays, withOldPassword);
     }
 
     private static Result Empty(bool dryRun, IReadOnlyList<string> problems) => new(dryRun, problems, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, null, 0);

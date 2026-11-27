@@ -16,6 +16,8 @@ public class LegacyImportTests : IDisposable
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private static readonly DateTime Start = new(2021, 5, 4, 9, 30, 0, DateTimeKind.Utc);
 
+    private const string OldPassword = "Stara-lozinka-123";
+
     private readonly ApiWorld _world;
     private readonly string _folder = Path.Combine(Path.GetTempPath(), "import-" + Guid.NewGuid().ToString("N"));
     private readonly string _tag = Guid.NewGuid().ToString("N")[..8];
@@ -35,6 +37,9 @@ public class LegacyImportTests : IDisposable
 
     private string Email(string who) => $"{who}.{_tag}@example.test";
 
+    // What PHP makes of a password: $2y$. (BCrypt.Net writes $2a$, the same hash.) Cost 4 keeps the test fast.
+    private readonly string _oldHash = BCrypt.Net.BCrypt.HashPassword(OldPassword, 4).Replace("$2a$", "$2y$");
+
     /// <summary>Two companies, one branch, two clients, one employee, three tickets (one with a script in it, one open and overdue).</summary>
     private void WritePackage(Func<PackageTicket, PackageTicket>? change = null)
     {
@@ -50,9 +55,9 @@ public class LegacyImportTests : IDisposable
         WriteLines("categories.jsonl", new[] { new PackageLookup("k:f", "Fakturisano " + _tag) });
         WriteLines("users.jsonl", new[]
         {
-            new PackageUser("c:1", "Client", Email("ana"), "Ana", "Anić", "061 111 222", "o:1", null, true, Start),
+            new PackageUser("c:1", "Client", Email("ana"), "Ana", "Anić", "061 111 222", "o:1", null, true, Start, _oldHash, true),
             new PackageUser("c:2", "Client", Email("dino"), "Dino", "Dinić", null, "g:n", null, true, Start),
-            new PackageUser("s:1", "Employee", Email("boris"), "Boris", "Borić", null, null, "d:1", true, Start),
+            new PackageUser("s:1", "Employee", Email("boris"), "Boris", "Borić", null, null, "d:1", true, Start, _oldHash),
         });
 
         var closed = new PackageTicket(
@@ -126,8 +131,14 @@ public class LegacyImportTests : IDisposable
             var protector = scope.ServiceProvider.GetRequiredService<IPiiProtector>();
             var ana = await users.FindByEmailAsync(Email("ana"));
             Assert.NotNull(ana);
-            Assert.Null(ana!.PasswordHash);
-            Assert.True(ana.MustChangePassword);
+            Assert.Equal(_oldHash, ana!.PasswordHash); // the hash of the old system, as it was
+            Assert.False(ana.MustChangePassword); // a person with a password has nothing to change
+            Assert.True(ana.EmailConfirmed); // the old system had confirmed it
+            var dino = await users.FindByEmailAsync(Email("dino"));
+            Assert.Null(dino!.PasswordHash); // no password there, none here: an administrator gives one
+            Assert.True(dino.MustChangePassword);
+            Assert.False(dino.EmailConfirmed);
+            Assert.Equal(2, result.PeopleWithTheirOldPassword);
             Assert.Equal(UserRole.Client, ana.Role);
             Assert.Equal("bs", ana.PreferredLanguage);
             Assert.Equal(Start, ana.CreatedAtUtc);
@@ -172,6 +183,36 @@ public class LegacyImportTests : IDisposable
                 Assert.Equal(1, await db.AuditLogs.CountAsync(a => a.Action == "LegacyImportCompleted" && a.Details!.Contains("tickets=3")));
                 return 0;
             });
+        }
+        finally { await CleanUp(); }
+    }
+
+    [SqlFact]
+    public async Task A_person_who_brought_the_old_password_signs_in_with_it_and_that_sign_in_replaces_the_hash()
+    {
+        WritePackage();
+        try
+        {
+            await InScope(sp => LegacyImport.RunCoreAsync(sp, _folder, dryRun: false, requireEmptyDatabase: false, restartNumbers: false, TextWriter.Null,
+                TestContext.Current.CancellationToken));
+
+            Task<ApiResponse> SignIn(string who, string password) => _world.Send(null, HttpMethod.Post, "/api/auth/login", new { email = Email(who), password });
+
+            Assert.Equal(401, (await SignIn("ana", OldPassword + "x")).Code); // a wrong password is a wrong password
+
+            var login = await SignIn("ana", OldPassword);
+            Assert.Equal(200, login.Code);
+            Assert.False(login.Json.GetProperty("requiresPasswordChange").GetBoolean()); // nothing to change: it is her own password
+            Assert.False(string.IsNullOrEmpty(login.Json.GetProperty("accessToken").GetString()));
+
+            using var scope = _world.Factory.Services.CreateScope();
+            var ana = await scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>().FindByEmailAsync(Email("ana"));
+            Assert.False(LegacyPasswordHasher.IsBcrypt(ana!.PasswordHash)); // replaced by that sign-in with Identity's own
+            Assert.NotEqual(_oldHash, ana.PasswordHash);
+
+            Assert.Equal(200, (await SignIn("ana", OldPassword)).Code); // and the same password goes on working
+            Assert.Equal(200, (await SignIn("boris", OldPassword)).Code); // a member of the staff the same way
+            Assert.Equal(401, (await SignIn("dino", OldPassword)).Code); // a person who had none cannot sign in until an administrator gives one
         }
         finally { await CleanUp(); }
     }

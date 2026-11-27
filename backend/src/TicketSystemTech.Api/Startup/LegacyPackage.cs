@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using TicketSystemTech.Domain.Enums;
+using TicketSystemTech.Infrastructure.Identity;
 
 namespace TicketSystemTech.Api.Startup;
 
@@ -16,9 +17,13 @@ public sealed record PackageLookup(string Key, string Name);
 
 public sealed record PackageSlaPlan(string Key, string Name, int Hours);
 
-/// <summary>One person. <c>Role</c> is Admin, Employee or Client; a client has a company, an employee a branch.</summary>
+/// <summary>
+/// One person. <c>Role</c> is Admin, Employee or Client; a client has a company, an employee a branch. <c>PasswordHash</c> is the bcrypt hash the person had in the
+/// other system: carried over as it is, it lets them sign in with the password they had (see LegacyPasswordHasher); null means no password (an administrator or
+/// the "forgot password" link gives one). <c>EmailConfirmed</c> says whether the address was confirmed there; left out, staff count as confirmed and clients not.
+/// </summary>
 public sealed record PackageUser(string Key, string Role, string Email, string FirstName, string LastName, string? Phone, string? CompanyKey,
-    string? DepartmentKey, bool IsActive, DateTime? CreatedAtUtc);
+    string? DepartmentKey, bool IsActive, DateTime? CreatedAtUtc, string? PasswordHash = null, bool? EmailConfirmed = null);
 
 public sealed record PackageAssignee(string UserKey, DateTime? AssignedAtUtc, bool IsPrimary);
 
@@ -129,6 +134,7 @@ public static class LegacyPackageValidator
             if (!LooksLikeAnAddress(u.Email) || !personEmails.Add(u.Email)) Bad($"person {u.Key}: the e-mail address is not an address or someone else has it.");
             if (string.IsNullOrWhiteSpace(u.FirstName) || string.IsNullOrWhiteSpace(u.LastName) || u.FirstName.Length > 100 || u.LastName.Length > 100)
                 Bad($"person {u.Key}: the first or last name is empty or longer than 100 characters.");
+            if (u.PasswordHash is not null && !LegacyPasswordHasher.IsBcrypt(u.PasswordHash)) Bad($"person {u.Key}: the password hash is not a bcrypt hash (60 characters, starting with $2a$, $2b$ or $2y$).");
             if (role == UserRole.Client && (u.CompanyKey is null || !companies.Contains(u.CompanyKey))) Bad($"person {u.Key}: a client needs a company that exists.");
             if (role == UserRole.Employee && (u.DepartmentKey is null || !departments.Contains(u.DepartmentKey))) Bad($"person {u.Key}: an employee needs a branch that exists.");
         }
