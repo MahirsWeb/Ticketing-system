@@ -278,6 +278,54 @@ describe('the page of one user', () => {
       expect(screen.getByRole('button', { name: /Edit account details/ })).toBeInTheDocument(); // the form is closed
     });
 
+    describe('taking the tickets of a client along to another company', () => {
+      const MOVE = /Also move this person's existing tickets to the new company/;
+
+      it('offers it only once the company of a client has been changed, and not again when it is changed back', async () => {
+        const user = userEvent.setup();
+        renderPage();
+        await open(user);
+        await waitFor(() => expect(screen.getByLabelText('Company')).toHaveValue('co1'));
+        expect(screen.queryByLabelText(MOVE)).not.toBeInTheDocument();
+
+        await user.selectOptions(screen.getByLabelText('Company'), 'co2');
+        expect(screen.getByLabelText(MOVE)).not.toBeChecked(); // never ticked for the administrator: tickets of an earlier employer stay with it
+        expect(screen.getByText(/the old tickets belong to the old company/)).toBeInTheDocument();
+
+        await user.selectOptions(screen.getByLabelText('Company'), 'co1');
+        expect(screen.queryByLabelText(MOVE)).not.toBeInTheDocument();
+      });
+
+      it('says so to the server when it is ticked, and says nothing when it is not', async () => {
+        const user = userEvent.setup();
+        renderPage();
+        await open(user);
+        await waitFor(() => expect(screen.getByLabelText('Company')).toHaveValue('co1'));
+
+        await user.selectOptions(screen.getByLabelText('Company'), 'co2');
+        await user.click(screen.getByLabelText(MOVE));
+        await user.click(screen.getByRole('button', { name: 'Save' }));
+        await waitFor(() => expect(usersApi.updateUser).toHaveBeenCalledTimes(1));
+        expect(vi.mocked(usersApi.updateUser).mock.calls[0][1]).toMatchObject({ role: 'Client', companyId: 'co2', moveTickets: true });
+
+        await open(user);
+        await user.selectOptions(await screen.findByLabelText('Company'), 'co2');
+        await user.click(screen.getByRole('button', { name: 'Save' }));
+        await waitFor(() => expect(usersApi.updateUser).toHaveBeenCalledTimes(2));
+        expect(vi.mocked(usersApi.updateUser).mock.calls[1][1].moveTickets).toBeUndefined();
+      });
+
+      it('does not offer it for a member of the staff', async () => {
+        const user = userEvent.setup();
+        renderPage('/users/e1');
+        await open(user);
+        await user.selectOptions(await screen.findByLabelText('Account type'), 'Client');
+        await user.selectOptions(await screen.findByLabelText('Company'), 'co2');
+
+        expect(screen.queryByLabelText(MOVE)).not.toBeInTheDocument();
+      });
+    });
+
     it('asks for a company before it saves a client without one', async () => {
       const user = userEvent.setup();
       renderPage();

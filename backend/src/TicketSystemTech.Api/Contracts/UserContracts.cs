@@ -23,14 +23,18 @@ public record CreateClientRequest(
     [Required] Guid CompanyId
 );
 
-/// <summary>Admin-only edit of an existing account. Email is intentionally excluded — it's the login identity.</summary>
+/// <summary>
+/// Admin-only edit of an existing account. Email is intentionally excluded — it's the login identity. <c>MoveTickets</c>: a ticket keeps the company it
+/// was written under, so changing a client's company moves only the person; true also moves the tickets they wrote before.
+/// </summary>
 public record UpdateUserRequest(
     [Required] string FirstName,
     [Required] string LastName,
     [Required] UserRole Role,
     Guid? CompanyId, // Required when Role is Client.
     Guid? DepartmentId, // Required when Role is Employee.
-    Guid? SubBranchId // Required if the selected branch has sub-branches defined.
+    Guid? SubBranchId, // Required if the selected branch has sub-branches defined.
+    bool MoveTickets = false
 );
 
 /// <summary>One page of accounts for the Users screen. The two totals ignore the search text, so the tab labels

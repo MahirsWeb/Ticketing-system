@@ -56,7 +56,7 @@ export const usersApi = {
 
   updateUser: (
     userId: string,
-    data: { firstName: string; lastName: string; role: UserRole; companyId?: string; departmentId?: string; subBranchId?: string }
+    data: { firstName: string; lastName: string; role: UserRole; companyId?: string; departmentId?: string; subBranchId?: string; moveTickets?: boolean }
   ) =>
     apiClient
       .put(`/api/users/${userId}`, {
@@ -66,6 +66,8 @@ export const usersApi = {
         companyId: data.companyId || null,
         departmentId: data.departmentId || null,
         subBranchId: data.subBranchId || null,
+        // Only said when it is asked for: a ticket keeps the company it was written under unless the administrator wants the person's tickets to follow them.
+        ...(data.moveTickets ? { moveTickets: true } : {}),
       })
       .then((r) => r.data),
 

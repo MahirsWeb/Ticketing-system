@@ -3194,6 +3194,9 @@
           "lastName": {
             "type": "string"
           },
+          "moveTickets": {
+            "type": "boolean"
+          },
           "role": {
             "$ref": "#/components/schemas/UserRole"
           },

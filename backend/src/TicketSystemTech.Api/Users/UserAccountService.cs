@@ -225,7 +225,29 @@ public sealed class UserAccountService : IUserAccountService
         _cache.Remove(UserStatusCache.Key(user.Id));
         foreach (var task in handedBack) await _notifier.DeliverAsync(task);
 
+        // After the person is saved, and not tied to the company having just changed: asking again with the box ticked finishes a move that stopped half way.
+        if (request.MoveTickets && request.Role == UserRole.Client && companyId is { } target)
+            await MoveTicketsToCompanyAsync(user, target);
+
         return Outcome<Done>.Ok(Done.Value);
+    }
+
+    /// <summary>
+    /// A ticket keeps the company it was written under, so a client who is put into another company leaves what they wrote before behind. When the
+    /// administrator says so, those tickets follow the person. It is meant for a person who was in a temporary group (people of an old system who had no
+    /// company), not for one who changed employer: the tickets of the earlier employer belong to it. Whatever the move changes is recorded.
+    /// </summary>
+    private async Task MoveTicketsToCompanyAsync(ApplicationUser client, Guid target)
+    {
+        var moved = await _db.Tickets.Where(t => t.ClientId == client.Id && t.CompanyId != target).ExecuteUpdateAsync(s => s.SetProperty(t => t.CompanyId, target));
+        if (moved == 0) return;
+
+        // A company that does not want its tickets read by an outside AI keeps nothing of them indexed, the tickets that just came to it included.
+        if (await _db.Companies.AnyAsync(c => c.Id == target && !c.AiIndexingEnabled))
+            await _db.KnowledgeBaseChunks.Where(k => k.TicketId != null && k.Ticket!.ClientId == client.Id).ExecuteDeleteAsync();
+
+        _db.Audit(_currentUser.UserId, "ClientTicketsMoved", nameof(ApplicationUser), client.Id, $"to company {target}; tickets: {moved}");
+        await _db.SaveChangesAsync();
     }
 
     public async Task<Outcome<Done>> SetActiveAsync(Guid id, bool isActive)

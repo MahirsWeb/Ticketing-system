@@ -19,10 +19,14 @@ export function UserEditForm({ user, onSaved, onCancel }: { user: UserListItemDt
   const [companyId, setCompanyId] = useState(user.companyId ?? '');
   const [departmentId, setDepartmentId] = useState(user.departmentId ?? '');
   const [subBranchId, setSubBranchId] = useState(user.subBranchId ?? '');
+  const [moveTickets, setMoveTickets] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const needsBranch = accountType === 'Employee';
+  // A ticket keeps the company it was written under, so putting a client into another company moves only the person. The choice to take their tickets too
+  // is offered exactly then: for a client who stays a client and whose company is being changed.
+  const companyChanged = user.role === 'Client' && accountType === 'Client' && !!companyId && companyId !== (user.companyId ?? '');
   // Sub-branches are kept per branch by the shared cache, so going back to a branch already seen does not ask again.
   const { data: availableSubBranches = [] } = useSubBranches(departmentId, { enabled: needsBranch });
 
@@ -52,6 +56,7 @@ export function UserEditForm({ user, onSaved, onCancel }: { user: UserListItemDt
         companyId: accountType === 'Client' ? companyId : undefined,
         departmentId: needsBranch ? departmentId : undefined,
         subBranchId: needsBranch ? subBranchId || undefined : undefined,
+        moveTickets: companyChanged && moveTickets ? true : undefined,
       });
       onSaved();
     } catch (err: any) {
@@ -91,6 +96,17 @@ export function UserEditForm({ user, onSaved, onCancel }: { user: UserListItemDt
             ))}
           </Select>
         </Field>
+      )}
+      {companyChanged && (
+        <div className="sm:col-span-2">
+          <label className="flex items-start gap-2 text-sm text-slate-800">
+            <input type="checkbox" className="mt-1" checked={moveTickets} onChange={(e) => setMoveTickets(e.target.checked)} />
+            <span>
+              {t('edit_moveTickets')}
+              <span className="mt-0.5 block text-xs text-slate-600">{t('edit_moveTicketsHint')}</span>
+            </span>
+          </label>
+        </div>
       )}
       {needsBranch && (
         <Field>

@@ -6550,6 +6550,7 @@ export interface components {
             departmentId?: string | null;
             firstName?: string;
             lastName?: string;
+            moveTickets?: boolean;
             role?: components["schemas"]["UserRole"];
             /** Format: uuid */
             subBranchId?: string | null;
