@@ -166,6 +166,49 @@ public class EmployeeReportsTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task The_total_is_rounded_from_the_seconds_so_three_days_of_20_minutes_are_one_hour_and_not_0_99()
+    {
+        const int year = 2046;
+        var t = Made(At(year, 3, 1));
+        await SaveAsync(t);
+        // 20 minutes on three days: each day is 0.33 h when rounded alone, and three of them 0.99; the three together are 3600 s, which is 1.00 h
+        await SaveAsync(Session(t, _world.EmpA1, At(year, 3, 10), 1200), Session(t, _world.EmpA1, At(year, 3, 11), 1200), Session(t, _world.EmpA1, At(year, 3, 12), 1200));
+
+        var detail = await GetAsync(_world.Admin, $"{Base}/hours/{_world.EmpA1.Id}?{Period(year)}");
+        var everybody = await GetAsync(_world.Admin, $"{Base}/hours?{Period(year)}");
+        using var book = await SheetAsync(_world.Admin, $"userId={_world.EmpA1.Id}&year={year}&month=3&language=en");
+
+        var days = detail.GetProperty("days").EnumerateArray().Where(d => d.GetProperty("totalHours").GetDouble() > 0).ToList();
+        Assert.Equal(new[] { 0.33, 0.33, 0.33 }, days.Select(d => d.GetProperty("totalHours").GetDouble()));
+        Assert.Equal(1.0, detail.GetProperty("totalHours").GetDouble());
+        Assert.Equal(1.0, Person(everybody, _world.EmpA1).GetProperty("totalHours").GetDouble());
+        var sheet = book.GetSheet("Overview by days");
+        var total = sheet.GetRow(sheet.LastRowNum);
+        Assert.Equal(1.0, total.GetCell(3).NumericCellValue); // not 0.99
+        Assert.Equal(0.99, Math.Round(Enumerable.Range(0, sheet.LastRowNum).Select(i => sheet.GetRow(i)).Where(r => r?.GetCell(3)?.CellType == NPOI.SS.UserModel.CellType.Numeric).Sum(r => r.GetCell(3).NumericCellValue), 2)); // what the rows above show adds up to this
+    }
+
+    [SqlFact]
+    public async Task The_worksheet_says_in_its_header_that_a_session_is_still_running_and_marks_the_day_and_the_company()
+    {
+        var now = DateTime.UtcNow;
+        var t = Made(now.AddDays(-1));
+        await SaveAsync(t);
+        await SaveAsync(new TicketWorkSession { TicketId = t.Id, UserId = _world.EmpA1.Id, StartedAtUtc = now.AddMinutes(-30), EndedAtUtc = null });
+
+        using var book = await SheetAsync(_world.Admin, $"userId={_world.EmpA1.Id}&year={now.Year}&month={now.Month}&language=en");
+
+        for (var i = 0; i < book.NumberOfSheets; i++)
+        {
+            var sheet = book.GetSheetAt(i);
+            var warning = Enumerable.Range(0, 8).Select(r => sheet.GetRow(r)).Single(r => r?.GetCell(0)?.StringCellValue == "Warning");
+            Assert.Contains("are still running and are counted up to the moment this sheet was made", warning.GetCell(1).StringCellValue);
+        }
+        var raw = book.GetSheet("Raw list");
+        Assert.Contains(Enumerable.Range(0, raw.LastRowNum + 1), i => raw.GetRow(i)?.GetCell(1)?.StringCellValue == "still running");
+    }
+
+    [SqlFact]
     public async Task A_session_that_is_still_running_is_counted_up_to_now()
     {
         var t = Made(DateTime.UtcNow.AddDays(-1));
@@ -176,6 +219,10 @@ public class EmployeeReportsTests : IAsyncLifetime
 
         var hours = detail.GetProperty("ticketHours").GetDouble();
         Assert.InRange(hours, 1.99, 2.1);
+        Assert.Equal(1, detail.GetProperty("runningSessions").GetInt32()); // the screen says that these hours are not final
+        var people = await GetAsync(_world.Admin, $"{Base}/hours?from={DateTime.UtcNow.AddDays(-1):yyyy-MM-ddTHH:mm:ssZ}&to={DateTime.UtcNow.AddHours(1):yyyy-MM-ddTHH:mm:ssZ}");
+        Assert.Equal(1, Person(people, _world.EmpA1).GetProperty("runningSessions").GetInt32());
+        Assert.Equal(0, Person(people, _world.EmpA2).GetProperty("runningSessions").GetInt32());
     }
 
     [SqlFact]
@@ -292,8 +339,9 @@ public class EmployeeReportsTests : IAsyncLifetime
         var b = new Company { Name = "ER Podijeljena" };
         var c = new Company { Name = "ER Malo" };
         var d = new Company { Name = "ER Staro" };
-        await SaveAsync(a, b, c, d);
-        _companies.AddRange(new[] { a.Id, b.Id, c.Id, d.Id });
+        var only = new Company { Name = "ER Jedini" };
+        await SaveAsync(a, b, c, d, only);
+        _companies.AddRange(new[] { a.Id, b.Id, c.Id, d.Id, only.Id });
         var now = DateTime.UtcNow;
         Ticket Closed(Company company, Actor by, double daysAgo) => Made(now.AddDays(-daysAgo - 1), TicketStatus.Closed, company.Id, by, now.AddDays(-daysAgo));
         var tickets = new List<Ticket>();
@@ -303,19 +351,25 @@ public class EmployeeReportsTests : IAsyncLifetime
         tickets.AddRange(Enumerable.Range(0, 3).Select(_ => Closed(b, _world.EmpA2, 20))); // 3 of 6 = 50 %: listed, not high
         tickets.AddRange(Enumerable.Range(0, 4).Select(_ => Closed(c, _world.EmpA1, 10))); // all of them, but only 4 tickets: under the minimum
         tickets.AddRange(Enumerable.Range(0, 6).Select(_ => Closed(d, _world.EmpA1, 400))); // all of them, but more than a year ago
+        tickets.AddRange(Enumerable.Range(0, 6).Select(_ => Closed(only, _world.EmpA1, 10))); // every one by the same person: nobody else knows this company
         await SaveAsync(tickets.Cast<object>().ToArray());
 
         var r = await GetAsync(_world.Admin, $"{Base}/dependency");
 
-        var items = r.GetProperty("items").EnumerateArray().Where(i => new[] { a.Id, b.Id, c.Id, d.Id }.Contains(i.GetProperty("companyId").GetGuid())).ToList();
-        Assert.Equal(new[] { "ER Zavisna", "ER Podijeljena" }, items.Select(i => i.GetProperty("company").GetString()));
-        Assert.Equal(83.3, items[0].GetProperty("sharePercent").GetDouble());
+        var items = r.GetProperty("items").EnumerateArray().Where(i => new[] { a.Id, b.Id, c.Id, d.Id, only.Id }.Contains(i.GetProperty("companyId").GetGuid())).ToList();
+        Assert.Equal(new[] { "ER Jedini", "ER Zavisna", "ER Podijeljena" }, items.Select(i => i.GetProperty("company").GetString()));
+        Assert.Equal(100.0, items[0].GetProperty("sharePercent").GetDouble());
+        Assert.True(items[0].GetProperty("sole").GetBoolean()); // the only person: every ticket of the company was closed by them
         Assert.True(items[0].GetProperty("high").GetBoolean());
-        Assert.Equal(6, items[0].GetProperty("closed").GetInt32());
-        Assert.Equal(5, items[0].GetProperty("personClosed").GetInt32());
-        Assert.Equal(_world.EmpA1.Id, items[0].GetProperty("personId").GetGuid());
-        Assert.Equal(50.0, items[1].GetProperty("sharePercent").GetDouble());
-        Assert.False(items[1].GetProperty("high").GetBoolean());
+        Assert.Equal(83.3, items[1].GetProperty("sharePercent").GetDouble());
+        Assert.True(items[1].GetProperty("high").GetBoolean());
+        Assert.False(items[1].GetProperty("sole").GetBoolean()); // 5 of 6 is high, but somebody else has closed one
+        Assert.Equal(6, items[1].GetProperty("closed").GetInt32());
+        Assert.Equal(5, items[1].GetProperty("personClosed").GetInt32());
+        Assert.Equal(_world.EmpA1.Id, items[1].GetProperty("personId").GetGuid());
+        Assert.Equal(50.0, items[2].GetProperty("sharePercent").GetDouble());
+        Assert.False(items[2].GetProperty("high").GetBoolean());
+        Assert.False(items[2].GetProperty("sole").GetBoolean());
 
         var stricter = await GetAsync(_world.Admin, $"{Base}/dependency?minShare=80&minClosed=6");
         Assert.Contains(stricter.GetProperty("items").EnumerateArray(), i => i.GetProperty("companyId").GetGuid() == a.Id);

@@ -180,7 +180,7 @@ public sealed class EmployeeReportService : IEmployeeReportService
             var task = days.Sum(d => d.TaskSeconds);
             int? without = CountsDaysWithout(p) ? WorkTimeSummary.DaysWithoutWork(days, BusinessTimeZone.LocalDate(p.CreatedAtUtc, zone), today).Count : null;
             return new PersonHoursDto(p.Id, p.Name, p.DepartmentId is { } d ? branches.GetValueOrDefault(d) : null,
-                WorkTimeSummary.Hours(ticket), WorkTimeSummary.Hours(task), WorkTimeSummary.Hours(ticket + task), without);
+                WorkTimeSummary.Hours(ticket), WorkTimeSummary.Hours(task), WorkTimeSummary.Hours(ticket + task), without, WorkTimeSummary.RunningCount(mine));
         }).OrderByDescending(r => r.TotalHours).ThenBy(r => r.Name).ToList();
         return new HoursPeopleDto(rows);
     }
@@ -212,7 +212,7 @@ public sealed class EmployeeReportService : IEmployeeReportService
             person.Id, person.Name, WorkTimeSummary.Hours(ticket), WorkTimeSummary.Hours(task), WorkTimeSummary.Hours(ticket + task),
             days.Select(d => new DayHoursDto(d.Day, WorkTimeSummary.Hours(d.TicketSeconds), WorkTimeSummary.Hours(d.TaskSeconds), WorkTimeSummary.Hours(d.TotalSeconds))).ToList(),
             WorkTimeSummary.ByWeek(days).Select(w => new WeekHoursDto(w.WeekStart, WorkTimeSummary.Hours(w.TicketSeconds), WorkTimeSummary.Hours(w.TaskSeconds), WorkTimeSummary.Hours(w.TotalSeconds))).ToList(),
-            without, applies));
+            without, applies, WorkTimeSummary.RunningCount(entries)));
     }
 
     // ---------------------------------------------------------------- what a person is good at
@@ -300,7 +300,7 @@ public sealed class EmployeeReportService : IEmployeeReportService
         {
             var share = Math.Round(x.Top!.Count * 100.0 / x.Total, 1);
             var person = x.Top.ClosedByUserId!.Value;
-            return new CompanyDependencyDto(x.CompanyId, companies.GetValueOrDefault(x.CompanyId, "?"), x.Total, person, people.GetValueOrDefault(person, "?"), x.Top.Count, share, share >= HighSharePercent);
+            return new CompanyDependencyDto(x.CompanyId, companies.GetValueOrDefault(x.CompanyId, "?"), x.Total, person, people.GetValueOrDefault(person, "?"), x.Top.Count, share, share >= HighSharePercent, x.Top.Count == x.Total);
         }).ToList();
         return new DependencyDto(found.Count, minClosed, minSharePercent, items);
     }

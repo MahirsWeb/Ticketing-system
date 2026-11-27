@@ -148,6 +148,68 @@ public class WorkTimeSummaryTests
     }
 
     [Fact]
+    public void A_session_that_is_still_running_is_marked_everywhere_it_counts_and_the_header_of_every_sheet_warns_about_it()
+    {
+        using var wb = new XSSFWorkbook(new MemoryStream(TimesheetExcelExporter.Build(Document("en"))));
+
+        for (var i = 0; i < 4; i++) // the warning is in the header of every sheet, with the moment up to which it is counted
+        {
+            var warning = wb.GetSheetAt(i).GetRow(6);
+            Assert.Equal("Warning", warning.GetCell(0).StringCellValue);
+            Assert.Contains("1 work session(s) are still running and are counted up to the moment this sheet was made (04.03.2026 12:00 (Europe/Sarajevo))", warning.GetCell(1).StringCellValue);
+        }
+        var days = wb.GetSheet("Overview by days");
+        Assert.Equal("Still running", days.GetRow(8).GetCell(4).StringCellValue);
+        Assert.Equal(1, days.GetRow(9 + 3).GetCell(4).NumericCellValue); // 4 March, the day it runs
+        Assert.Null(days.GetRow(9 + 1).GetCell(4)); // the other days have nothing to say
+        var companies = wb.GetSheet("By company");
+        Assert.Equal(1, companies.GetRow(9).GetCell(2).NumericCellValue); // Alfa: the company of the running session
+        var items = wb.GetSheet("By ticket and task");
+        Assert.Contains(Enumerable.Range(9, items.LastRowNum - 8), i => items.GetRow(i).GetCell(1).StringCellValue == "T-3 traje (still running)");
+    }
+
+    [Fact]
+    public void A_document_without_a_running_session_has_no_warning()
+    {
+        var doc = Document("en");
+        var finished = doc with { Entries = doc.Entries.Where(e => e.EndUtc is not null).ToList() };
+
+        using var wb = new XSSFWorkbook(new MemoryStream(TimesheetExcelExporter.Build(finished)));
+
+        Assert.NotEqual("Warning", wb.GetSheetAt(0).GetRow(6)?.GetCell(0)?.StringCellValue);
+        Assert.Equal(0, WorkTimeSummary.RunningCount(finished.Entries));
+    }
+
+    [Fact]
+    public void The_days_and_weeks_know_how_many_of_their_sessions_are_running()
+    {
+        var running = new WorkEntry(Guid.NewGuid(), Me, false, Guid.NewGuid(), "T-1", "x", CompanyId("Alfa"), "Alfa", At(2026, 3, 4), null);
+        var days = WorkTimeSummary.ByDay(new[] { running, Ticket(At(2026, 3, 4, 12), 600) }, new DateOnly(2026, 3, 3), new DateOnly(2026, 3, 5), Zone, At(2026, 3, 4, 11));
+
+        Assert.Equal(new[] { 0, 1, 0 }, days.Select(d => d.RunningCount));
+        Assert.Equal(1, WorkTimeSummary.ByWeek(days).Single().RunningCount);
+    }
+
+    [Fact]
+    public void The_hours_decimals_are_set_in_one_place_and_the_number_format_of_the_workbooks_follows_it()
+    {
+        Assert.Equal(2, WorkTimeSummary.HoursDecimals);
+        Assert.Equal("0.00", WorkTimeSummary.HoursNumberFormat);
+        Assert.Equal(0.33, WorkTimeSummary.Hours(1200)); // 20 minutes
+    }
+
+    [Fact]
+    public void The_total_is_rounded_from_the_seconds_and_not_added_up_from_the_rounded_days()
+    {
+        // Three days of 20 minutes: each day shows 0.33 h, which adds up to 0.99, but 3600 s are 1.00 h and that is the total.
+        var sessions = new[] { Ticket(At(2026, 3, 2), 1200), Ticket(At(2026, 3, 3), 1200), Ticket(At(2026, 3, 4), 1200) };
+        var days = WorkTimeSummary.ByDay(sessions, new DateOnly(2026, 3, 2), new DateOnly(2026, 3, 4), Zone, Now);
+
+        Assert.Equal(0.99, Math.Round(days.Sum(d => WorkTimeSummary.Hours(d.TotalSeconds)), 2));
+        Assert.Equal(1.00, WorkTimeSummary.Hours(days.Sum(d => d.TotalSeconds)));
+    }
+
+    [Fact]
     public void The_totals_of_the_sheets_agree_and_a_running_session_is_counted_up_to_the_moment_of_making()
     {
         using var wb = new XSSFWorkbook(new MemoryStream(TimesheetExcelExporter.Build(Document("en"))));
@@ -160,13 +222,13 @@ public class WorkTimeSummaryTests
         Assert.Equal(4.42, totalRow.GetCell(3).NumericCellValue);
 
         var companies = wb.GetSheetAt(1);
-        Assert.Equal("Alfa", companies.GetRow(8).GetCell(0).StringCellValue); // 5400 + 7200 s = 3.5 h
-        Assert.Equal(3.5, companies.GetRow(8).GetCell(1).NumericCellValue);
+        Assert.Equal("Alfa", companies.GetRow(9).GetCell(0).StringCellValue); // 5400 + 7200 s = 3.5 h
+        Assert.Equal(3.5, companies.GetRow(9).GetCell(1).NumericCellValue);
         Assert.Equal("Tasks (no company)", companies.GetRow(companies.LastRowNum - 1).GetCell(0).StringCellValue);
         Assert.Equal(4.42, companies.GetRow(companies.LastRowNum).GetCell(1).NumericCellValue);
 
         var raw = wb.GetSheetAt(3);
-        Assert.Equal("still running", raw.GetRow(11).GetCell(1).StringCellValue);
-        Assert.Equal(4, raw.LastRowNum - 7); // four sessions
+        Assert.Equal("still running", raw.GetRow(12).GetCell(1).StringCellValue);
+        Assert.Equal(4, raw.LastRowNum - 8); // four sessions
     }
 }

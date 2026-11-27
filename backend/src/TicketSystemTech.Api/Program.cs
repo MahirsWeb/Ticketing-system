@@ -275,6 +275,8 @@ builder.Services.AddScoped<TicketSystemTech.Api.Reports.IReportService, TicketSy
 builder.Services.AddScoped<TicketSystemTech.Api.Integration.IAuditTrailReader, TicketSystemTech.Api.Integration.AuditTrailReader>();
 builder.Services.AddScoped<TicketSystemTech.Api.Reports.ITicketInsightService, TicketSystemTech.Api.Reports.TicketInsightService>();
 builder.Services.AddScoped<TicketSystemTech.Api.Reports.IEmployeeReportService, TicketSystemTech.Api.Reports.EmployeeReportService>();
+builder.Services.AddScoped<TicketSystemTech.Api.Reports.ITicketCardService, TicketSystemTech.Api.Reports.TicketCardService>();
+builder.Services.AddScoped<TicketSystemTech.Api.Reports.ICompanyMonthlyReportService, TicketSystemTech.Api.Reports.CompanyMonthlyReportService>();
 builder.Services.AddScoped<TicketSystemTech.Api.Reports.ICompanyReportService, TicketSystemTech.Api.Reports.CompanyReportService>();
 builder.Services.AddScoped<TicketSystemTech.Api.WorkTasks.IWorkTaskQueries, TicketSystemTech.Api.WorkTasks.WorkTaskQueries>();
 builder.Services.AddScoped<TicketSystemTech.Api.WorkTasks.IWorkTaskService, TicketSystemTech.Api.WorkTasks.WorkTaskService>();

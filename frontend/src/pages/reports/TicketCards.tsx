@@ -4,6 +4,7 @@ import { Card, StatusBadge } from '../../components/ui';
 import { useLanguage } from '../../i18n/LanguageContext';
 import type { TranslationKey } from '../../i18n/translations';
 import type { AgeGroupDto, AttentionDto, FirstResponseDto, ResolutionTimeDto, TicketBriefDto, TicketBriefListDto, TransfersDto } from '../../types';
+import { formatHours } from '../../lib/hours';
 import { Bar, CardHeading } from '../dashboard/companies/CompanyCards';
 
 const AGE_LABEL: Record<string, TranslationKey> = {
@@ -103,7 +104,7 @@ function Hours({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-md bg-slate-50 px-3 py-2">
       <div className="text-xs text-slate-600">{label}</div>
-      <div className="text-xl font-bold text-slate-900">{t('rp_hoursValue', { hours: value })}</div>
+      <div className="text-xl font-bold text-slate-900">{t('rp_hoursValue', { hours: formatHours(value) })}</div>
     </div>
   );
 }

@@ -1668,6 +1668,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reports/companies/branch-load": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    companyId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BranchLoadDto"];
+                        "text/json": components["schemas"]["BranchLoadDto"];
+                        "text/plain": components["schemas"]["BranchLoadDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reports/companies/branches": {
         parameters: {
             query?: never;
@@ -1698,6 +1739,47 @@ export interface paths {
                         "application/json": components["schemas"]["BranchCountDto"][];
                         "text/json": components["schemas"]["BranchCountDto"][];
                         "text/plain": components["schemas"]["BranchCountDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/companies/card": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    companyId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CompanyCardDto"];
+                        "text/json": components["schemas"]["CompanyCardDto"];
+                        "text/plain": components["schemas"]["CompanyCardDto"];
                     };
                 };
             };
@@ -2328,6 +2410,90 @@ export interface paths {
                         "text/json": components["schemas"]["BreakdownItemDto"][];
                         "text/plain": components["schemas"]["BreakdownItemDto"][];
                     };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/company-monthly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    companyId?: string;
+                    year?: number;
+                    month?: number;
+                    audience?: string;
+                    includeHours?: boolean;
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CompanyMonthlyDto"];
+                        "text/json": components["schemas"]["CompanyMonthlyDto"];
+                        "text/plain": components["schemas"]["CompanyMonthlyDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/company-monthly/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    companyId?: string;
+                    year?: number;
+                    month?: number;
+                    audience?: string;
+                    includeHours?: boolean;
+                    language?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
             };
         };
@@ -3652,6 +3818,82 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tickets/{id}/card": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TicketCardDto"];
+                        "text/json": components["schemas"]["TicketCardDto"];
+                        "text/plain": components["schemas"]["TicketCardDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tickets/{id}/card/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    language?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -5194,6 +5436,27 @@ export interface components {
             departmentName?: string;
             users?: components["schemas"]["GanttResponse"][];
         };
+        BranchLoadDto: {
+            items?: components["schemas"]["BranchLoadItemDto"][];
+            /** Format: double */
+            totalHours?: number;
+            /** Format: int32 */
+            totalTickets?: number;
+        };
+        BranchLoadItemDto: {
+            /** Format: int32 */
+            closed?: number;
+            /** Format: uuid */
+            departmentId?: string | null;
+            /** Format: double */
+            hours?: number;
+            name?: string;
+            /** Format: double */
+            sharePercent?: number;
+            subBranches?: components["schemas"]["SubBranchLoadDto"][];
+            /** Format: int32 */
+            tickets?: number;
+        };
         BreakdownItemDto: {
             /** Format: int32 */
             count?: number;
@@ -5240,6 +5503,23 @@ export interface components {
             /** Format: uuid */
             userId?: string;
         };
+        CompanyCardDto: {
+            /** Format: int32 */
+            activeClientsEver?: number;
+            /** Format: int32 */
+            activeClientsInPeriod?: number;
+            byYear?: components["schemas"]["YearCountDto"][];
+            /** Format: date-time */
+            firstTicketAtUtc?: string | null;
+            /** Format: date-time */
+            lastTicketAtUtc?: string | null;
+            /** Format: int32 */
+            registeredClients?: number;
+            /** Format: double */
+            totalHours?: number;
+            /** Format: int32 */
+            totalTickets?: number;
+        };
         CompanyClientItem: {
             email?: string;
             /** Format: uuid */
@@ -5271,6 +5551,7 @@ export interface components {
             personId?: string;
             /** Format: double */
             sharePercent?: number;
+            sole?: boolean;
         };
         CompanyItemFull: {
             address?: string | null;
@@ -5291,6 +5572,60 @@ export interface components {
             totalCount?: number;
             /** Format: int32 */
             totalTickets?: number;
+        };
+        CompanyMonthlyDto: {
+            /** Format: double */
+            averageResolutionHours?: number;
+            byCategory?: components["schemas"]["NamedCountDto"][] | null;
+            byStatus?: components["schemas"]["StatusCountDto"][];
+            byTopic?: components["schemas"]["NamedCountDto"][];
+            /** Format: int32 */
+            closed?: number;
+            /** Format: int32 */
+            created?: number;
+            header?: components["schemas"]["CompanyMonthlyHeaderDto"];
+            /** Format: double */
+            medianResolutionHours?: number;
+            /** Format: int32 */
+            resolutionCount?: number;
+            /** Format: double */
+            slaComplianceRate?: number | null;
+            /** Format: int32 */
+            slaCounted?: number;
+            tickets?: components["schemas"]["CompanyMonthlyTicketDto"][];
+            /** Format: int32 */
+            ticketsTotal?: number;
+            ticketsTruncated?: boolean;
+            /** Format: double */
+            workHours?: number | null;
+        };
+        CompanyMonthlyHeaderDto: {
+            audience?: string;
+            company?: string;
+            /** Format: uuid */
+            companyId?: string;
+            includesHours?: boolean;
+            listScope?: string;
+            /** Format: date-time */
+            madeAtUtc?: string;
+            madeBy?: string;
+            /** Format: int32 */
+            month?: number;
+            /** Format: int32 */
+            year?: number;
+        };
+        CompanyMonthlyTicketDto: {
+            /** Format: date-time */
+            closedAtUtc?: string | null;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: double */
+            resolutionHours?: number | null;
+            status?: components["schemas"]["TicketStatus"];
+            ticketNumber?: string;
+            title?: string;
         };
         CompanyRowDto: {
             /** Format: double */
@@ -5508,6 +5843,8 @@ export interface components {
             daysWithoutEntry?: string[];
             daysWithoutEntryApply?: boolean;
             name?: string;
+            /** Format: int32 */
+            runningSessions?: number;
             /** Format: double */
             taskHours?: number;
             /** Format: double */
@@ -5609,6 +5946,13 @@ export interface components {
         NameOnlyRequest: {
             name?: string;
         };
+        NamedCountDto: {
+            /** Format: int32 */
+            count?: number;
+            /** Format: uuid */
+            id?: string | null;
+            name?: string;
+        };
         NotificationPreferenceItem: {
             email?: boolean;
             type?: string;
@@ -5663,6 +6007,8 @@ export interface components {
             /** Format: int32 */
             daysWithoutEntry?: number | null;
             name?: string;
+            /** Format: int32 */
+            runningSessions?: number;
             /** Format: double */
             taskHours?: number;
             /** Format: double */
@@ -5838,6 +6184,25 @@ export interface components {
             id?: string;
             name?: string;
         };
+        StatusCountDto: {
+            /** Format: int32 */
+            count?: number;
+            status?: string;
+        };
+        StatusSpanDto: {
+            /** Format: date-time */
+            fromUtc?: string;
+            /** Format: int64 */
+            seconds?: number;
+            status?: string | null;
+            /** Format: date-time */
+            toUtc?: string | null;
+        };
+        StatusTotalDto: {
+            /** Format: int64 */
+            seconds?: number;
+            status?: string;
+        };
         SubBranchCountDto: {
             /** Format: int32 */
             count?: number;
@@ -5852,6 +6217,17 @@ export interface components {
             id?: string;
             isActive?: boolean;
             name?: string;
+        };
+        SubBranchLoadDto: {
+            /** Format: int32 */
+            closed?: number;
+            /** Format: double */
+            hours?: number;
+            name?: string;
+            /** Format: uuid */
+            subBranchId?: string | null;
+            /** Format: int32 */
+            tickets?: number;
         };
         TicketAssigneeDto: {
             name?: string;
@@ -5888,6 +6264,59 @@ export interface components {
             items?: components["schemas"]["TicketBriefDto"][];
             /** Format: int32 */
             total?: number;
+        };
+        TicketCardDto: {
+            /** Format: date-time */
+            asOfUtc?: string;
+            events?: components["schemas"]["TicketCardEventDto"][];
+            header?: components["schemas"]["TicketCardHeaderDto"];
+            spans?: components["schemas"]["StatusSpanDto"][];
+            statusTotals?: components["schemas"]["StatusTotalDto"][];
+            trailComplete?: boolean;
+            /** Format: int64 */
+            unknownSeconds?: number;
+        };
+        TicketCardEventDto: {
+            /** Format: date-time */
+            atUtc?: string;
+            /** Format: int64 */
+            durationSeconds?: number | null;
+            from?: string | null;
+            kind?: string;
+            person?: string | null;
+            running?: boolean;
+            to?: string | null;
+        };
+        TicketCardHeaderDto: {
+            assignee?: string | null;
+            branch?: string | null;
+            client?: string;
+            /** Format: int32 */
+            clientReplies?: number;
+            /** Format: date-time */
+            closedAtUtc?: string | null;
+            company?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            dueDateUtc?: string | null;
+            /** Format: uuid */
+            id?: string;
+            /** Format: int32 */
+            internalNotes?: number;
+            /** Format: date-time */
+            openedAtUtc?: string | null;
+            priority?: string | null;
+            /** Format: double */
+            resolutionHours?: number | null;
+            slaMet?: boolean | null;
+            /** Format: int32 */
+            staffReplies?: number;
+            status?: components["schemas"]["TicketStatus"];
+            ticketNumber?: string;
+            title?: string;
+            /** Format: double */
+            workHours?: number;
         };
         TicketCountsDto: {
             /** Format: int32 */
@@ -6282,6 +6711,12 @@ export interface components {
             /** Format: date-time */
             asOfUtc?: string;
             people?: components["schemas"]["PersonLoadDto"][];
+        };
+        YearCountDto: {
+            /** Format: int32 */
+            count?: number;
+            /** Format: int32 */
+            year?: number;
         };
     };
     responses: never;

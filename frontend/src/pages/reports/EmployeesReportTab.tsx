@@ -6,7 +6,7 @@ import { DateRangePicker } from '../../components/DateRangePicker';
 import { ErrorText, Select } from '../../components/ui';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { useAuthStore } from '../../store/authStore';
-import { DependencyCard, HoursCard, HoursDetailCard, SpecializationCard, TimesheetCard, WorkloadCard } from './EmployeeCards';
+import { DependencyCard, HoursCard, HoursDetailCard, SpecializationCard, WorkloadCard } from './EmployeeCards';
 
 /**
  * The "Employees" tab: reports about people. Admin sees everybody (and may narrow to a branch, and choose a person for the details); an employee sees only
@@ -102,7 +102,6 @@ export function EmployeesReportTab() {
         {personId && detail.data && <HoursDetailCard data={detail.data} />}
         {personId && specialization.data && <SpecializationCard data={specialization.data} />}
         {!personId && <p className="text-sm text-slate-600">{t('em_chooseFirst')}</p>}
-        <TimesheetCard userId={personId} />
       </section>
 
       {isAdmin && dependency.data && (

@@ -95,6 +95,16 @@ public class CompanyReportsController : ControllerBase
     public async Task<ActionResult<QuietCompaniesDto>> Quiet(DateTime? from, DateTime? to, int limit = 10, CancellationToken ct = default) =>
         Ok(await _reports.QuietCompaniesAsync(Filter(from, to), limit, ct));
 
+    /// <summary>The company as a whole: first and last ticket, tickets by year, registered and active clients, hours. Needs a company.</summary>
+    [HttpGet("card")]
+    public async Task<ActionResult<CompanyCardDto>> Card(DateTime? from, DateTime? to, Guid? companyId, CancellationToken ct) =>
+        this.ToActionResult(await _reports.CardAsync(Filter(from, to, companyId), ct));
+
+    /// <summary>The branches that work for the company: tickets, closed, hours of their staff, share. Needs a company.</summary>
+    [HttpGet("branch-load")]
+    public async Task<ActionResult<BranchLoadDto>> BranchLoad(DateTime? from, DateTime? to, Guid? companyId, CancellationToken ct) =>
+        this.ToActionResult(await _reports.BranchLoadAsync(Filter(from, to, companyId), ct));
+
     /// <summary>The workbook of the same figures: what is on the screen for the same choice.</summary>
     [HttpGet("export")]
     public async Task<IActionResult> Export(DateTime? from, DateTime? to, Guid? companyId, Guid? clientId, CancellationToken ct)

@@ -643,6 +643,7 @@ export interface PersonHoursDto {
   taskHours: number;
   totalHours: number;
   daysWithoutEntry: number | null;
+  runningSessions: number;
 }
 
 export interface HoursPeopleDto {
@@ -673,6 +674,7 @@ export interface HoursDetailDto {
   weeks: WeekHoursDto[];
   daysWithoutEntry: string[];
   daysWithoutEntryApply: boolean;
+  runningSessions: number;
 }
 
 export interface SpecializationItemDto {
@@ -700,6 +702,7 @@ export interface CompanyDependencyDto {
   personClosed: number;
   sharePercent: number;
   high: boolean;
+  sole: boolean;
 }
 
 export interface DependencyDto {
@@ -707,4 +710,167 @@ export interface DependencyDto {
   minClosed: number;
   minSharePercent: number;
   items: CompanyDependencyDto[];
+}
+
+// The documents: the card of a ticket (api/tickets/{id}/card) and the monthly report of a company (api/reports/company-monthly).
+export type TicketCardEventKind =
+  | 'Created'
+  | 'Opened'
+  | 'Assigned'
+  | 'Unassigned'
+  | 'StatusChanged'
+  | 'Transferred'
+  | 'Closed'
+  | 'Reopened'
+  | 'StaffReply'
+  | 'ClientReply'
+  | 'InternalNote'
+  | 'WorkSession';
+
+export interface TicketCardEventDto {
+  atUtc: string;
+  kind: string;
+  person: string | null;
+  from: string | null;
+  to: string | null;
+  durationSeconds: number | null;
+  running: boolean;
+}
+
+export interface StatusSpanDto {
+  status: string | null;
+  fromUtc: string;
+  toUtc: string | null;
+  seconds: number;
+}
+
+export interface StatusTotalDto {
+  status: string;
+  seconds: number;
+}
+
+export interface TicketCardHeaderDto {
+  id: string;
+  ticketNumber: string;
+  title: string;
+  status: TicketStatus;
+  company: string;
+  client: string;
+  branch: string | null;
+  assignee: string | null;
+  priority: string | null;
+  createdAt: string;
+  openedAtUtc: string | null;
+  closedAtUtc: string | null;
+  resolutionHours: number | null;
+  dueDateUtc: string | null;
+  slaMet: boolean | null;
+  staffReplies: number;
+  clientReplies: number;
+  internalNotes: number;
+  workHours: number;
+}
+
+export interface TicketCardDto {
+  asOfUtc: string;
+  header: TicketCardHeaderDto;
+  events: TicketCardEventDto[];
+  spans: StatusSpanDto[];
+  statusTotals: StatusTotalDto[];
+  unknownSeconds: number;
+  trailComplete: boolean;
+}
+
+export type CompanyMonthlyAudience = 'internal' | 'client';
+
+export interface CompanyMonthlyHeaderDto {
+  companyId: string;
+  company: string;
+  year: number;
+  month: number;
+  audience: string;
+  includesHours: boolean;
+  madeAtUtc: string;
+  madeBy: string;
+  listScope: string;
+}
+
+export interface StatusCountDto {
+  status: string;
+  count: number;
+}
+
+export interface NamedCountDto {
+  id: string | null;
+  name: string;
+  count: number;
+}
+
+export interface CompanyMonthlyTicketDto {
+  id: string;
+  ticketNumber: string;
+  title: string;
+  status: TicketStatus;
+  createdAt: string;
+  closedAtUtc: string | null;
+  resolutionHours: number | null;
+}
+
+export interface CompanyMonthlyDto {
+  header: CompanyMonthlyHeaderDto;
+  created: number;
+  closed: number;
+  byStatus: StatusCountDto[];
+  byTopic: NamedCountDto[];
+  byCategory: NamedCountDto[] | null;
+  resolutionCount: number;
+  averageResolutionHours: number;
+  medianResolutionHours: number;
+  slaComplianceRate: number | null;
+  slaCounted: number;
+  workHours: number | null;
+  tickets: CompanyMonthlyTicketDto[];
+  ticketsTotal: number;
+  ticketsTruncated: boolean;
+}
+
+// The card of a company and the load of the branches that work for it (api/reports/companies/card and branch-load).
+export interface YearCountDto {
+  year: number;
+  count: number;
+}
+
+export interface CompanyCardDto {
+  firstTicketAtUtc: string | null;
+  lastTicketAtUtc: string | null;
+  totalTickets: number;
+  byYear: YearCountDto[];
+  registeredClients: number;
+  activeClientsInPeriod: number;
+  activeClientsEver: number;
+  totalHours: number;
+}
+
+export interface SubBranchLoadDto {
+  subBranchId: string | null;
+  name: string;
+  tickets: number;
+  closed: number;
+  hours: number;
+}
+
+export interface BranchLoadItemDto {
+  departmentId: string | null;
+  name: string;
+  tickets: number;
+  closed: number;
+  hours: number;
+  sharePercent: number;
+  subBranches: SubBranchLoadDto[];
+}
+
+export interface BranchLoadDto {
+  totalTickets: number;
+  totalHours: number;
+  items: BranchLoadItemDto[];
 }

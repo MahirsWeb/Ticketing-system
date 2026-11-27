@@ -189,7 +189,7 @@ export default function AppLayout() {
 
   return (
     <div className="min-h-screen bg-slate-200">
-      <header className="border-b border-slate-300 bg-[#1a2b4c]">
+      <header className="border-b border-slate-300 bg-[#1a2b4c] print:hidden">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
           <div className="text-lg font-bold text-white">{t('appName')}</div>
           <div className="flex items-center gap-4">

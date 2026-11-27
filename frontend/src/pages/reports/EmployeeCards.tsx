@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { employeeReportsApi } from '../../api/employeeReports';
 import { Button, Card, ErrorText } from '../../components/ui';
+import { formatHours } from '../../lib/hours';
 import { useLanguage } from '../../i18n/LanguageContext';
 import type { DependencyDto, HoursDetailDto, HoursPeopleDto, SpecializationDto, SpecializationItemDto, WorkloadDto } from '../../types';
 import { CardHeading } from '../dashboard/companies/CompanyCards';
@@ -83,9 +84,12 @@ export function HoursCard({ data, selectedId, onPick }: { data: HoursPeopleDto; 
                       p.name
                     )}
                   </td>
-                  <td className={num}>{p.ticketHours}</td>
-                  <td className={num}>{p.taskHours}</td>
-                  <td className={`${num} font-semibold`}>{p.totalHours}</td>
+                  <td className={num}>{formatHours(p.ticketHours)}</td>
+                  <td className={num}>{formatHours(p.taskHours)}</td>
+                  <td className={`${num} font-semibold`}>
+                    {formatHours(p.totalHours)}
+                    {p.runningSessions > 0 && <span className="ml-1 text-xs font-normal text-amber-800">({t('em_runningShort', { count: p.runningSessions })})</span>}
+                  </td>
                   <td className={num}>{p.daysWithoutEntry ?? '—'}</td>
                 </tr>
               ))}
@@ -93,6 +97,7 @@ export function HoursCard({ data, selectedId, onPick }: { data: HoursPeopleDto; 
           </table>
         </div>
       )}
+      {data.people.some((p) => p.runningSessions > 0) && <p className="mt-3 text-xs text-amber-800">{t('em_runningNote')}</p>}
     </Card>
   );
 }
@@ -106,7 +111,8 @@ export function HoursDetailCard({ data }: { data: HoursDetailDto }) {
   return (
     <Card className="p-5">
       <CardHeading title={t('em_detailFor', { name: data.name })} note={t('em_noteDetail')} />
-      <p className="mb-3 text-sm text-slate-800">{t('em_detailTotal', { total: data.totalHours, tickets: data.ticketHours, tasks: data.taskHours })}</p>
+      <p className="mb-1 text-sm text-slate-800">{t('em_detailTotal', { total: formatHours(data.totalHours), tickets: formatHours(data.ticketHours), tasks: formatHours(data.taskHours) })}</p>
+      {data.runningSessions > 0 && <p className="mb-3 text-xs text-amber-800">{t('em_runningDetail', { count: data.runningSessions })}</p>}
       <div className="grid gap-6 lg:grid-cols-2">
         <div>
           <h3 className="mb-1 text-xs font-semibold text-slate-700">{t('em_byWeek')}</h3>
@@ -123,9 +129,9 @@ export function HoursDetailCard({ data }: { data: HoursDetailDto }) {
               {data.weeks.map((w) => (
                 <tr key={w.weekStart} className="border-b border-slate-100 last:border-0">
                   <td className={td}>{t('em_weekOf', { date: day(w.weekStart) })}</td>
-                  <td className={num}>{w.ticketHours}</td>
-                  <td className={num}>{w.taskHours}</td>
-                  <td className={`${num} font-semibold`}>{w.totalHours}</td>
+                  <td className={num}>{formatHours(w.ticketHours)}</td>
+                  <td className={num}>{formatHours(w.taskHours)}</td>
+                  <td className={`${num} font-semibold`}>{formatHours(w.totalHours)}</td>
                 </tr>
               ))}
             </tbody>
@@ -149,9 +155,9 @@ export function HoursDetailCard({ data }: { data: HoursDetailDto }) {
                 {worked.map((d) => (
                   <tr key={d.day} className="border-b border-slate-100 last:border-0">
                     <td className={td}>{day(d.day)}</td>
-                    <td className={num}>{d.ticketHours}</td>
-                    <td className={num}>{d.taskHours}</td>
-                    <td className={`${num} font-semibold`}>{d.totalHours}</td>
+                    <td className={num}>{formatHours(d.ticketHours)}</td>
+                    <td className={num}>{formatHours(d.taskHours)}</td>
+                    <td className={`${num} font-semibold`}>{formatHours(d.totalHours)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -189,7 +195,7 @@ function Top({ title, items, empty }: { title: string; items: SpecializationItem
               <span className="text-slate-800">
                 {index + 1}. {i.name}
               </span>
-              <span className="shrink-0 text-xs text-slate-600">{t('em_closedHours', { closed: i.closed, hours: i.hours })}</span>
+              <span className="shrink-0 text-xs text-slate-600">{t('em_closedHours', { closed: i.closed, hours: formatHours(i.hours) })}</span>
             </li>
           ))}
         </ol>
@@ -233,7 +239,11 @@ export function DependencyCard({ data }: { data: DependencyDto }) {
                 </span>
                 <span className="shrink-0 font-semibold text-slate-800">
                   {t('em_percent', { percent: i.sharePercent })}
-                  {i.high && <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-xs font-semibold text-red-800">{t('em_high')}</span>}
+                  {i.sole ? (
+                    <span className="ml-2 rounded bg-red-200 px-1.5 py-0.5 text-xs font-semibold text-red-900">{t('em_sole')}</span>
+                  ) : (
+                    i.high && <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-xs font-semibold text-red-800">{t('em_high')}</span>
+                  )}
                 </span>
               </li>
             ))}

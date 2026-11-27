@@ -22,6 +22,7 @@ const CompaniesPage = lazy(() => import('./pages/dashboard/companies/CompaniesPa
 const ReportsPage = lazy(() => import('./pages/reports/ReportsPage'));
 const TicketsListPage = lazy(() => import('./pages/tickets/TicketsListPage'));
 const TicketDetailPage = lazy(() => import('./pages/tickets/TicketDetailPage'));
+const TicketCardPage = lazy(() => import('./pages/tickets/TicketCardPage'));
 const NewTicketPage = lazy(() => import('./pages/tickets/NewTicketPage'));
 const NewTicketOnBehalfPage = lazy(() => import('./pages/tickets/NewTicketOnBehalfPage'));
 const UsersPage = lazy(() => import('./pages/users/UsersPage'));
@@ -113,6 +114,7 @@ export default function App() {
               <Route path="/tickets" element={<TicketsListPage />} />
               <Route path="/my-notifications" element={<NotificationPreferencesPage />} />
               <Route path="/tickets/:id" element={<TicketDetailPage />} />
+              <Route path="/tickets/:id/card" element={<TicketCardPage />} />
               <Route
                 path="/tickets/new"
                 element={

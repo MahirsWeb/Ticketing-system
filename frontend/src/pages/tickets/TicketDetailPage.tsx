@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ticketsApi } from '../../api/tickets';
 import { ticketKeys, useTicket } from '../../api/ticketQueries';
@@ -97,6 +97,13 @@ export default function TicketDetailPage() {
           />{' '}
           ({ticket.companyName}) {t('detail_on')} {format(new Date(ticket.createdAt), 'dd.MM.yyyy HH:mm')}
         </p>
+        {isStaff && (
+          <p className="mt-2">
+            <Link to={`/tickets/${ticket.id}/card`} className="text-sm font-medium text-blue-700 hover:underline">
+              {t('tk_open')}
+            </Link>
+          </p>
+        )}
         {isStaff && (
           <div className="mt-3">
             <TicketStatusActions key={`status-${ticket.id}`} ticket={ticket} onChanged={setTicket} />

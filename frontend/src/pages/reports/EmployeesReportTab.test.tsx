@@ -32,6 +32,7 @@ const detail = {
   weeks: [{ weekStart: '2026-11-02', ticketHours: 5.5, taskHours: 1, totalHours: 6.5 }],
   daysWithoutEntry: ['2026-11-04', '2026-11-05'],
   daysWithoutEntryApply: true,
+  runningSessions: 0,
 };
 
 beforeEach(() => {
@@ -47,8 +48,8 @@ beforeEach(() => {
   });
   vi.mocked(employeeReportsApi.hours).mockResolvedValue({
     people: [
-      { userId: 'e1', name: 'Amra Hadžić', branch: 'IT', ticketHours: 5.5, taskHours: 1, totalHours: 6.5, daysWithoutEntry: 2 },
-      { userId: 'e2', name: 'Emir Kovač', branch: 'Prodaja', ticketHours: 0, taskHours: 0, totalHours: 0, daysWithoutEntry: null },
+      { userId: 'e1', name: 'Amra Hadžić', branch: 'IT', ticketHours: 5.5, taskHours: 1, totalHours: 6.5, daysWithoutEntry: 2, runningSessions: 0 },
+      { userId: 'e2', name: 'Emir Kovač', branch: 'Prodaja', ticketHours: 0, taskHours: 0, totalHours: 0, daysWithoutEntry: null, runningSessions: 0 },
     ],
   });
   vi.mocked(employeeReportsApi.hoursOf).mockResolvedValue(detail);
@@ -65,8 +66,8 @@ beforeEach(() => {
     minClosed: 5,
     minSharePercent: 50,
     items: [
-      { companyId: 'c1', company: 'Alfa', closed: 6, personId: 'e1', person: 'Amra Hadžić', personClosed: 5, sharePercent: 83.3, high: true },
-      { companyId: 'c2', company: 'Beta', closed: 8, personId: 'e2', person: 'Emir Kovač', personClosed: 4, sharePercent: 50, high: false },
+      { companyId: 'c1', company: 'Alfa', closed: 6, personId: 'e1', person: 'Amra Hadžić', personClosed: 5, sharePercent: 83.3, high: true, sole: false },
+      { companyId: 'c2', company: 'Beta', closed: 8, personId: 'e2', person: 'Emir Kovač', personClosed: 4, sharePercent: 50, high: false, sole: false },
     ],
   });
   vi.mocked(employeeReportsApi.timesheet).mockResolvedValue(undefined);
@@ -121,12 +122,11 @@ describe('the reports page: the Employees tab', () => {
     expect(within(within(hours).getByRole('row', { name: /Emir Kovač/ })).getAllByRole('cell')[4]).toHaveTextContent('—'); // days without entry are not counted for him
     expect(within(hours).getByText(/there is no calendar of holidays/)).toBeInTheDocument();
     expect(screen.getByText(/Choose a person to see the details/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Download/ })).toBeDisabled();
     expect(vi.mocked(employeeReportsApi.hoursOf)).not.toHaveBeenCalled(); // nobody is asked for before one is chosen
     expect(vi.mocked(employeeReportsApi.specialization)).not.toHaveBeenCalled();
   });
 
-  it('opens the details of a person from the table: hours by week and day, the days without entry, the top three and the worksheet', async () => {
+  it('opens the details of a person from the table: hours by week and day, the days without entry and the top three', async () => {
     const user = userEvent.setup();
     renderPage();
 
@@ -146,33 +146,6 @@ describe('the reports page: the Employees tab', () => {
     expect(screen.getByText('5 closed · 3.5 h')).toBeInTheDocument();
     expect(screen.getByText('Tickets closed in the period: 9')).toBeInTheDocument();
     expect(screen.getAllByText('Nothing in this period.')).toHaveLength(1); // the categories
-
-    await user.click(screen.getByRole('button', { name: /Download/ }));
-    await waitFor(() => expect(vi.mocked(employeeReportsApi.timesheet)).toHaveBeenCalledWith({ userId: 'e1', year: new Date().getFullYear(), month: new Date().getMonth() + 1 }));
-  });
-
-  it('downloads the month that was chosen', async () => {
-    const user = userEvent.setup();
-    renderPage();
-    await pick(user, 'e2');
-
-    const month = screen.getByLabelText('Month') as HTMLInputElement;
-    await user.clear(month);
-    await user.type(month, '2026-03');
-    await user.click(screen.getByRole('button', { name: /Download/ }));
-
-    await waitFor(() => expect(vi.mocked(employeeReportsApi.timesheet)).toHaveBeenCalledWith({ userId: 'e2', year: 2026, month: 3 }));
-  });
-
-  it('says so when the worksheet could not be made', async () => {
-    vi.mocked(employeeReportsApi.timesheet).mockRejectedValue(new Error('boom'));
-    const user = userEvent.setup();
-    renderPage();
-    await pick(user, 'e1');
-
-    await user.click(screen.getByRole('button', { name: /Download/ }));
-
-    expect(await screen.findByText('The work sheet could not be made. Try again.')).toBeInTheDocument();
   });
 
   it('shows Admin the companies that depend on one person with the share and the high mark, and the rule in the note', async () => {
@@ -217,7 +190,50 @@ describe('the reports page: the Employees tab', () => {
     expect(vi.mocked(employeeReportsApi.dependency)).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'Emir Kovač' })).not.toBeInTheDocument(); // the names in the table are not links for an employee
     expect(vi.mocked(lookupsApi.departments)).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: /Download/ })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: /Download/ })).not.toBeInTheDocument(); // the work sheet is in the Records tab
+  });
+
+  it('marks the person whose hours are not final because a session is still running, with a note, and says so in the details', async () => {
+    vi.mocked(employeeReportsApi.hours).mockResolvedValue({
+      people: [{ userId: 'e1', name: 'Amra Hadžić', branch: 'IT', ticketHours: 5.5, taskHours: 1, totalHours: 6.5, daysWithoutEntry: 2, runningSessions: 2 }],
+    });
+    vi.mocked(employeeReportsApi.hoursOf).mockResolvedValue({ ...detail, runningSessions: 2 });
+    const user = userEvent.setup();
+    renderPage();
+
+    const hours = (await screen.findByText('Recorded hours')).closest('div')!.parentElement!;
+    expect(within(within(hours).getByRole('row', { name: /Amra Hadžić/ })).getByText('(2 running)')).toBeInTheDocument();
+    expect(within(hours).getByText(/hours of the people marked "running" are not final/)).toBeInTheDocument();
+    await user.click(within(hours).getByRole('button', { name: 'Amra Hadžić' }));
+    expect(await screen.findByText(/2 work session\(s\) are still running and are counted up to now; these hours will be larger later\./)).toBeInTheDocument();
+  });
+
+  it('says nothing about running sessions when none is running', async () => {
+    renderPage();
+
+    await screen.findByText('Recorded hours');
+    expect(screen.queryByText(/\d+ running/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/are not final/)).not.toBeInTheDocument();
+  });
+
+  it('marks the company that one person alone has closed every ticket of, apart from the high share', async () => {
+    vi.mocked(employeeReportsApi.dependency).mockResolvedValue({
+      total: 2,
+      minClosed: 5,
+      minSharePercent: 50,
+      items: [
+        { companyId: 'c3', company: 'Gama', closed: 6, personId: 'e1', person: 'Amra Hadžić', personClosed: 6, sharePercent: 100, high: true, sole: true },
+        { companyId: 'c1', company: 'Alfa', closed: 6, personId: 'e1', person: 'Amra Hadžić', personClosed: 5, sharePercent: 83.3, high: true, sole: false },
+      ],
+    });
+    renderPage();
+
+    const card = (await screen.findByText('Companies that depend on one person')).closest('div')!.parentElement!;
+    const gama = within(card).getByText('Gama').closest('li')!;
+    expect(within(gama).getByText('only person')).toBeInTheDocument();
+    expect(within(gama).queryByText('high')).not.toBeInTheDocument(); // the stronger mark says it
+    expect(within(within(card).getByText('Alfa').closest('li')!).getByText('high')).toBeInTheDocument();
+    expect(within(within(card).getByText('Alfa').closest('li')!).queryByText('only person')).not.toBeInTheDocument();
   });
 
   it('says that days without entry do not apply to somebody who is not an active employee', async () => {

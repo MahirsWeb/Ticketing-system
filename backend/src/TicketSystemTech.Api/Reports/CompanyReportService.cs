@@ -62,6 +62,12 @@ public interface ICompanyReportService
 
     /// <summary>Companies that went quiet: tickets in the previous period, none in this one. Over all companies; a company or client in the filter is ignored.</summary>
     Task<QuietCompaniesDto> QuietCompaniesAsync(CompanyReportFilter filter, int limit, CancellationToken ct);
+
+    // ---- the card of a company and the load of its branches (CompanyReportService.Card.cs)
+
+    Task<Outcome<CompanyCardDto>> CardAsync(CompanyReportFilter filter, CancellationToken ct);
+
+    Task<Outcome<BranchLoadDto>> BranchLoadAsync(CompanyReportFilter filter, CancellationToken ct);
 }
 
 public sealed partial class CompanyReportService : ICompanyReportService

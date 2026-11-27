@@ -5,8 +5,9 @@ import { useLanguage } from '../../i18n/LanguageContext';
 import { TicketsReportTab } from './TicketsReportTab';
 
 const EmployeesReportTab = lazy(() => import('./EmployeesReportTab').then((m) => ({ default: m.EmployeesReportTab })));
+const EvidenceTab = lazy(() => import('./EvidenceTab').then((m) => ({ default: m.EvidenceTab })));
 
-type TabKey = 'tickets' | 'employees';
+type TabKey = 'tickets' | 'employees' | 'evidence';
 
 /**
  * The reports of staff (Admin and Employee). The tabs are added as the reports are: the one about tickets and the one about employees. Which is open is in
@@ -16,24 +17,26 @@ type TabKey = 'tickets' | 'employees';
 export default function ReportsPage() {
   const { t } = useLanguage();
   const [params, setParams] = useSearchParams();
-  const active: TabKey = params.get('tab') === 'employees' ? 'employees' : 'tickets';
+  const tab = params.get('tab');
+  const active: TabKey = tab === 'employees' ? 'employees' : tab === 'evidence' ? 'evidence' : 'tickets';
   return (
     <div>
       <Tabs
-        className="mb-4"
+        className="mb-4 print:hidden"
         label={t('rp_tabsAria')}
         active={active}
         tabs={[
           { key: 'tickets', label: t('rp_tabTickets') },
           { key: 'employees', label: t('rp_tabEmployees') },
+          { key: 'evidence', label: t('rp_tabEvidence') },
         ]}
-        onSelect={(key) => setParams(key === 'employees' ? { tab: 'employees' } : {}, { replace: true })}
+        onSelect={(key) => setParams(key === 'tickets' ? {} : { tab: key }, { replace: true })}
       />
       {active === 'tickets' ? (
         <TicketsReportTab />
       ) : (
         <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-600">{t('common_loading')}</p>}>
-          <EmployeesReportTab />
+          {active === 'employees' ? <EmployeesReportTab /> : <EvidenceTab />}
         </Suspense>
       )}
     </div>

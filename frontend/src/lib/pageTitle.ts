@@ -7,6 +7,7 @@ const RULES: { test: (path: string) => boolean; key: TranslationKey }[] = [
   { test: (p) => ['/set-new-password', '/forgot-password', '/reset-password', '/verify-email'].includes(p), key: 'title_account' },
   { test: (p) => p === '/tickets/new', key: 'nav_submitTicket' },
   { test: (p) => p === '/tickets/new-on-behalf', key: 'title_newOnBehalf' },
+  { test: (p) => /^\/tickets\/[^/]+\/card$/.test(p), key: 'tk_title' },
   { test: (p) => /^\/tickets\/[^/]+$/.test(p), key: 'title_ticket' },
   { test: (p) => p === '/tickets', key: 'nav_tickets' },
   { test: (p) => p === '/tasks', key: 'nav_task' },

@@ -9,7 +9,7 @@ import { usersApi } from '../../../api/users';
 import { renderWithQuery } from '../../../test/renderWithQuery';
 
 vi.mock('../../../api/companyReports', () => ({
-  companyReportsApi: { top: vi.fn(), list: vi.fn(), summary: vi.fn(), clients: vi.fn(), topics: vi.fn(), categories: vi.fn(), branches: vi.fn(), closedBy: vi.fn(), timeSeries: vi.fn(), openAge: vi.fn(), timeSpent: vi.fn(), conversation: vi.fn(), rhythm: vi.fn(), repeatedTopics: vi.fn(), quiet: vi.fn(), exportXlsx: vi.fn() },
+  companyReportsApi: { top: vi.fn(), list: vi.fn(), summary: vi.fn(), clients: vi.fn(), topics: vi.fn(), categories: vi.fn(), branches: vi.fn(), card: vi.fn(), branchLoad: vi.fn(), closedBy: vi.fn(), timeSeries: vi.fn(), openAge: vi.fn(), timeSpent: vi.fn(), conversation: vi.fn(), rhythm: vi.fn(), repeatedTopics: vi.fn(), quiet: vi.fn(), exportXlsx: vi.fn() },
 }));
 vi.mock('../../../api/lookups', () => ({ lookupsApi: { companies: vi.fn() } }));
 vi.mock('../../../api/users', () => ({ usersApi: { companyClientChoices: vi.fn() } }));
@@ -44,6 +44,18 @@ beforeEach(() => {
   ]);
   vi.mocked(companyReportsApi.categories).mockResolvedValue([{ id: 'g1', name: 'Hardver', count: 5, isActive: true }]);
   vi.mocked(companyReportsApi.branches).mockResolvedValue([{ departmentId: 'd1', name: 'IT', count: 5, noSubBranchCount: 2, subBranches: [{ subBranchId: 's1', name: 'Mreža', count: 3 }] }]);
+  vi.mocked(companyReportsApi.card).mockResolvedValue({
+    firstTicketAtUtc: '2031-12-20T10:00:00Z', lastTicketAtUtc: '2033-02-01T10:00:00Z', totalTickets: 120, byYear: [{ year: 2032, count: 90 }, { year: 2033, count: 30 }],
+    registeredClients: 8, activeClientsInPeriod: 3, activeClientsEver: 6, totalHours: 41.5,
+  });
+  vi.mocked(companyReportsApi.branchLoad).mockResolvedValue({
+    totalTickets: 10, totalHours: 12.25,
+    items: [
+      { departmentId: 'd1', name: 'IT', tickets: 6, closed: 4, hours: 8.5, sharePercent: 60, subBranches: [
+        { subBranchId: 's1', name: 'Mreža', tickets: 4, closed: 3, hours: 6 }, { subBranchId: null, name: '', tickets: 2, closed: 1, hours: 2.5 } ] },
+      { departmentId: null, name: '', tickets: 4, closed: 0, hours: 3.75, sharePercent: 40, subBranches: [] },
+    ],
+  });
   vi.mocked(companyReportsApi.openAge).mockResolvedValue({ total: 5, upTo2Days: 1, upTo7Days: 2, upTo30Days: 1, older: 1, oldestDays: 60, oldestCompany: 'Alfa' });
   vi.mocked(companyReportsApi.timeSpent).mockResolvedValue({ totalHours: 4, sessions: 3, tickets: 2, avgHoursPerTicket: 2, runningSessions: 1 });
   vi.mocked(companyReportsApi.conversation).mockResolvedValue({ tickets: 3, avgMessagesPerTicket: 1.5, pickedUp: 2, avgHoursToPickup: 2.5, notPickedUp: 1 });
@@ -172,11 +184,84 @@ describe('the second tab of the dashboard: companies', () => {
     expect(screen.getByText('80%')).toBeInTheDocument();
     expect(screen.queryByText('Companies with the most tickets')).not.toBeInTheDocument();
     expect(await screen.findByText('Employees of the company')).toBeInTheDocument();
-    expect(await screen.findByText('By branch')).toBeInTheDocument();
+    expect(await screen.findByText('Load by branch')).toBeInTheDocument();
     expect(screen.getByText('Mreža')).toBeInTheDocument();
     expect(screen.getByText('No sub-branch')).toBeInTheDocument();
     expect(vi.mocked(companyReportsApi.summary).mock.calls.at(-1)?.[0]).toMatchObject({ companyId: 'c1' });
     expect(vi.mocked(companyReportsApi.summary).mock.calls.at(-1)?.[0].clientId).toBeUndefined();
+  });
+
+  it('shows the card of the company: first and last ticket, the years, and the clients registered against those that wrote', async () => {
+    const user = userEvent.setup();
+    renderTab();
+
+    await chooseCompany(user);
+
+    const card = (await screen.findByText('Card of the company')).closest('div')!.parentElement!;
+    expect(within(card).getByText('First ticket').nextSibling).toHaveTextContent('20.12.2031');
+    expect(within(card).getByText('Last ticket').nextSibling).toHaveTextContent('01.02.2033');
+    expect(within(card).getByText('All tickets').nextSibling).toHaveTextContent('120');
+    expect(within(card).getByText('All recorded work').nextSibling).toHaveTextContent('41.5 h');
+    expect(within(card).getByText('2032').nextSibling).toHaveTextContent('90');
+    expect(within(card).getByText('2033').nextSibling).toHaveTextContent('30');
+    expect(within(card).getByText('Registered').nextSibling).toHaveTextContent('8');
+    expect(within(card).getByText('Wrote in the period').nextSibling).toHaveTextContent('3 / 8');
+    expect(within(card).getByText('Ever wrote').nextSibling).toHaveTextContent('6 / 8');
+    expect(within(card).getByText(/the period does not change it/)).toBeInTheDocument(); // what the period does is said
+    expect(vi.mocked(companyReportsApi.card)).toHaveBeenCalledWith(expect.objectContaining({ companyId: 'c1' }));
+  });
+
+  it('says so when the company has no tickets yet', async () => {
+    vi.mocked(companyReportsApi.card).mockResolvedValue({ firstTicketAtUtc: null, lastTicketAtUtc: null, totalTickets: 0, byYear: [], registeredClients: 2, activeClientsInPeriod: 0, activeClientsEver: 0, totalHours: 0 });
+    const user = userEvent.setup();
+    renderTab();
+
+    await chooseCompany(user);
+
+    expect(await screen.findByText('The company has no tickets yet.')).toBeInTheDocument();
+  });
+
+  it('shows the branches that work for the company with the closed, the hours of their staff and the share, and the sub-branches under their branch', async () => {
+    const user = userEvent.setup();
+    renderTab();
+
+    await chooseCompany(user);
+
+    const load = (await screen.findByText('Load by branch')).closest('div')!.parentElement!;
+    const rows = within(load).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell').map((c) => c.textContent));
+    expect(rows[0]).toEqual(['IT', '6', '4', '8.5', '60 %']);
+    expect(rows[1]).toEqual(['Mreža', '4', '3', '6', '—']); // a sub-branch has no share of its own
+    expect(rows[2]).toEqual(['No sub-branch', '2', '1', '2.5', '—']);
+    expect(rows[3]).toEqual(['Not routed / no branch', '4', '0', '3.75', '40 %']);
+    expect(within(load).getByText('In all: 10 tickets created, 12.25 h of work.')).toBeInTheDocument();
+    expect(within(load).getByText(/by the branch of the person who worked, not of the ticket/)).toBeInTheDocument();
+    expect(vi.mocked(companyReportsApi.branchLoad)).toHaveBeenCalledWith(expect.objectContaining({ companyId: 'c1' }));
+  });
+
+  it('does not ask for the card or the load of the branches until a company is chosen, and never for the old branches of a person without one', async () => {
+    renderTab();
+    await screen.findByText('By topic');
+
+    expect(vi.mocked(companyReportsApi.card)).not.toHaveBeenCalled();
+    expect(vi.mocked(companyReportsApi.branchLoad)).not.toHaveBeenCalled();
+    expect(vi.mocked(companyReportsApi.branches)).not.toHaveBeenCalled();
+    expect(screen.queryByText('Card of the company')).not.toBeInTheDocument();
+  });
+
+  it('shows the branches of a person, not of the company, when a person is chosen: the load of the company is its own', async () => {
+    const user = userEvent.setup();
+    renderTab();
+    await chooseCompany(user);
+    await screen.findByText('Load by branch');
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Employee of the company' })).toBeEnabled());
+
+    await user.click(screen.getByRole('combobox', { name: 'Employee of the company' }));
+    await user.click(await screen.findByRole('option', { name: /^Klijent Prvi/ }));
+
+    expect(await screen.findByText('By branch')).toBeInTheDocument();
+    expect(screen.queryByText('Load by branch')).not.toBeInTheDocument();
+    expect(screen.queryByText('Card of the company')).not.toBeInTheDocument();
+    expect(vi.mocked(companyReportsApi.branches)).toHaveBeenCalledWith(expect.objectContaining({ companyId: 'c1', clientId: 'k1' }));
   });
 
   it('shows a person of the company next to the company: the tickets against the average of the people, the resolution time and the SLA against the company', async () => {

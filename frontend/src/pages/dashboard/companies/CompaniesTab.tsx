@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom';
 import { subDays } from 'date-fns';
 import { companyReportsApi } from '../../../api/companyReports';
 import {
+  useBranchLoad,
   useCompanyBranches,
+  useCompanyCard,
   useCompanyCategories,
   useCompanyClientStats,
   useCompanyClosedBy,
@@ -24,6 +26,7 @@ import { DateRangePicker } from '../../../components/DateRangePicker';
 import { Button, ErrorText } from '../../../components/ui';
 import { useLanguage } from '../../../i18n/LanguageContext';
 import { BranchesCard, BreakdownCard, ClientsCard, ClosedByCard, TopCompaniesCard } from './CompanyCards';
+import { BranchLoadCard, CompanyCardCard } from './CompanyCardCards';
 import { CompanyFigures } from './CompanyFigures';
 import { ConversationCard, OpenAgeCard, QuietCard, RepeatedCard, RhythmCard, TimeSpentCard } from './InsightCards';
 
@@ -70,7 +73,10 @@ export function CompaniesTab() {
   const people = useCompanyClientStats(range, companyId ?? undefined);
   const topics = useCompanyTopics(params);
   const categories = useCompanyCategories(params);
-  const branches = useCompanyBranches(params);
+  // The branches of one person are the old card; the company's own load by branch (with closed, hours and share) is the new one.
+  const branches = useCompanyBranches(params, !!companyId && !!clientId);
+  const card = useCompanyCard(range, companyId ?? undefined);
+  const branchLoad = useBranchLoad(range, companyId ?? undefined);
   const closedBy = useCompanyClosedBy(params);
   const openAge = useCompanyOpenAge(params);
   const timeSpent = useCompanyTimeSpent(params);
@@ -79,7 +85,7 @@ export function CompaniesTab() {
   const repeated = useCompanyRepeated(params);
   const quiet = useQuietCompanies(range, !companyId);
 
-  const failed = [top, summary, people, topics, categories, branches, closedBy, openAge, timeSpent, conversation, rhythm, repeated, quiet].some((q) => q.isError);
+  const failed = [top, summary, people, topics, categories, branches, card, branchLoad, closedBy, openAge, timeSpent, conversation, rhythm, repeated, quiet].some((q) => q.isError);
   const seeMore = (
     <Link className="text-sm font-medium text-blue-700 hover:underline" to={`/dashboard/companies?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`}>
       {t('co_seeMore')} →
@@ -152,7 +158,9 @@ export function CompaniesTab() {
         {closedBy.data && <ClosedByCard data={closedBy.data} />}
         {topics.data && <BreakdownCard title={t('co_byTopic')} items={topics.data} />}
         {categories.data && <BreakdownCard title={t('co_byCategory')} items={categories.data} />}
-        {companyId && branches.data && <BranchesCard items={branches.data} />}
+        {companyId && clientId && branches.data && <BranchesCard items={branches.data} />}
+        {companyId && !clientId && card.data && <CompanyCardCard data={card.data} />}
+        {companyId && !clientId && branchLoad.data && <BranchLoadCard data={branchLoad.data} />}
         {openAge.data && <OpenAgeCard data={openAge.data} />}
         {timeSpent.data && <TimeSpentCard data={timeSpent.data} />}
         {conversation.data && <ConversationCard data={conversation.data} />}

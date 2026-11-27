@@ -10,6 +10,8 @@ export const companyReportKeys = {
   topics: (p: CompanyReportParams) => ['company-reports', 'topics', p] as const,
   categories: (p: CompanyReportParams) => ['company-reports', 'categories', p] as const,
   branches: (p: CompanyReportParams) => ['company-reports', 'branches', p] as const,
+  card: (p: object) => ['company-reports', 'card', p] as const,
+  branchLoad: (p: object) => ['company-reports', 'branch-load', p] as const,
   closedBy: (p: CompanyReportParams) => ['company-reports', 'closed-by', p] as const,
   timeSeries: (p: CompanyReportParams) => ['company-reports', 'time-series', p] as const,
   openAge: (p: CompanyReportParams) => ['company-reports', 'open-age', p] as const,
@@ -51,8 +53,21 @@ export function useCompanyCategories(params: CompanyReportParams) {
   return useQuery({ queryKey: companyReportKeys.categories(params), queryFn: () => companyReportsApi.categories(params), ...FIGURES });
 }
 
-export function useCompanyBranches(params: CompanyReportParams) {
-  return useQuery({ queryKey: companyReportKeys.branches(params), queryFn: () => companyReportsApi.branches(params), ...FIGURES });
+/** The branches of ONE PERSON of a company (the card of the company's own load is `useBranchLoad`); asked for only when a person is chosen. */
+export function useCompanyBranches(params: CompanyReportParams, enabled = true) {
+  return useQuery({ queryKey: companyReportKeys.branches(params), queryFn: () => companyReportsApi.branches(params), enabled, ...FIGURES });
+}
+
+/** The card of a company (over all the years; the period only counts the clients that wrote in it). Asked for only when a company is chosen. */
+export function useCompanyCard(range: { from?: string; to?: string }, companyId: string | undefined) {
+  const params = { ...range, companyId: companyId ?? '' };
+  return useQuery({ queryKey: companyReportKeys.card(params), queryFn: () => companyReportsApi.card(params), enabled: !!companyId, ...FIGURES });
+}
+
+/** The load of the branches that work for a company, in the period. */
+export function useBranchLoad(range: { from?: string; to?: string }, companyId: string | undefined) {
+  const params = { ...range, companyId: companyId ?? '' };
+  return useQuery({ queryKey: companyReportKeys.branchLoad(params), queryFn: () => companyReportsApi.branchLoad(params), enabled: !!companyId, ...FIGURES });
 }
 
 export function useCompanyClosedBy(params: CompanyReportParams) {

@@ -85,6 +85,23 @@ describe('the ticket page', () => {
     expect(screen.getByTestId('feed')).toHaveTextContent('InProgress|1');
   });
 
+  it('leads staff to the card of the ticket', async () => {
+    renderPage();
+
+    const link = await screen.findByRole('link', { name: 'Ticket card' });
+
+    expect(link).toHaveAttribute('href', '/tickets/t1/card');
+  });
+
+  it('does not offer the card to a client: it is not theirs, and the server refuses it', async () => {
+    useAuthStore.setState({ accessToken: 't', user: { id: 'c1', firstName: 'Kli', lastName: 'Jent', role: 'Client' } as UserSummary });
+    renderPage();
+
+    await screen.findByTestId('feed');
+
+    expect(screen.queryByRole('link', { name: 'Ticket card' })).not.toBeInTheDocument();
+  });
+
   it('gives every part of the page a key of its own, so none is dropped or doubled when the ticket changes', async () => {
     // The knowledge-base panel and the close form were both keyed by the ticket's id, and React does not promise to keep two children with one key.
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {});

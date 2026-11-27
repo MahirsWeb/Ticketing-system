@@ -25,8 +25,6 @@ public sealed record TimesheetDocument(
 /// </summary>
 public static class TimesheetExcelExporter
 {
-    private const string HoursFormat = "0.00";
-
     public static byte[] Build(TimesheetDocument doc)
     {
         using var workbook = new XSSFWorkbook();
@@ -38,19 +36,26 @@ public static class TimesheetExcelExporter
 
         // 1. by day
         var days = Sheet(workbook, doc, styles, doc.T("ts_sheetDays"));
-        var r = Row(days.Sheet, days.Next, styles.Header, doc.T("ts_day"), doc.T("ts_ticketHours"), doc.T("ts_taskHours"), doc.T("ts_totalHours"));
+        var r = Row(days.Sheet, days.Next, styles.Header, doc.T("ts_day"), doc.T("ts_ticketHours"), doc.T("ts_taskHours"), doc.T("ts_totalHours"), doc.T("ts_runningCol"));
         foreach (var d in doc.Days)
+        {
             r = Numbers(days.Sheet, r, styles, d.Day.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture) + " " + doc.T("ts_wd" + (int)d.Day.DayOfWeek),
                 new[] { WorkTimeSummary.Hours(d.TicketSeconds), WorkTimeSummary.Hours(d.TaskSeconds), WorkTimeSummary.Hours(d.TotalSeconds) });
+            Count(days.Sheet.GetRow(r - 1), 4, d.RunningCount);
+        }
         Numbers(days.Sheet, r, styles, doc.T("ts_total"), new[] { WorkTimeSummary.Hours(ticketTotal), WorkTimeSummary.Hours(taskTotal), WorkTimeSummary.Hours(total) }, bold: true);
-        Fit(days.Sheet, 4);
+        Fit(days.Sheet, 5);
 
         // 2. by company
         var companies = Sheet(workbook, doc, styles, doc.T("ts_sheetCompanies"));
-        r = Row(companies.Sheet, companies.Next, styles.Header, doc.T("ts_company"), doc.T("ts_totalHours"));
-        foreach (var c in doc.Companies) r = Numbers(companies.Sheet, r, styles, c.Label, new[] { WorkTimeSummary.Hours(c.Seconds) });
+        r = Row(companies.Sheet, companies.Next, styles.Header, doc.T("ts_company"), doc.T("ts_totalHours"), doc.T("ts_runningCol"));
+        foreach (var c in doc.Companies)
+        {
+            r = Numbers(companies.Sheet, r, styles, c.Label, new[] { WorkTimeSummary.Hours(c.Seconds) });
+            Count(companies.Sheet.GetRow(r - 1), 2, c.RunningCount);
+        }
         Numbers(companies.Sheet, r, styles, doc.T("ts_total"), new[] { WorkTimeSummary.Hours(total) }, bold: true);
-        Fit(companies.Sheet, 2);
+        Fit(companies.Sheet, 3);
 
         // 3. by ticket or task
         var items = Sheet(workbook, doc, styles, doc.T("ts_sheetItems"));
@@ -59,7 +64,7 @@ public static class TimesheetExcelExporter
         {
             var row = items.Sheet.CreateRow(r++);
             row.CreateCell(0).SetCellValue(i.IsTask ? doc.T("ts_task") : doc.T("ts_ticket"));
-            row.CreateCell(1).SetCellValue(i.Label);
+            row.CreateCell(1).SetCellValue(i.RunningCount > 0 ? $"{i.Label} ({doc.T("ts_running")})" : i.Label);
             Hours(row, 2, WorkTimeSummary.Hours(i.Seconds), styles.Hours);
         }
         var totalRow = items.Sheet.CreateRow(r);
@@ -103,7 +108,7 @@ public static class TimesheetExcelExporter
             Header.SetFont(bold);
             Header.FillForegroundColor = IndexedColors.Grey25Percent.Index;
             Header.FillPattern = FillPattern.SolidForeground;
-            var format = workbook.CreateDataFormat().GetFormat(HoursFormat);
+            var format = workbook.CreateDataFormat().GetFormat(WorkTimeSummary.HoursNumberFormat);
             Hours = workbook.CreateCellStyle();
             Hours.DataFormat = format;
             BoldHours = workbook.CreateCellStyle();
@@ -123,7 +128,7 @@ public static class TimesheetExcelExporter
         var sheet = workbook.CreateSheet(name);
         var month = $"{doc.Month:00}.{doc.Year}";
         var madeAt = Local(doc.MadeAtUtc, doc.Zone) + " (" + doc.Zone.Id + ")";
-        var lines = new (string Label, string Value)[]
+        var lines = new List<(string Label, string Value)>
         {
             (doc.T("ts_title"), ""),
             (doc.T("ts_person"), doc.PersonName),
@@ -132,7 +137,10 @@ public static class TimesheetExcelExporter
             (doc.T("ts_madeAt"), madeAt),
             (doc.T("ts_snapshotLabel"), doc.T("ts_snapshot")),
         };
-        for (var i = 0; i < lines.Length; i++)
+        var running = WorkTimeSummary.RunningCount(doc.Entries);
+        // A session that has not ended is counted up to now, so its hours are not final: the sheet says so, on every sheet.
+        if (running > 0) lines.Add((doc.T("ts_runningLabel"), string.Format(CultureInfo.InvariantCulture, doc.T("ts_runningWarning"), running, madeAt)));
+        for (var i = 0; i < lines.Count; i++)
         {
             var row = sheet.CreateRow(i);
             var label = row.CreateCell(0);
@@ -140,7 +148,7 @@ public static class TimesheetExcelExporter
             label.CellStyle = styles.Bold;
             if (lines[i].Value.Length > 0) row.CreateCell(1).SetCellValue(lines[i].Value);
         }
-        return (sheet, lines.Length + 1);
+        return (sheet, lines.Count + 1);
     }
 
     private static int Row(ISheet sheet, int rowIndex, ICellStyle style, params string[] cells)
@@ -163,6 +171,13 @@ public static class TimesheetExcelExporter
         if (bold) cell.CellStyle = styles.Bold;
         for (var i = 0; i < hours.Length; i++) Hours(row, i + 1, hours[i], bold ? styles.BoldHours : styles.Hours);
         return rowIndex + 1;
+    }
+
+    /// <summary>A whole number in a cell, only when there is something to say (a zero is left blank).</summary>
+    private static void Count(IRow row, int column, int count)
+    {
+        if (count <= 0) return;
+        row.CreateCell(column, CellType.Numeric).SetCellValue(count);
     }
 
     private static void Hours(IRow row, int column, double hours, ICellStyle style)

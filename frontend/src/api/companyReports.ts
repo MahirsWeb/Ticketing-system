@@ -1,6 +1,8 @@
 import { apiClient } from './client';
 import type {
   BranchCountDto,
+  BranchLoadDto,
+  CompanyCardDto,
   BreakdownItemDto,
   ClosedByDto,
   CompanyClientStatDto,
@@ -46,6 +48,8 @@ export const companyReportsApi = {
   topics: (params: CompanyReportParams) => apiClient.get<BreakdownItemDto[]>(`${base}/topics`, { params }).then((r) => r.data),
   categories: (params: CompanyReportParams) => apiClient.get<BreakdownItemDto[]>(`${base}/categories`, { params }).then((r) => r.data),
   branches: (params: CompanyReportParams) => apiClient.get<BranchCountDto[]>(`${base}/branches`, { params }).then((r) => r.data),
+  card: (params: { from?: string; to?: string; companyId: string }) => apiClient.get<CompanyCardDto>(`${base}/card`, { params }).then((r) => r.data),
+  branchLoad: (params: { from?: string; to?: string; companyId: string }) => apiClient.get<BranchLoadDto>(`${base}/branch-load`, { params }).then((r) => r.data),
   closedBy: (params: CompanyReportParams) => apiClient.get<ClosedByDto>(`${base}/closed-by`, { params }).then((r) => r.data),
   timeSeries: (params: CompanyReportParams) => apiClient.get<TimeSeriesPointDto[]>(`${base}/timeseries`, { params }).then((r) => r.data),
 
